@@ -818,27 +818,6 @@ async function proceedToOrder() {
         showOrderModal(orderData);
     } catch (error) { console.error(error); }
 }
-    
-    // ... (서버 전송 로직 기존 동일) ...
-    const today = new Date();
-    const orderRecord = {
-        date: today.toISOString().split('T')[0],
-        time: today.toTimeString().split(' ')[0].substring(0, 5),
-        orders: orderData,
-        inventory: currentInventoryCopy,
-        warnings: currentWarnings 
-    };
-
-    try {
-        await fetch(`${API_BASE}/api/inventory/orders`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(orderRecord)
-        });
-        currentWarnings = {}; 
-        showOrderModal(orderData);
-    } catch (error) { console.error(error); }
-}
 
 function showOrderModal(orderData) {
     const modal = document.getElementById('orderModal');
