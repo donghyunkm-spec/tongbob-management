@@ -17,6 +17,8 @@ let currentSortOrder = 'default';
 let allItemsWithInfo = []; 
 let currentWarnings = {}; 
 let showWeeklyForced = false; 
+// [추가] 재고 확인 탭용 날짜 변수
+let checkDateOffset = 0; // 0: 오늘, -1: 어제 ...
 
 // [NEW] 현재 작업 중인 매장 위치 (1루 or 3루)
 let currentLocation = '1루'; // '1루' or '3루'
@@ -79,7 +81,7 @@ async function loadInventoryDataAll() {
     }
 }
 
-// 탭 전환
+// 기존 showInvTab 함수 수정 (check 탭 진입 시 초기화)
 function showInvTab(tabName) {
     document.querySelectorAll('.inv-tab-content').forEach(el => el.style.display = 'none');
     document.querySelectorAll('#inventory-content .tab').forEach(el => el.classList.remove('active'));
@@ -93,30 +95,80 @@ function showInvTab(tabName) {
     if (tabName === 'inventory') {
         renderUnifiedInventoryForm();
     } else if (tabName === 'check') {
-        // [신규] 재고확인 탭 렌더링
+        checkDateOffset = 0; // 탭 들어오면 '오늘'로 리셋
         renderInventoryCheck();
     } else if (tabName === 'standard') {
-        // [요청2] 들어오자마자 전체 로딩
         selectStandardVendor('all'); 
     } else if (tabName === 'manageItems') {
-        // [요청3] 들어오자마자 전체 품목 + 정렬 모드
         renderManageItems(); 
     } else if (tabName === 'holidays') loadHolidays();
     else if (tabName === 'orderHistory') loadOrderHistory();
 }
 
-// =========================================================
-// [기능] 재고 확인 (신규) - 전체 현황판
-// =========================================================
+// [수정] 재고 확인 렌더링 (날짜별 로직 추가)
 function renderInventoryCheck() {
     const container = document.getElementById('inventoryCheckList');
+    const dateDisplay = document.getElementById('checkDateDisplay');
+    const orderBtn = document.getElementById('btnStartOrder');
+    
     if (!container) return;
 
+    // 1. 날짜 계산 및 표시
+    const targetDate = new Date();
+    targetDate.setDate(targetDate.getDate() + checkDateOffset);
+    const dateStr = targetDate.toISOString().split('T')[0];
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    // 헤더 텍스트 설정
+    let dayLabel = `${targetDate.getMonth()+1}/${targetDate.getDate()}`;
+    if (checkDateOffset === 0) dayLabel += " (오늘)";
+    else if (checkDateOffset === -1) dayLabel += " (어제)";
+    else if (checkDateOffset === 1) dayLabel += " (내일)";
+    
+    if(dateDisplay) dateDisplay.innerText = dayLabel;
+
+    // 2. 발주 버튼 활성화 여부 (오늘일 때만 가능)
+    if(orderBtn) {
+        if (checkDateOffset === 0) {
+            orderBtn.style.display = 'block';
+        } else {
+            orderBtn.style.display = 'none';
+        }
+    }
+
+    // 3. 데이터 준비
+    let displayInventory = {};
+    
+    if (checkDateOffset === 0) {
+        // 오늘: 현재 작업 중인 메모리 사용
+        displayInventory = { ...inventory };
+    } else if (checkDateOffset > 0) {
+        // 미래
+        container.innerHTML = `<div style="padding:50px; text-align:center; color:#999;">미래의 데이터는 볼 수 없습니다.</div>`;
+        return;
+    } else {
+        // 과거: recentHistory에서 찾기
+        const record = recentHistory.find(r => r.date === dateStr);
+        if (record) {
+            // 구조 평탄화 (history는 { vendor: { key: val } } 구조일 수 있음)
+            // server.js의 저장 구조에 따라 다르지만, 여기서는 history에 1루/3루 키가 다 들어있다고 가정
+            // 만약 history가 vendor별로 묶여있다면 풀어줘야 함.
+            // server.js 코드를 보니 history.inventory[vendor][itemKey] = val 형태임.
+            Object.values(record.inventory).forEach(vendorObj => {
+                Object.assign(displayInventory, vendorObj);
+            });
+        } else {
+            container.innerHTML = `<div style="padding:50px; text-align:center; color:#999;">${dateStr} 기록이 없습니다.</div>`;
+            return;
+        }
+    }
+
+    // 4. 테이블 그리기
     let html = `
         <table class="check-table">
             <thead>
                 <tr>
-                    <th style="text-align:left;">품목명</th>
+                    <th>품목명</th>
                     <th>1루</th>
                     <th>3루</th>
                     <th style="background:#e3f2fd;">합계</th>
@@ -130,13 +182,13 @@ function renderInventoryCheck() {
     // 전체 품목 순회 (업체별)
     Object.keys(items).forEach(vendor => {
         const vendorItems = items[vendor];
-        // 업체명 헤더
-        html += `<tr style="background:#f1f3f5;"><td colspan="6" style="text-align:left; font-size:12px; color:#555;">📦 ${vendor}</td></tr>`;
+        // 업체명 헤더 (Sticky 아님, 스크롤 됨)
+        html += `<tr style="background:#f8f9fa;"><td colspan="6" style="text-align:left; font-size:12px; font-weight:bold; color:#555; padding-left:10px;">📦 ${vendor}</td></tr>`;
 
         vendorItems.forEach(item => {
             const rawItemKey = `${vendor}_${item.품목명}`;
-            const stock1 = inventory[`1루_${rawItemKey}`] || 0;
-            const stock3 = inventory[`3루_${rawItemKey}`] || 0;
+            const stock1 = displayInventory[`1루_${rawItemKey}`] || 0;
+            const stock3 = displayInventory[`3루_${rawItemKey}`] || 0;
             const totalStock = stock1 + stock3;
             const usage = dailyUsage[rawItemKey] || 0;
             const diff = totalStock - usage; // 차이 = 합계 - 사용량
@@ -150,7 +202,7 @@ function renderInventoryCheck() {
 
             html += `
                 <tr>
-                    <td style="text-align:left; font-weight:bold;">${item.품목명}</td>
+                    <td>${item.품목명}</td>
                     <td>${stock1}</td>
                     <td>${stock3}</td>
                     <td class="check-val" style="background:#e3f2fd;">${totalStock}</td>
@@ -163,6 +215,16 @@ function renderInventoryCheck() {
 
     html += `</tbody></table>`;
     container.innerHTML = html;
+}
+
+// [신규] 발주 프로세스 시작 버튼 (경고창 -> 발주창)
+function triggerOrderProcess() {
+    if (checkDateOffset !== 0) {
+        showAlert('오늘 날짜에서만 발주가 가능합니다.', 'error');
+        return;
+    }
+    // 기존의 검증 로직 호출
+    checkOrderConfirmation();
 }
 
 
@@ -537,6 +599,7 @@ function renderStandardForm() {
 // ==========================================================
 // [핵심] 발주 확인 (통합 계산 로직)
 // ==========================================================
+// [수정] saveInventory: 저장만 수행하고 발주창 안 띄움
 async function saveInventory() {
     saveCurrentInputToMemory(); // 1. 현재 입력값 메모리에 저장
 
@@ -551,23 +614,26 @@ async function saveInventory() {
         
         if (result.success) {
             inventory = result.inventory; // 서버에서 최신본 동기화
-            showAlert('재고가 저장되었습니다.', 'success');
+            showAlert('재고가 저장되었습니다. (발주는 재고확인 탭에서 진행하세요)', 'success');
             
-            // 3. 멈춤 방지를 위해 UI 갱신 먼저 수행
+            // UI 갱신 (저장 버튼 깜빡임 효과 등 종료)
             renderUnifiedInventoryForm();
-
-            // 4. 발주 확인 로직 실행 (약간의 딜레이 후 모달 띄우기)
-            setTimeout(() => {
-                checkOrderConfirmation();
-            }, 300);
+            
+            // [중요] checkOrderConfirmation() 호출 제거됨!
         } else {
             showAlert('저장 실패: 서버 오류', 'error');
         }
     } catch (e) {
         console.error(e);
         showAlert('저장 실패 (네트워크 오류)', 'error');
-        renderUnifiedInventoryForm(); // 에러 나도 화면은 복구
+        renderUnifiedInventoryForm();
     }
+}
+
+// [신규] 재고 확인 탭 날짜 변경
+function changeCheckDate(delta) {
+    checkDateOffset += delta;
+    renderInventoryCheck();
 }
 
 function getDaysUntilNextDelivery(vendor) {

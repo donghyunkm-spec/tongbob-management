@@ -115,33 +115,62 @@
         .summary-card.net-profit { background: #1a237e; color: white; }
         .summary-card.net-profit .val { color: #fff; }
 
-        /* [신규] 재고확인 탭 테이블 스타일 */
+        /* [수정] 재고확인 테이블 스타일 개선 */
         .check-table-container {
-            overflow-x: auto; /* 가로 스크롤 허용 */
-            white-space: nowrap; /* 줄바꿈 방지 */
+            overflow-x: auto;
+            white-space: nowrap;
             margin-top: 10px;
             border: 1px solid #ddd;
+            position: relative; /* 스티키 헤더를 위해 필요 */
+            max-height: 70vh; /* 세로 스크롤도 생기도록 */
         }
+
         .check-table {
             width: 100%;
-            border-collapse: collapse;
+            border-collapse: separate; /* sticky 적용을 위해 collapse 해제 권장 */
+            border-spacing: 0;
             font-size: 13px;
         }
+
         .check-table th, .check-table td {
             padding: 8px 10px;
             border-bottom: 1px solid #eee;
+            border-right: 1px solid #eee; /* 세로선 추가 */
             text-align: center;
+            vertical-align: middle;
         }
-        .check-table th {
-            background-color: #f1f3f5;
+
+        /* [핵심] 첫 번째 열(품목명) 고정 및 스타일 */
+        .check-table th:first-child,
+        .check-table td:first-child {
+            position: sticky;
+            left: 0;
+            z-index: 10;
+            background-color: #fff; /* 배경색 필수 (투명하면 겹침) */
+            border-right: 2px solid #ccc; /* 고정 열 구분선 강조 */
+            
+            /* 긴 글자 처리 */
+            white-space: normal; /* 줄바꿈 허용 */
+            min-width: 80px;
+            max-width: 120px; /* 너무 넓어지지 않게 제한 */
+            word-break: keep-all; /* 단어 단위 줄바꿈 */
             font-weight: bold;
-            position: sticky; /* 헤더 고정 */
-            top: 0;
+            color: #333;
+            text-align: left;
         }
-        .check-table tr:nth-child(even) { background-color: #fafafa; }
-        .check-val { font-weight: bold; }
-        .diff-plus { color: #2e7d32; } /* 여유 있음 */
-        .diff-minus { color: #c62828; } /* 부족함 */
+
+        .check-table th:first-child {
+            z-index: 11; /* 헤더의 첫열은 더 위에 */
+            background-color: #f1f3f5;
+        }
+
+        /* 헤더 고정 (상단) */
+        .check-table th {
+            position: sticky;
+            top: 0;
+            background-color: #f1f3f5;
+            z-index: 9;
+        }
 
         /* [차트] 바 스타일 */
         .bar-row { display: flex; align-items: center; margin-bottom: 8px; font-size: 12px; }
@@ -628,7 +657,7 @@
             <div class="accounting-card" style="padding: 10px; margin-bottom: 15px;">
                 <div class="tabs" style="grid-template-columns: repeat(5, 1fr); margin-bottom: 0; font-size: 12px;">
                     <button class="tab active" onclick="showInvTab('inventory')">재고입력</button>
-                    <button class="tab" onclick="showInvTab('check')" style="background:#fff3e0; color:#e65100; font-weight:bold;">🔎 재고확인</button> <button class="tab" onclick="showInvTab('standard')">사용량</button>
+                    <button class="tab" onclick="showInvTab('check')" style="background:#fff3e0; color:#e65100; font-weight:bold;">🔎 재고확인</button> 
                     <button class="tab" onclick="showInvTab('standard')">사용량</button>
                     <button class="tab" onclick="showInvTab('manageItems')">품목관리</button>
                     <button class="tab" onclick="showInvTab('holidays')">휴일</button>
@@ -673,9 +702,21 @@
 
             <div id="check-tab" class="inv-tab-content" style="display:none;">
                 <div class="form-container">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; background:#fff; padding:10px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <button onclick="changeCheckDate(-1)" class="number-btn">&lt;</button>
+                            <h3 id="checkDateDisplay" style="margin:0; font-size:16px;">오늘</h3>
+                            <button onclick="changeCheckDate(1)" class="number-btn">&gt;</button>
+                        </div>
+                        
+                        <button id="btnStartOrder" onclick="triggerOrderProcess()" 
+                            style="background:#ff5722; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; box-shadow:0 2px 5px rgba(0,0,0,0.2);">
+                            🚀 발주 진행
+                        </button>
+                    </div>
+
                     <div style="margin-bottom:10px; padding:10px; background:#e3f2fd; border-radius:5px; font-size:12px; color:#1565C0;">
-                        📊 <strong>전체 재고 현황판</strong><br>
-                        (차이 = 합계재고 - 하루사용량)
+                        📊 <strong>전체 재고 현황판</strong> (가로로 스크롤하여 1루/3루 확인)
                     </div>
                     <div id="inventoryCheckList" class="check-table-container"></div>
                 </div>
