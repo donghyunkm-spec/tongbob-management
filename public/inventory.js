@@ -332,7 +332,7 @@ function renderUnifiedInventoryForm() {
     const formContainer = document.getElementById('inventoryForm');
     if (!formContainer) return;
     
-    // 상단 컨트롤 바
+    // 상단 컨트롤 바 (Sticky) - 여기가 유일한 컨트롤 영역이 됩니다.
     let html = `
         <div class="sticky-header-bar">
             <div style="display:flex; gap:5px; flex:1;">
@@ -343,8 +343,14 @@ function renderUnifiedInventoryForm() {
         </div>
         
         <div style="margin-bottom:10px; display:flex; gap:10px; justify-content:flex-end; font-size:12px;">
+             <button class="filter-btn" id="sortOrderBtn" onclick="toggleSortOrder()" style="padding:5px 10px; border:1px solid #ddd; background:white; border-radius:15px;">
+                ${currentSortOrder === 'lastOrder' ? '📅 기본 순서로' : '📅 발주일 오래된 순'}
+             </button>
              <button id="toggleWeeklyBtn" onclick="toggleWeeklyItems()" style="padding:5px 10px; border:1px solid #ddd; background:white; border-radius:15px;">
                 ${showWeeklyForced ? '✅ 주간품목 포함' : '🔄 주간품목 보기'}
+             </button>
+             <button class="filter-btn" onclick="showLongTermNoOrder()" style="padding:5px 10px; border:1px solid #ddd; background:white; border-radius:15px; color:#d32f2f;">
+                ⚠️ 미발주
              </button>
         </div>
     `;
@@ -360,8 +366,16 @@ function renderUnifiedInventoryForm() {
         });
     });
 
-    // 정렬
-    allDisplayItems.sort((a, b) => a.sortKey - b.sortKey);
+    // 정렬 로직
+    if (currentSortOrder === 'lastOrder') {
+        allDisplayItems.sort((a, b) => {
+            const dateA = lastOrderDates[`${a.vendor}_${a.품목명}`] || '0000-00-00';
+            const dateB = lastOrderDates[`${b.vendor}_${b.품목명}`] || '0000-00-00';
+            return dateA.localeCompare(dateB); // 오래된(작은) 날짜가 먼저 오도록
+        });
+    } else {
+        allDisplayItems.sort((a, b) => a.sortKey - b.sortKey);
+    }
 
     let hasItems = false;
     html += `<div style="background:white; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.1);">`;
@@ -380,6 +394,8 @@ function renderUnifiedInventoryForm() {
         let prevVal = null;
         const lastRecord = recentHistory.find(r => r.date !== today.toISOString().split('T')[0]);
         if (lastRecord && lastRecord.inventory[item.vendor]) {
+             // 데이터 구조 호환성 체크 (벤더별 묶음 vs 플랫 키)
+             // 기존 server.js 로직상 history.inventory[vendor][locItemKey] 형태로 저장됨
              prevVal = lastRecord.inventory[item.vendor][locItemKey];
              if(prevVal !== undefined) yesterdayStock = prevVal;
         }
@@ -392,12 +408,13 @@ function renderUnifiedInventoryForm() {
         const isAlert = (daysSince >= 7);
 
         html += `
-            <div class="item-row-compact">
+            <div class="item-row-compact" style="${item.중요도 === '상' ? 'background-color:#fff8e1;' : ''}">
                 <div class="irc-name">
                     <span>
                         ${item.품목명} 
                         <span style="font-weight:normal; font-size:11px; color:#888;">(${item.vendor.substr(0,2)})</span>
-                        ${isAlert ? '⚠️' : ''}
+                        ${isAlert ? '<span style="color:red; font-size:10px;">⚠️</span>' : ''}
+                        ${item.관리주기 === 'weekly' ? '<span style="color:blue; font-size:10px;">[주간]</span>' : ''}
                     </span>
                 </div>
                 
@@ -596,12 +613,16 @@ function renderStandardForm() {
     formContainer.innerHTML = headerHtml + listHtml;
 }
 
-// ==========================================================
-// [핵심] 발주 확인 (통합 계산 로직)
-// ==========================================================
-// [수정] saveInventory: 저장만 수행하고 발주창 안 띄움
+// [수정 3] 저장 함수 (저장 후 UI가 깨지지 않도록 보장)
 async function saveInventory() {
     saveCurrentInputToMemory(); // 1. 현재 입력값 메모리에 저장
+
+    // 버튼 피드백 (저장 중...)
+    const saveBtn = document.querySelector('.btn-sticky-action');
+    if(saveBtn) {
+        saveBtn.textContent = '⏳ 저장중...';
+        saveBtn.disabled = true;
+    }
 
     try {
         // 2. 서버로 전송
@@ -614,18 +635,15 @@ async function saveInventory() {
         
         if (result.success) {
             inventory = result.inventory; // 서버에서 최신본 동기화
-            showAlert('재고가 저장되었습니다. (발주는 재고확인 탭에서 진행하세요)', 'success');
-            
-            // UI 갱신 (저장 버튼 깜빡임 효과 등 종료)
-            renderUnifiedInventoryForm();
-            
-            // [중요] checkOrderConfirmation() 호출 제거됨!
+            showAlert('저장되었습니다.', 'success');
         } else {
             showAlert('저장 실패: 서버 오류', 'error');
         }
     } catch (e) {
         console.error(e);
         showAlert('저장 실패 (네트워크 오류)', 'error');
+    } finally {
+        // UI 갱신 (저장 버튼 상태 복구 및 화면 리프레시)
         renderUnifiedInventoryForm();
     }
 }
