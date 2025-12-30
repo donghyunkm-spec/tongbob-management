@@ -667,34 +667,7 @@
 
             <div id="inventory-tab" class="inv-tab-content active">
                 <div class="form-container">
-                    <div class="inventory-controls" style="margin-bottom:10px;">
-                        <div class="filter-controls">
-                            <button class="filter-btn" id="sortOrderBtn" onclick="toggleSortOrder()">📅 발주일순</button>
-                            <button class="filter-btn" id="toggleWeeklyBtn" onclick="toggleWeeklyItems()">🔄 주간품목</button>
-                            <button class="filter-btn" onclick="showLongTermNoOrder()">⚠️ 미발주</button>
-                        </div>
-                    </div>
                     <div id="inventoryForm" class="inventory-form-unified"></div>
-                    <div class="form-actions">
-                        <button onclick="saveInventory()" class="submit-btn" style="background:#2e7d32;">💾 저장 및 발주 확인</button>
-                    </div>
-                    <div class="location-tabs" style="display:flex; gap:10px; margin-bottom:15px;">
-                        <button id="btn-loc-1루" class="loc-btn active" onclick="setLocation('1루')" 
-                            style="flex:1; padding:12px; border:2px solid #ddd; background:white; font-weight:bold; border-radius:8px;">
-                            ⚾ 1루 매장
-                        </button>
-                        <button id="btn-loc-3루" class="loc-btn" onclick="setLocation('3루')" 
-                            style="flex:1; padding:12px; border:2px solid #ddd; background:white; font-weight:bold; border-radius:8px;">
-                            ⚾ 3루 매장
-                        </button>
-                    </div>
-
-                    <div class="inventory-controls">
-                        <div class="filter-controls">
-                            <button class="filter-btn" id="toggleWeeklyBtn" onclick="toggleWeeklyItems()">🔄 주간품목</button>
-                            <button class="filter-btn" onclick="showLongTermNoOrder()">⚠️ 미발주</button>
-                        </div>
-                    </div>
                 </div>
             </div>
 
