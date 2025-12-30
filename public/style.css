@@ -1681,3 +1681,28 @@ input[type="checkbox"] {
     color: #1976D2; /* 파란색 강조 */
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
+
+/* =========================================
+   모달 기본 스타일 (누락되어 추가)
+   ========================================= */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.6);
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal-large .modal-content {
+    max-width: 800px;
+    width: 95%;
+}

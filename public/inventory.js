@@ -219,10 +219,17 @@ function renderInventoryCheck() {
 
 // [신규] 발주 프로세스 시작 버튼 (경고창 -> 발주창)
 function triggerOrderProcess() {
+    console.log('[DEBUG] 발주진행 버튼 클릭됨');
+    console.log('[DEBUG] checkDateOffset:', checkDateOffset);
+    
     if (checkDateOffset !== 0) {
         showAlert('오늘 날짜에서만 발주가 가능합니다.', 'error');
         return;
     }
+    
+    console.log('[DEBUG] items:', items);
+    console.log('[DEBUG] inventory:', inventory);
+    
     // 기존의 검증 로직 호출
     checkOrderConfirmation();
 }
@@ -735,10 +742,12 @@ function getDeliveryInfo(vendor) {
 
 // 발주 확인 로직
 function checkOrderConfirmation() {
+    console.log('[DEBUG] checkOrderConfirmation 시작');
     const confirmItems = { '고센유통': [], '한강유통(고기)': [], '인터넷발주': [] };
     
     for (const vendor in items) {
         const vendorItems = items[vendor];
+        console.log(`[DEBUG] ${vendor} 품목 수:`, vendorItems.length);
         const daysNeeded = getDaysUntilNextDelivery(vendor); // 다음 배송일까지 필요한 일수
         
         vendorItems.forEach(item => {
@@ -801,8 +810,15 @@ function checkOrderConfirmation() {
 
 // 모달 표시
 function showConfirmModal(confirmItems) {
+    console.log('[DEBUG] showConfirmModal 호출됨');
+    console.log('[DEBUG] confirmItems:', confirmItems);
+    
     const modal = document.getElementById('confirmModal');
     const content = document.getElementById('confirmContent');
+    
+    console.log('[DEBUG] modal element:', modal);
+    console.log('[DEBUG] content element:', content);
+    
     let html = '';
     let hasAnyItem = false;
     
@@ -840,7 +856,12 @@ function showConfirmModal(confirmItems) {
     }
 
     content.innerHTML = html;
+    console.log('[DEBUG] 모달 HTML 설정 완료');
+    console.log('[DEBUG] modal 현재 class:', modal.className);
+    
     modal.classList.add('active');
+    console.log('[DEBUG] modal active 클래스 추가 후:', modal.className);
+    console.log('[DEBUG] 모달 표시 완료');
 }
 
 function closeConfirmModal() {
