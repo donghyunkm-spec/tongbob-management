@@ -115,6 +115,34 @@
         .summary-card.net-profit { background: #1a237e; color: white; }
         .summary-card.net-profit .val { color: #fff; }
 
+        /* [신규] 재고확인 탭 테이블 스타일 */
+        .check-table-container {
+            overflow-x: auto; /* 가로 스크롤 허용 */
+            white-space: nowrap; /* 줄바꿈 방지 */
+            margin-top: 10px;
+            border: 1px solid #ddd;
+        }
+        .check-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .check-table th, .check-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #eee;
+            text-align: center;
+        }
+        .check-table th {
+            background-color: #f1f3f5;
+            font-weight: bold;
+            position: sticky; /* 헤더 고정 */
+            top: 0;
+        }
+        .check-table tr:nth-child(even) { background-color: #fafafa; }
+        .check-val { font-weight: bold; }
+        .diff-plus { color: #2e7d32; } /* 여유 있음 */
+        .diff-minus { color: #c62828; } /* 부족함 */
+
         /* [차트] 바 스타일 */
         .bar-row { display: flex; align-items: center; margin-bottom: 8px; font-size: 12px; }
         .bar-label { width: 80px; text-align: right; margin-right: 10px; color: #555; }
@@ -600,6 +628,7 @@
             <div class="accounting-card" style="padding: 10px; margin-bottom: 15px;">
                 <div class="tabs" style="grid-template-columns: repeat(5, 1fr); margin-bottom: 0; font-size: 12px;">
                     <button class="tab active" onclick="showInvTab('inventory')">재고입력</button>
+                    <button class="tab" onclick="showInvTab('check')" style="background:#fff3e0; color:#e65100; font-weight:bold;">🔎 재고확인</button> <button class="tab" onclick="showInvTab('standard')">사용량</button>
                     <button class="tab" onclick="showInvTab('standard')">사용량</button>
                     <button class="tab" onclick="showInvTab('manageItems')">품목관리</button>
                     <button class="tab" onclick="showInvTab('holidays')">휴일</button>
@@ -639,6 +668,16 @@
                     </div>
                     
                     <div id="inventoryForm" class="inventory-form-unified"></div>
+                </div>
+            </div>
+
+            <div id="check-tab" class="inv-tab-content" style="display:none;">
+                <div class="form-container">
+                    <div style="margin-bottom:10px; padding:10px; background:#e3f2fd; border-radius:5px; font-size:12px; color:#1565C0;">
+                        📊 <strong>전체 재고 현황판</strong><br>
+                        (차이 = 합계재고 - 하루사용량)
+                    </div>
+                    <div id="inventoryCheckList" class="check-table-container"></div>
                 </div>
             </div>
 

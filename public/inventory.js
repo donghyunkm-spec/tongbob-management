@@ -92,6 +92,9 @@ function showInvTab(tabName) {
 
     if (tabName === 'inventory') {
         renderUnifiedInventoryForm();
+    } else if (tabName === 'check') {
+        // [신규] 재고확인 탭 렌더링
+        renderInventoryCheck();
     } else if (tabName === 'standard') {
         // [요청2] 들어오자마자 전체 로딩
         selectStandardVendor('all'); 
@@ -100,6 +103,66 @@ function showInvTab(tabName) {
         renderManageItems(); 
     } else if (tabName === 'holidays') loadHolidays();
     else if (tabName === 'orderHistory') loadOrderHistory();
+}
+
+// =========================================================
+// [기능] 재고 확인 (신규) - 전체 현황판
+// =========================================================
+function renderInventoryCheck() {
+    const container = document.getElementById('inventoryCheckList');
+    if (!container) return;
+
+    let html = `
+        <table class="check-table">
+            <thead>
+                <tr>
+                    <th style="text-align:left;">품목명</th>
+                    <th>1루</th>
+                    <th>3루</th>
+                    <th style="background:#e3f2fd;">합계</th>
+                    <th>1일사용</th>
+                    <th>차이</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    // 전체 품목 순회 (업체별)
+    Object.keys(items).forEach(vendor => {
+        const vendorItems = items[vendor];
+        // 업체명 헤더
+        html += `<tr style="background:#f1f3f5;"><td colspan="6" style="text-align:left; font-size:12px; color:#555;">📦 ${vendor}</td></tr>`;
+
+        vendorItems.forEach(item => {
+            const rawItemKey = `${vendor}_${item.품목명}`;
+            const stock1 = inventory[`1루_${rawItemKey}`] || 0;
+            const stock3 = inventory[`3루_${rawItemKey}`] || 0;
+            const totalStock = stock1 + stock3;
+            const usage = dailyUsage[rawItemKey] || 0;
+            const diff = totalStock - usage; // 차이 = 합계 - 사용량
+
+            let displayUnit = item.발주단위;
+            if (vendor === '한강유통(고기)') displayUnit = getMeatVendorInfo(item.품목명).inputUnit;
+
+            // 차이 색상: 양수면 초록, 음수면 빨강
+            const diffClass = (diff >= 0) ? 'diff-plus' : 'diff-minus';
+            const diffSign = (diff > 0) ? '+' : '';
+
+            html += `
+                <tr>
+                    <td style="text-align:left; font-weight:bold;">${item.품목명}</td>
+                    <td>${stock1}</td>
+                    <td>${stock3}</td>
+                    <td class="check-val" style="background:#e3f2fd;">${totalStock}</td>
+                    <td>${usage}</td>
+                    <td class="${diffClass} check-val">${diffSign}${parseFloat(diff.toFixed(1))}</td>
+                </tr>
+            `;
+        });
+    });
+
+    html += `</tbody></table>`;
+    container.innerHTML = html;
 }
 
 
@@ -193,8 +256,10 @@ function toggleWeeklyItems() {
 
 // 입력값 메모리 저장
 function saveCurrentInputToMemory() {
+    // 현재 화면에 있는 input들만 읽어서 inventory 메모리에 업데이트
     const inputs = document.querySelectorAll('input[id^="current_"]');
     inputs.forEach(input => {
+        if (!input) return;
         const key = input.id.replace('current_', '');
         const val = input.value.trim();
         inventory[key] = val === '' ? 0 : parseFloat(val);
@@ -205,7 +270,7 @@ function renderUnifiedInventoryForm() {
     const formContainer = document.getElementById('inventoryForm');
     if (!formContainer) return;
     
-    // 1. [상단 고정바] 위치 선택 + 저장 버튼
+    // 상단 컨트롤 바
     let html = `
         <div class="sticky-header-bar">
             <div style="display:flex; gap:5px; flex:1;">
@@ -222,29 +287,24 @@ function renderUnifiedInventoryForm() {
         </div>
     `;
 
-    // 2. [리스트] 통합 정렬하여 렌더링
     const today = new Date();
     const isTuesday = today.getDay() === 2;
     
-    // 모든 품목을 하나의 리스트로 통합
     let allDisplayItems = [];
     Object.keys(items).forEach(vendor => {
         items[vendor].forEach(item => {
-            // 정렬 키: 1루면 sort1, 3루면 sort3 사용. 없으면 매우 큰 수(뒤로)
             const sortKey = (currentLocation === '1루') ? (item.sort1 ?? 9999) : (item.sort3 ?? 9999);
             allDisplayItems.push({ ...item, vendor, sortKey });
         });
     });
 
-    // 정렬 수행
+    // 정렬
     allDisplayItems.sort((a, b) => a.sortKey - b.sortKey);
 
     let hasItems = false;
-    
     html += `<div style="background:white; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.1);">`;
 
     allDisplayItems.forEach(item => {
-        // 주간 품목 필터링
         if (item.관리주기 === 'weekly' && !isTuesday && !showWeeklyForced) return;
 
         hasItems = true;
@@ -252,27 +312,23 @@ function renderUnifiedInventoryForm() {
         const locItemKey = `${currentLocation}_${rawItemKey}`;
         
         const currentStock = inventory[locItemKey] || 0;
-        const usage = dailyUsage[rawItemKey] || 0;
         
-        // 어제 재고 찾기
+        // 전일 재고 찾기
         let yesterdayStock = '-';
         let prevVal = null;
-        const lastRecord = recentHistory.find(r => r.date !== new Date().toISOString().split('T')[0]);
+        const lastRecord = recentHistory.find(r => r.date !== today.toISOString().split('T')[0]);
         if (lastRecord && lastRecord.inventory[item.vendor]) {
              prevVal = lastRecord.inventory[item.vendor][locItemKey];
              if(prevVal !== undefined) yesterdayStock = prevVal;
         }
 
-        // 단위 처리
         let displayUnit = item.발주단위;
         if (item.vendor === '한강유통(고기)') displayUnit = getMeatVendorInfo(item.품목명).inputUnit;
         
-        // 미발주 경고
         const lastDate = lastOrderDates[rawItemKey];
         const daysSince = lastDate ? getDaysSince(lastDate) : 999;
         const isAlert = (daysSince >= 7);
 
-        // [요청1] 가로 배치 (Compact Row)
         html += `
             <div class="item-row-compact">
                 <div class="irc-name">
@@ -308,7 +364,6 @@ function renderUnifiedInventoryForm() {
     });
     
     html += `</div>`;
-    
     if (!hasItems) html += '<p style="text-align:center; padding:20px;">표시할 품목이 없습니다.</p>';
     formContainer.innerHTML = html;
 }
@@ -406,17 +461,10 @@ function renderItemGroup(vendor, item, locItemKey, rawItemKey, lastOrderDate, da
     `;
 }
 
-// 매장 위치 변경 탭 클릭 시
+// 1루/3루 탭 변경
 function setLocation(loc) {
-    // 변경 전 현재 입력값 임시 저장 (화면에 있는 것만)
     saveCurrentInputToMemory();
-    
     currentLocation = loc;
-    
-    // 버튼 스타일 변경
-    document.querySelectorAll('.loc-btn').forEach(btn => btn.classList.remove('active'));
-    document.getElementById(`btn-loc-${loc}`).classList.add('active');
-    
     renderUnifiedInventoryForm();
 }
 
@@ -444,7 +492,6 @@ function renderStandardForm() {
     const formContainer = document.getElementById('standardForm');
     if (!formContainer) return;
     
-    // [요청2] 상단 필터 + 저장 버튼 (Sticky)
     let headerHtml = `
         <div class="sticky-header-bar">
             <div class="vendor-selector" style="margin:0; flex:1; display:flex; gap:5px; overflow-x:auto;">
@@ -457,9 +504,7 @@ function renderStandardForm() {
         </div>
     `;
 
-    // 렌더링 대상
     const targetVendors = (currentStandardVendor === 'all') ? Object.keys(items) : [currentStandardVendor];
-    
     let listHtml = '<div style="background:white; border-radius:8px; border:1px solid #eee;">';
     
     targetVendors.forEach(vendor => {
@@ -486,7 +531,6 @@ function renderStandardForm() {
         });
     });
     listHtml += '</div>';
-
     formContainer.innerHTML = headerHtml + listHtml;
 }
 
@@ -494,20 +538,36 @@ function renderStandardForm() {
 // [핵심] 발주 확인 (통합 계산 로직)
 // ==========================================================
 async function saveInventory() {
-    saveCurrentInputToMemory();
+    saveCurrentInputToMemory(); // 1. 현재 입력값 메모리에 저장
+
     try {
+        // 2. 서버로 전송
         const response = await fetch(`${API_BASE}/api/inventory/current`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ inventory: inventory })
         });
         const result = await response.json();
+        
         if (result.success) {
-            inventory = result.inventory;
+            inventory = result.inventory; // 서버에서 최신본 동기화
             showAlert('재고가 저장되었습니다.', 'success');
-            await checkOrderConfirmation(); 
+            
+            // 3. 멈춤 방지를 위해 UI 갱신 먼저 수행
+            renderUnifiedInventoryForm();
+
+            // 4. 발주 확인 로직 실행 (약간의 딜레이 후 모달 띄우기)
+            setTimeout(() => {
+                checkOrderConfirmation();
+            }, 300);
+        } else {
+            showAlert('저장 실패: 서버 오류', 'error');
         }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+        console.error(e);
+        showAlert('저장 실패 (네트워크 오류)', 'error');
+        renderUnifiedInventoryForm(); // 에러 나도 화면은 복구
+    }
 }
 
 function getDaysUntilNextDelivery(vendor) {
@@ -586,30 +646,30 @@ function getDeliveryInfo(vendor) {
     };
 }
 
-async function checkOrderConfirmation() {
+// 발주 확인 로직
+function checkOrderConfirmation() {
     const confirmItems = { '고센유통': [], '한강유통(고기)': [], '인터넷발주': [] };
-    const realWarnings = { '고센유통': [], '한강유통(고기)': [], '인터넷발주': [] };
     
     for (const vendor in items) {
         const vendorItems = items[vendor];
-        const daysNeeded = getDaysUntilNextDelivery(vendor);
+        const daysNeeded = getDaysUntilNextDelivery(vendor); // 다음 배송일까지 필요한 일수
         
         vendorItems.forEach(item => {
             const rawItemKey = `${vendor}_${item.품목명}`;
             
-            // [통합 재고 계산] 1루 + 3루
+            // 통합 재고 (1루 + 3루)
             const stock1 = inventory[`1루_${rawItemKey}`] || 0;
             const stock3 = inventory[`3루_${rawItemKey}`] || 0;
             const totalStock = stock1 + stock3;
             
             const usage = dailyUsage[rawItemKey] || 0;
-            const neededTotal = usage * daysNeeded; // 필요량
+            const neededTotal = usage * daysNeeded; // 배송 전까지 필요한 양
             
-            let orderAmountRaw = Math.max(0, neededTotal - totalStock);
+            let orderAmountRaw = Math.max(0, neededTotal - totalStock); // 부족분
             let displayQty = 0;
             let displayUnit = item.발주단위;
 
-            // 단위 계산 로직 (고기 등)
+            // 단위 변환 (고기 등)
             if (vendor === '한강유통(고기)') {
                 const meatInfo = getMeatVendorInfo(item.품목명);
                 displayUnit = meatInfo.unit;
@@ -623,66 +683,76 @@ async function checkOrderConfirmation() {
                 displayQty = Math.round(orderAmountRaw * 10) / 10;
             }
             
-            // 경고 로직 (중요 품목 미발주 등)
-            let needsConfirmation = false;
+            // 0개라도 리스트에는 포함시켜서 보여주는 게 좋음 (상태 확인용)
+            // 하지만 모달에는 '발주할 것'만 띄우는 게 일반적.
+            // 여기서는 0개 이상인 것만 담되, 중요 품목이 0이면 경고
             let reason = '';
-            
-            if (displayQty === 0 && (item.중요도 === '상')) {
-                needsConfirmation = true; reason = '중요 품목 미발주';
+            if (displayQty === 0 && item.중요도 === '상' && totalStock < neededTotal) {
+                 // 재고가 부족한데 발주량이 0? (단위 이슈 등) -> 일단 포함
+                 reason = '확인필요';
             }
             
-            const obj = {
-                ...item,
-                itemKey: rawItemKey,
-                currentStock: totalStock, // 통합 재고 보여줌
-                stock1, stock3,           // 상세 재고도 포함
-                orderAmount: displayQty,
-                displayUnit,
-                reason,
-                lastOrderDate: lastOrderDates[rawItemKey] || ''
-            };
-
-            if (needsConfirmation) realWarnings[vendor].push(obj);
-            if (needsConfirmation || displayQty > 0) confirmItems[vendor].push(obj);
+            if (displayQty > 0 || reason) {
+                const obj = {
+                    ...item,
+                    itemKey: rawItemKey,
+                    currentStock: totalStock,
+                    stock1, stock3,
+                    orderAmount: displayQty,
+                    displayUnit,
+                    reason,
+                    daysNeeded // 며칠치인지
+                };
+                confirmItems[vendor].push(obj);
+            }
         });
     }
 
-    currentWarnings = realWarnings;
-    const hasItems = Object.values(confirmItems).some(arr => arr.length > 0);
-    
-    if (hasItems) showConfirmModal(confirmItems);
-    else proceedToOrder();
+    // 발주할 게 있든 없든 모달 띄우기 (사용자 피드백 확실하게)
+    showConfirmModal(confirmItems);
 }
 
-// [모달] 발주 확인창 렌더링 수정 (상세 재고 표시)
+// 모달 표시
 function showConfirmModal(confirmItems) {
     const modal = document.getElementById('confirmModal');
     const content = document.getElementById('confirmContent');
     let html = '';
+    let hasAnyItem = false;
     
     for (const vendor in confirmItems) {
         const list = confirmItems[vendor];
         if (list.length > 0) {
-            const dInfo = getDeliveryInfo(vendor); // daysNeeded 등 계산
+            hasAnyItem = true;
+            const dInfo = getDeliveryInfo(vendor); 
             html += `<div class="delivery-info-box">
-                <h3>📦 ${vendor} (${dInfo.days}일치)</h3>
-                <p>도착: ${dInfo.deliveryDate} | 사용: ~${dInfo.endDate}</p>
+                <h3>📦 ${vendor} (${dInfo.days}일치 확보)</h3>
+                <p>도착예정: ${dInfo.deliveryDate}</p>
             </div>
             <table class="confirm-table">
-                <thead><tr><th>품목</th><th>재고(1루/3루)</th><th>권장발주</th></tr></thead>
+                <thead><tr><th>품목</th><th>재고(1루+3루)</th><th>발주량</th></tr></thead>
                 <tbody>`;
             
             list.forEach(i => {
                 html += `<tr>
                     <td>${i.품목명}<br><span style="font-size:10px;color:red">${i.reason}</span></td>
-                    <td>${i.currentStock} (${i.stock1}/${i.stock3})</td>
-                    <td><strong>${i.orderAmount} ${i.displayUnit}</strong></td>
+                    <td>${i.currentStock} <span style="font-size:10px; color:#888;">(${i.stock1}+${i.stock3})</span></td>
+                    <td><strong style="color:#1976D2; font-size:15px;">${i.orderAmount} ${i.displayUnit}</strong></td>
                 </tr>`;
             });
             html += `</tbody></table>`;
         }
     }
-    content.innerHTML = html || '<p style="text-align:center;padding:20px">발주할 품목이 없습니다.</p>';
+
+    if (!hasAnyItem) {
+        html = `
+            <div style="text-align:center; padding:30px;">
+                <p style="font-size:16px; margin-bottom:10px;">✅ 모든 재고가 충분합니다.</p>
+                <p style="color:#888; font-size:13px;">(설정된 사용량 기반)</p>
+            </div>
+        `;
+    }
+
+    content.innerHTML = html;
     modal.classList.add('active');
 }
 
@@ -693,8 +763,6 @@ function closeConfirmModal() {
 async function proceedToOrder() {
     closeConfirmModal();
     const orderData = { '고센유통': [], '한강유통(고기)': [], '인터넷발주': [] };
-    
-    // 현재 메모리에 있는 재고 저장용 카피
     const currentInventoryCopy = { ...inventory };
 
     for (const vendor in items) {
@@ -703,11 +771,9 @@ async function proceedToOrder() {
         
         vendorItems.forEach(item => {
             const rawItemKey = `${vendor}_${item.품목명}`;
-            // 통합 재고 계산
             const s1 = inventory[`1루_${rawItemKey}`] || 0;
             const s3 = inventory[`3루_${rawItemKey}`] || 0;
             const totalStock = s1 + s3;
-
             const usage = dailyUsage[rawItemKey] || 0;
             const needed = usage * daysNeeded;
             const rawAmt = Math.max(0, needed - totalStock);
@@ -715,7 +781,6 @@ async function proceedToOrder() {
             let finalQty = 0;
             let finalUnit = item.발주단위;
             
-            // ... (단위 계산 로직 동일) ...
             if (vendor === '한강유통(고기)') {
                 const mInfo = getMeatVendorInfo(item.품목명);
                 finalUnit = mInfo.unit;
@@ -732,6 +797,27 @@ async function proceedToOrder() {
             }
         });
     }
+    
+    // 서버 전송
+    const today = new Date();
+    const orderRecord = {
+        date: today.toISOString().split('T')[0],
+        time: today.toTimeString().split(' ')[0].substring(0, 5),
+        orders: orderData,
+        inventory: currentInventoryCopy,
+        warnings: currentWarnings 
+    };
+
+    try {
+        await fetch(`${API_BASE}/api/inventory/orders`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(orderRecord)
+        });
+        currentWarnings = {}; 
+        showOrderModal(orderData);
+    } catch (error) { console.error(error); }
+}
     
     // ... (서버 전송 로직 기존 동일) ...
     const today = new Date();
@@ -757,18 +843,14 @@ async function proceedToOrder() {
 function showOrderModal(orderData) {
     const modal = document.getElementById('orderModal');
     const content = document.getElementById('orderContent');
-    
     let html = '';
     
     for (const vendor in orderData) {
         const items = orderData[vendor];
         if (items.length > 0) {
-            let actionBtn = '';
-            if (vendor === '한강유통(고기)') {
-                actionBtn = `<button onclick="goToOrderHistory()" class="btn-goto-history">📂 내역 보러가기</button>`;
-            } else {
-                actionBtn = `<button onclick="copyVendorOrder('${vendor}')" class="btn-mini-kakao">💬 복사</button>`;
-            }
+            let actionBtn = (vendor === '한강유통(고기)') 
+                ? `<button onclick="goToOrderHistory()" class="btn-goto-history">📂 내역</button>`
+                : `<button onclick="copyVendorOrder('${vendor}')" class="btn-mini-kakao">💬 복사</button>`;
 
             html += `
                 <div class="order-section">
@@ -777,15 +859,11 @@ function showOrderModal(orderData) {
                         ${actionBtn}
                     </div>
                     <div class="order-items" id="order_${vendor}">`;
-            
             items.forEach(item => {
                 const displayUnit = item.displayUnit || item.발주단위;
                 html += `${item.품목명} ${item.orderAmount}${displayUnit}\n`;
             });
-            
-            html += `</div>
-                </div>
-            `;
+            html += `</div></div>`;
         }
     }
     
@@ -804,28 +882,17 @@ function goToOrderHistory() {
 function copyVendorOrder(vendor) {
     const itemContainer = document.getElementById(`order_${vendor}`);
     if (!itemContainer) return;
-
     const itemsText = itemContainer.textContent.trim();
     const today = new Date();
     const month = today.getMonth() + 1;
     const date = today.getDate();
     
-    let copyText = '';
-
-    if (vendor === '고센유통') {
-        copyText = `안녕하세요 통빱 발주하겠습니다.\n\n`;
-        copyText += `${month}월 ${date}일\n\n`;
-        copyText += itemsText;
-        copyText += `\n\n감사합니다.`;
-    } else {
-        copyText = `[${vendor} 발주] ${month}/${date}\n\n${itemsText}`;
-    }
+    let copyText = (vendor === '고센유통') 
+        ? `안녕하세요 통빱 발주하겠습니다.\n\n${month}월 ${date}일\n\n${itemsText}\n\n감사합니다.`
+        : `[${vendor} 발주] ${month}/${date}\n\n${itemsText}`;
     
     navigator.clipboard.writeText(copyText).then(() => {
         showAlert(`${vendor} 발주서 복사 완료!`, 'success');
-    }).catch(err => {
-        console.error('복사 실패:', err);
-        showAlert('복사 실패', 'error');
     });
 }
 
@@ -873,7 +940,16 @@ function copyToKakao() {
     });
 }
 
-// 3. [수정] 하루 사용량 저장 함수
+function captureStandardInput() {
+    Object.keys(items).forEach(vendor => {
+        items[vendor].forEach(item => {
+            const itemKey = `${vendor}_${item.품목명}`;
+            const input = document.getElementById(`usage_${itemKey}`);
+            if (input) dailyUsage[itemKey] = input.value === '' ? 0 : parseFloat(input.value);
+        });
+    });
+}
+
 async function saveStandard() {
     captureStandardInput();
     try {
@@ -885,6 +961,8 @@ async function saveStandard() {
         if (await response.json().then(r=>r.success)) showAlert('사용량이 저장되었습니다.', 'success');
     } catch (e) { console.error(e); }
 }
+
+
 
 async function loadHolidays() {
     try {
@@ -1472,19 +1550,25 @@ function saveEditItem() {
     showAlert('수정되었습니다. 하단의 [저장] 버튼을 눌러 확정하세요.', 'success');
 }
 
+// 품목 관리 저장 수정
 async function saveItemChanges() {
     try {
-        await fetch(`${API_BASE}/api/inventory/items`, {
+        const res = await fetch(`${API_BASE}/api/inventory/items`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ items: items })
         });
-        showAlert('품목 순서 및 변경사항이 저장되었습니다.', 'success');
+        const result = await res.json();
         
+        if (result.success) {
+            showAlert('품목 설정이 서버에 저장되었습니다.', 'success');
+        } else {
+            showAlert('서버 저장 실패', 'error');
+        }
         renderUnifiedInventoryForm(); 
     } catch (e) {
         console.error(e);
-        showAlert('저장되었습니다 (로컬).', 'success');
+        showAlert(`에러 발생: ${e.message}`, 'error'); // 로컬 저장 메시지 제거
         renderUnifiedInventoryForm();
     }
 }
