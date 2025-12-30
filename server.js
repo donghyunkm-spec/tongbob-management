@@ -271,24 +271,31 @@ app.post('/api/inventory/current', (req, res) => {
     const { inventory } = req.body;
     writeJson(INVENTORY_CURRENT_FILE, inventory);
     
-    // 히스토리 저장
-    let history = readJson(INVENTORY_HISTORY_FILE, []);
-    const now = new Date();
-    const historyRecord = {
-        date: now.toISOString().split('T')[0],
-        time: now.toTimeString().split(' ')[0].substring(0, 5),
-        inventory: {}
-    };
-    for (const itemKey in inventory) {
-        const vendor = itemKey.split('_')[0];
-        if (!historyRecord.inventory[vendor]) historyRecord.inventory[vendor] = {};
-        historyRecord.inventory[vendor][itemKey] = inventory[itemKey];
-    }
-    history.push(historyRecord);
-    if (history.length > 100) history = history.slice(-100);
-    writeJson(INVENTORY_HISTORY_FILE, history);
+    // 즉시 응답 전송 (사용자 경험 개선)
+    res.json({ success: true, inventory: inventory });
     
-    res.json({ success: true });
+    // 히스토리 저장은 비동기로 처리 (응답 후 백그라운드 작업)
+    setImmediate(() => {
+        try {
+            let history = readJson(INVENTORY_HISTORY_FILE, []);
+            const now = new Date();
+            const historyRecord = {
+                date: now.toISOString().split('T')[0],
+                time: now.toTimeString().split(' ')[0].substring(0, 5),
+                inventory: {}
+            };
+            for (const itemKey in inventory) {
+                const vendor = itemKey.split('_')[0];
+                if (!historyRecord.inventory[vendor]) historyRecord.inventory[vendor] = {};
+                historyRecord.inventory[vendor][itemKey] = inventory[itemKey];
+            }
+            history.push(historyRecord);
+            if (history.length > 100) history = history.slice(-100);
+            writeJson(INVENTORY_HISTORY_FILE, history);
+        } catch (e) {
+            console.error('히스토리 저장 실패:', e);
+        }
+    });
 });
 
 // 3. 하루 사용량

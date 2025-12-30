@@ -643,8 +643,11 @@ async function saveInventory() {
         console.error(e);
         showAlert('저장 실패 (네트워크 오류)', 'error');
     } finally {
-        // UI 갱신 (저장 버튼 상태 복구 및 화면 리프레시)
-        renderUnifiedInventoryForm();
+        // 버튼 상태만 복구 (전체 폼 재렌더링 제거)
+        if(saveBtn) {
+            saveBtn.textContent = '💾 저장';
+            saveBtn.disabled = false;
+        }
     }
 }
 
