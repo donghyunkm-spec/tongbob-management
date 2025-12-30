@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>카카오톡 알림 권한 설정</title>
+    <style>
+        body { font-family: 'Arial', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f8f9fa; }
+        .container { text-align: center; background: white; padding: 40px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { margin-bottom: 20px; color: #333; }
+        p { color: #666; margin-bottom: 30px; }
+        .kakao-btn {
+            background: #FEE500; color: #000000 85%; border: none; padding: 15px 30px;
+            border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; text-decoration: none;
+        }
+        .kakao-btn:hover { background: #fdd835; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🔔 카카오톡 알림 권한 설정</h2>
+        <p>매일 오전 11시, 매출/예상 순익 알림을 받으려면<br>아래 버튼을 눌러 로그인을 완료해주세요.</p>
+        
+        <a id="loginBtn" href="#" class="kakao-btn">카카오 로그인하고 권한 주기</a>
+    </div>
+
+    <script>
+        // 여기에 사장님의 REST API KEY를 입력해주세요 (server.js와 동일한 키)
+        const REST_API_KEY = 'b93a072ab458557243baf45e12f2a011';
+        // 여기에 Railway 배포 주소 + /oauth/kakao (server.js와 동일한 주소)
+        const REDIRECT_URI = 'https://chogajipreservation-production.up.railway.app/oauth/kakao';
+
+        const kakaoAuthUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${REST_API_KEY}&redirect_uri=${REDIRECT_URI}&response_type=code&scope=talk_message`;
+
+        document.getElementById('loginBtn').href = kakaoAuthUrl;
+    </script>
+</body>
+</html>
