@@ -634,6 +634,45 @@ cron.schedule('0 11 * * *', () => {
     generateAndSendBriefing();
 }, { timezone: "Asia/Seoul" });
 
+// === [디버그용] 파일 저장 확인 API ===
+app.get('/api/debug/files', (req, res) => {
+    try {
+        // 현재 설정된 저장 경로 확인
+        const isRailway = process.env.RAILWAY_VOLUME_MOUNT_PATH !== undefined;
+        const currentPath = isRailway 
+            ? process.env.RAILWAY_VOLUME_MOUNT_PATH 
+            : path.join(__dirname, 'data');
+
+        // 폴더 내 파일 목록 읽기
+        if (!fs.existsSync(currentPath)) {
+            return res.json({ 
+                status: 'Folder Not Found', 
+                path: currentPath, 
+                files: [] 
+            });
+        }
+
+        const files = fs.readdirSync(currentPath).map(filename => {
+            const stats = fs.statSync(path.join(currentPath, filename));
+            return {
+                name: filename,
+                size: stats.size + ' bytes',
+                modified: stats.mtime.toLocaleString()
+            };
+        });
+
+        res.json({
+            status: 'OK',
+            environment: isRailway ? 'Railway Volume' : 'Local Disk',
+            savePath: currentPath,
+            fileCount: files.length,
+            files: files
+        });
+    } catch (e) {
+        res.json({ error: e.message });
+    }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`);
 });
