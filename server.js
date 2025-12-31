@@ -126,7 +126,15 @@ app.post('/api/login', (req, res) => {
 });
 
 app.get('/api/staff', (req, res) => {
-    res.json({ success: true, data: readJson(STAFF_FILE, []) });
+    const includeDeleted = req.query.includeDeleted === 'true';
+    let staff = readJson(STAFF_FILE, []);
+    
+    // ✅ 삭제된 직원 필터링 (includeDeleted=true가 아닌 경우)
+    if (!includeDeleted) {
+        staff = staff.filter(s => !s.deleted);
+    }
+    
+    res.json({ success: true, data: staff });
 });
 
 app.post('/api/staff', (req, res) => {
@@ -158,12 +166,89 @@ app.delete('/api/staff/:id', (req, res) => {
     const actor = req.query.actor || 'Unknown';
     let staff = readJson(STAFF_FILE, []);
     const target = staff.find(s => s.id == req.params.id);
+    
+    if (target) {
+        // ✅ 소프트 삭제: 데이터는 유지하고 플래그만 설정
+        const today = new Date().toISOString().split('T')[0];
+        target.deleted = true;
+        target.deletedAt = new Date().toISOString();
+        target.deletedBy = actor;
+        
+        // ✅ endDate가 없으면 오늘 날짜로 자동 설정 (급여 계산용)
+        if (!target.endDate) {
+            target.endDate = today;
+        }
+        
+        if (writeJson(STAFF_FILE, staff)) {
+            addLog(actor, '직원삭제', target.name, '퇴사 처리 (데이터 보관)');
+            res.json({ success: true });
+        } else {
+            res.status(500).json({ success: false });
+        }
+    } else {
+        res.status(404).json({ success: false, message: '직원을 찾을 수 없습니다.' });
+    }
+});
+
+// ✅ 직원 복구 API
+app.post('/api/staff/:id/restore', (req, res) => {
+    const { actor } = req.body;
+    let staff = readJson(STAFF_FILE, []);
+    const target = staff.find(s => s.id == req.params.id);
+    
+    if (target && target.deleted) {
+        // 복구 처리
+        target.deleted = false;
+        delete target.deletedAt;
+        delete target.deletedBy;
+        // endDate는 유지 (실제 퇴사일이 있을 수 있음)
+        
+        if (writeJson(STAFF_FILE, staff)) {
+            addLog(actor || 'Unknown', '직원복구', target.name, '복직 처리');
+            res.json({ success: true });
+        } else {
+            res.status(500).json({ success: false });
+        }
+    } else {
+        res.status(404).json({ success: false, message: '복구할 직원을 찾을 수 없습니다.' });
+    }
+});
+
+// ✅ 완전 삭제 API (30일 이상 지난 데이터만)
+app.delete('/api/staff/:id/permanent', (req, res) => {
+    const actor = req.query.actor || 'Unknown';
+    let staff = readJson(STAFF_FILE, []);
+    const target = staff.find(s => s.id == req.params.id);
+    
+    if (!target) {
+        return res.status(404).json({ success: false, message: '직원을 찾을 수 없습니다.' });
+    }
+    
+    if (!target.deleted) {
+        return res.status(400).json({ success: false, message: '삭제된 직원만 완전 삭제할 수 있습니다.' });
+    }
+    
+    // 30일 경과 확인
+    const deletedDate = new Date(target.deletedAt);
+    const now = new Date();
+    const daysDiff = Math.floor((now - deletedDate) / (1000 * 60 * 60 * 24));
+    
+    if (daysDiff < 30) {
+        return res.status(400).json({ 
+            success: false, 
+            message: `삭제 후 30일이 지나야 완전 삭제 가능합니다. (현재 ${daysDiff}일 경과)` 
+        });
+    }
+    
+    // 완전 삭제
     staff = staff.filter(s => s.id != req.params.id);
     
     if (writeJson(STAFF_FILE, staff)) {
-        if(target) addLog(actor, '직원삭제', target.name, '삭제됨');
+        addLog(actor, '직원완전삭제', target.name, `영구 삭제 (${daysDiff}일 경과)`);
         res.json({ success: true });
-    } else res.status(500).json({ success: false });
+    } else {
+        res.status(500).json({ success: false });
+    }
 });
 
 app.post('/api/staff/exception', async (req, res) => {

@@ -1184,6 +1184,36 @@ async function loadStaffData() {
     } catch(e) { console.error("데이터 로드 실패"); }
 }
 
+// ✅ 관리 탭 전환 (현재 직원 / 삭제된 직원)
+function switchManageTab(tab) {
+    if (!currentUser) {
+        openLoginModal();
+        return;
+    }
+    
+    // 삭제된 직원 탭은 관리자만
+    if (tab === 'deleted' && currentUser.role !== 'admin') {
+        alert('관리자만 접근 가능합니다.');
+        return;
+    }
+    
+    // 탭 버튼 스타일 변경
+    document.getElementById('activeStaffTab').classList.remove('active');
+    document.getElementById('deletedStaffTab').classList.remove('active');
+    
+    if (tab === 'active') {
+        document.getElementById('activeStaffTab').classList.add('active');
+        document.getElementById('activeStaffSection').style.display = 'block';
+        document.getElementById('deletedStaffSection').style.display = 'none';
+        renderManageList();
+    } else {
+        document.getElementById('deletedStaffTab').classList.add('active');
+        document.getElementById('activeStaffSection').style.display = 'none';
+        document.getElementById('deletedStaffSection').style.display = 'block';
+        loadDeletedStaff();
+    }
+}
+
 function renderManageList() {
     const list = document.getElementById('manageStaffList');
     if(!list) return;
@@ -1198,21 +1228,7 @@ function renderManageList() {
                 💰 ${s.salaryType === 'monthly' ? '월급' : '시급'}: ${s.salary ? s.salary.toLocaleString() : '0'}원
              </div>` : '';
 
-        list.innerHTML += `
-            <div class="reservation-item">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div>
-                        <strong style="font-size:16px;">${s.name}</strong> 
-                        <span style="font-size:12px; color:#666;">(${s.time})</span>
-                        <div style="font-size:13px; margin-top:5px;">📅 ${daysStr}</div>
-                        ${salaryInfo}
-                    </div>
-                    <div>
-                        <button class="edit-btn" onclick="openEditModal(${s.id})">수정</button>
-                        <button class="delete-btn" onclick="deleteStaff(${s.id})">삭제</button>
-                    </div>
-                </div>
-            </div>`;
+        // ✅ 역할 배지 추가
         const roles = s.roles || ['일반'];
         const rolesBadge = roles.map(r => {
             const roleColors = {
@@ -1223,7 +1239,167 @@ function renderManageList() {
             };
             return `<span style="background:${roleColors[r] || '#999'}; color:white; padding:2px 6px; border-radius:3px; font-size:11px; margin-right:3px;">${r}</span>`;
         }).join('');
+
+        list.innerHTML += `
+            <div class="reservation-item">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <strong style="font-size:16px;">${s.name}</strong> 
+                        <span style="font-size:12px; color:#666;">(${s.time})</span>
+                        <div style="font-size:13px; margin-top:5px;">${rolesBadge}</div>
+                        <div style="font-size:13px; margin-top:5px;">📅 ${daysStr}</div>
+                        ${salaryInfo}
+                    </div>
+                    <div>
+                        <button class="edit-btn" onclick="openEditModal(${s.id})">수정</button>
+                        <button class="delete-btn" onclick="deleteStaff(${s.id})">삭제</button>
+                    </div>
+                </div>
+            </div>`;
     });
+}
+
+// ✅ 삭제된 직원 목록 로드
+async function loadDeletedStaff() {
+    if (!currentUser || currentUser.role !== 'admin') {
+        alert('관리자만 접근 가능합니다.');
+        return;
+    }
+    
+    try {
+        const res = await fetch('/api/staff?includeDeleted=true');
+        const json = await res.json();
+        const deletedStaff = json.data.filter(s => s.deleted);
+        renderDeletedStaffList(deletedStaff);
+    } catch(e) {
+        console.error('삭제된 직원 로드 실패:', e);
+    }
+}
+
+// ✅ 삭제된 직원 목록 렌더링
+function renderDeletedStaffList(deletedStaff) {
+    const list = document.getElementById('deletedStaffList');
+    if(!list) return;
+    
+    list.innerHTML = '';
+    
+    if (deletedStaff.length === 0) {
+        list.innerHTML = '<p style="text-align:center; color:#999; padding:20px;">삭제된 직원이 없습니다.</p>';
+        return;
+    }
+    
+    deletedStaff.forEach(s => {
+        const deletedDate = new Date(s.deletedAt);
+        const now = new Date();
+        const daysPassed = Math.floor((now - deletedDate) / (1000 * 60 * 60 * 24));
+        const canPermanentDelete = daysPassed >= 30;
+        
+        const deletedInfo = `
+            <div style="font-size:12px; color:#999; margin-top:5px;">
+                🗑️ 삭제일: ${deletedDate.toLocaleDateString('ko-KR')} (${daysPassed}일 경과)
+                <br/>👤 삭제자: ${s.deletedBy || '알 수 없음'}
+            </div>
+        `;
+        
+        const roles = s.roles || ['일반'];
+        const rolesBadge = roles.map(r => {
+            const roleColors = {
+                '포스': '#e91e63',
+                '삼겹살': '#ff5722',
+                '국수': '#ff9800',
+                '일반': '#9e9e9e'
+            };
+            return `<span style="background:${roleColors[r] || '#999'}; color:white; padding:2px 6px; border-radius:3px; font-size:11px; margin-right:3px;">${r}</span>`;
+        }).join('');
+        
+        list.innerHTML += `
+            <div class="reservation-item" style="background:#f5f5f5; border-left:4px solid #999;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <strong style="font-size:16px; color:#666;">${s.name}</strong> 
+                        <span style="font-size:12px; color:#999;">(${s.time})</span>
+                        <div style="font-size:13px; margin-top:5px;">${rolesBadge}</div>
+                        ${deletedInfo}
+                    </div>
+                    <div style="display:flex; gap:5px; flex-direction:column;">
+                        <button class="edit-btn" onclick="restoreStaff(${s.id})" style="background:#4CAF50;">복구</button>
+                        <button class="delete-btn" onclick="permanentDeleteStaff(${s.id}, ${canPermanentDelete})" 
+                                ${!canPermanentDelete ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
+                            완전삭제 ${!canPermanentDelete ? '(30일 후)' : ''}
+                        </button>
+                    </div>
+                </div>
+            </div>`;
+    });
+}
+
+// ✅ 직원 복구
+async function restoreStaff(id) {
+    if (!currentUser || currentUser.role !== 'admin') {
+        alert('관리자만 가능합니다.');
+        return;
+    }
+    
+    if (!confirm('이 직원을 복구하시겠습니까?')) return;
+    
+    try {
+        const res = await fetch(`/api/staff/${id}/restore`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ actor: currentUser.name })
+        });
+        
+        const json = await res.json();
+        if (json.success) {
+            alert('직원이 복구되었습니다.');
+            await loadStaffData();
+            await loadDeletedStaff();
+        } else {
+            alert('복구 실패: ' + (json.message || '알 수 없는 오류'));
+        }
+    } catch(e) {
+        console.error('복구 실패:', e);
+        alert('복구 중 오류가 발생했습니다.');
+    }
+}
+
+// ✅ 완전 삭제
+async function permanentDeleteStaff(id, canDelete) {
+    if (!currentUser || currentUser.role !== 'admin') {
+        alert('관리자만 가능합니다.');
+        return;
+    }
+    
+    if (!canDelete) {
+        alert('삭제 후 30일이 지나야 완전 삭제가 가능합니다.');
+        return;
+    }
+    
+    if (!confirm('⚠️ 경고: 이 작업은 되돌릴 수 없습니다.\n\n직원의 모든 데이터가 영구적으로 삭제됩니다.\n정말 완전 삭제하시겠습니까?')) return;
+    
+    // 한 번 더 확인
+    const confirmText = prompt('완전 삭제를 진행하려면 "영구삭제" 를 입력하세요:');
+    if (confirmText !== '영구삭제') {
+        alert('취소되었습니다.');
+        return;
+    }
+    
+    try {
+        const res = await fetch(`/api/staff/${id}/permanent?actor=${encodeURIComponent(currentUser.name)}`, {
+            method: 'DELETE'
+        });
+        
+        const json = await res.json();
+        if (json.success) {
+            alert('완전 삭제되었습니다.');
+            await loadDeletedStaff();
+        } else {
+            alert('삭제 실패: ' + (json.message || '알 수 없는 오류'));
+        }
+    } catch(e) {
+        console.error('완전 삭제 실패:', e);
+        alert('삭제 중 오류가 발생했습니다.');
+    }
 }
 
 function openEditModal(id) {
