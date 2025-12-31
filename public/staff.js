@@ -13,6 +13,9 @@ let currentWeekStartDate = new Date();
 let accountingData = { daily: {}, monthly: {} };
 let currentAccDate = new Date().toISOString().split('T')[0];
 let currentDashboardDate = new Date(); // 가계부 조회 기준 월
+let selectedPredStore = 'all'; // 예상순익 매장 선택: 'all', '1', '3'
+let selectedDashStore = 'all'; // 월간분석 매장 선택: 'all', '1', '3'
+
 
 // 매장 이름 (UI 표시용)
 const storeNameKr = '통빱';
@@ -258,8 +261,12 @@ async function onLoginSuccess(user) {
     
     const userInfoDiv = document.getElementById('userInfo');
     if(userInfoDiv) {
-        userInfoDiv.style.display = 'block';
-        userInfoDiv.innerHTML = `${user.name} (${user.role === 'admin' ? '사장' : user.role === 'manager' ? '점장' : '직원'})`;
+        userInfoDiv.style.display = 'flex';
+    }
+    
+    const userNameSpan = document.getElementById('userName');
+    if(userNameSpan) {
+        userNameSpan.textContent = `${user.name} (${user.role === 'admin' ? '사장' : user.role === 'manager' ? '점장' : '직원'})`;
     }
 
     // 로그인 성공 시 재고관리 탭 표시
@@ -282,11 +289,33 @@ async function onLoginSuccess(user) {
         try { await loadLogs(); } catch(e) {}
     }
     
+    // 매니저는 예상순익, 월간분석 탭 숨김
+    if (user.role === 'manager') {
+        const predTab = document.getElementById('tab-prediction');
+        const dashTab = document.getElementById('tab-dashboard');
+        if(predTab) predTab.style.display = 'none';
+        if(dashTab) dashTab.style.display = 'none';
+    }
+    
     const activeTab = document.querySelector('.tab-content.active');
     if(activeTab && activeTab.id === 'accounting-content') {
         try { await loadAccountingData(); } catch(e) {}
     }
     try { renderManageList(); } catch(e) {}
+}
+
+// 로그아웃 함수
+function logout() {
+    if (!confirm('로그아웃 하시겠습니까?')) return;
+    
+    // localStorage 클리어
+    localStorage.removeItem('staffUser');
+    
+    // 현재 사용자 초기화
+    currentUser = null;
+    
+    // 페이지 새로고침
+    location.reload();
 }
 
 // ==========================================
@@ -349,29 +378,36 @@ function updateDashboardUI() {
     else if (activeSubTab.id === 'acc-monthly') loadMonthlyForm();
 }
 
-// [수정] 일일 데이터 로드 (돈통 정산 삭제, 새 필드 매핑)
+// [수정] 일일 데이터 로드 - 1루/3루 분리
 function loadDailyAccounting() {
     const datePicker = document.getElementById('accDate').value;
     if (!datePicker) return;
 
     const dayData = (accountingData.daily && accountingData.daily[datePicker]) ? accountingData.daily[datePicker] : {};
     
-    // 매출
-    if(document.getElementById('inpCard')) document.getElementById('inpCard').value = dayData.card || '';
-    if(document.getElementById('inpCash')) document.getElementById('inpCash').value = dayData.cash || '';
-    if(document.getElementById('inpDelivery')) document.getElementById('inpDelivery').value = dayData.delivery || '';
+    // 1루 매출
+    if(document.getElementById('inpCard1')) document.getElementById('inpCard1').value = dayData.card1 || '';
+    if(document.getElementById('inpCash1')) document.getElementById('inpCash1').value = dayData.cash1 || '';
+    if(document.getElementById('inpDelivery1')) document.getElementById('inpDelivery1').value = dayData.delivery1 || '';
+    if(document.getElementById('inpTransfer1')) document.getElementById('inpTransfer1').value = dayData.transfer1 || '';
     
-    // 참고용 계좌이체
-    if(document.getElementById('inpTransfer')) document.getElementById('inpTransfer').value = dayData.transfer || '';
+    // 3루 매출
+    if(document.getElementById('inpCard3')) document.getElementById('inpCard3').value = dayData.card3 || '';
+    if(document.getElementById('inpCash3')) document.getElementById('inpCash3').value = dayData.cash3 || '';
+    if(document.getElementById('inpDelivery3')) document.getElementById('inpDelivery3').value = dayData.delivery3 || '';
+    if(document.getElementById('inpTransfer3')) document.getElementById('inpTransfer3').value = dayData.transfer3 || '';
 
-    // 지출 (Food->고센유통)
+    // 지출 (공통)
     document.getElementById('inpFood').value = dayData.food || ''; 
     document.getElementById('inpMeat').value = dayData.meat || ''; 
     document.getElementById('inpEtc').value = dayData.etc || ''; 
-    document.getElementById('inpNote').value = dayData.note || '';
+    
+    // 메모 (각각)
+    if(document.getElementById('inpNote1')) document.getElementById('inpNote1').value = dayData.note1 || '';
+    if(document.getElementById('inpNote3')) document.getElementById('inpNote3').value = dayData.note3 || '';
 }
 
-// [수정] 일일 데이터 저장 (총매출 공식 변경)
+// [수정] 일일 데이터 저장 - 1루/3루 분리
 async function saveDailyAccounting() {
     if (!currentUser) { alert("로그인이 필요합니다."); openLoginModal(); return; }
     if (!['admin', 'manager'].includes(currentUser.role)) { alert("권한이 없습니다."); return; }
@@ -379,20 +415,31 @@ async function saveDailyAccounting() {
     const dateStr = document.getElementById('accDate').value;
     if (!dateStr) { alert('날짜를 선택해주세요.'); return; }
 
-    // 매출 입력
-    const card = parseInt(document.getElementById('inpCard').value) || 0;
-    const cash = parseInt(document.getElementById('inpCash').value) || 0;
-    const delivery = parseInt(document.getElementById('inpDelivery').value) || 0;
-    const transfer = parseInt(document.getElementById('inpTransfer').value) || 0; // 참고용
+    // 1루 매출 입력
+    const card1 = parseInt(document.getElementById('inpCard1').value) || 0;
+    const cash1 = parseInt(document.getElementById('inpCash1').value) || 0;
+    const delivery1 = parseInt(document.getElementById('inpDelivery1').value) || 0;
+    const transfer1 = parseInt(document.getElementById('inpTransfer1').value) || 0; // 참고용
+    
+    // 3루 매출 입력
+    const card3 = parseInt(document.getElementById('inpCard3').value) || 0;
+    const cash3 = parseInt(document.getElementById('inpCash3').value) || 0;
+    const delivery3 = parseInt(document.getElementById('inpDelivery3').value) || 0;
+    const transfer3 = parseInt(document.getElementById('inpTransfer3').value) || 0; // 참고용
 
-    // 지출 입력
+    // 지출 입력 (공통)
     const food = parseInt(document.getElementById('inpFood').value) || 0; // 고센유통
-    const meat = parseInt(document.getElementById('inpMeat').value) || 0; // 고기(유지)
+    const meat = parseInt(document.getElementById('inpMeat').value) || 0; // 고기
     const etc = parseInt(document.getElementById('inpEtc').value) || 0;   // 기타
-    const note = document.getElementById('inpNote').value || '';
+    
+    // 메모 (각각)
+    const note1 = document.getElementById('inpNote1').value || '';
+    const note3 = document.getElementById('inpNote3').value || '';
 
-    // [중요] 실제 매출 합산 (카드 + 현금 + 배달)
-    const totalSales = card + cash + delivery;
+    // 매출 합산 (계좌이체 제외)
+    const sales1 = card1 + cash1 + delivery1;
+    const sales3 = card3 + cash3 + delivery3;
+    const totalSales = sales1 + sales3;
     const totalCost = food + meat + etc;
 
     if (totalSales === 0 && totalCost === 0) {
@@ -400,10 +447,16 @@ async function saveDailyAccounting() {
     }
 
     const data = {
-        card, cash, delivery, transfer, 
+        // 1루 매출
+        card1, cash1, delivery1, transfer1, sales1,
+        // 3루 매출
+        card3, cash3, delivery3, transfer3, sales3,
+        // 전체 매출
         sales: totalSales, 
+        // 지출
         food, meat, etc, cost: totalCost, 
-        note
+        // 메모
+        note1, note3
     };
 
     try {
@@ -553,69 +606,62 @@ function loadMonthlyForm() {
     const monthStr = getMonthStr(currentDashboardDate);
     const mData = (accountingData.monthly && accountingData.monthly[monthStr]) ? accountingData.monthly[monthStr] : {};
 
-    const setVal = (id, val) => { if(document.getElementById(id)) document.getElementById(id).value = val || ''; };
+    const setVal = (id, val) => { 
+        const el = document.getElementById(id);
+        if(el) el.value = val || ''; 
+    };
 
-    // 1. 수기 입력 항목 불러오기
-    setVal('fixInternet', mData.internet);
-    setVal('fixWater', mData.water);
-    setVal('fixCleaning', mData.cleaning);
-    setVal('fixOperMgmt', mData.operMgmt);
-    setVal('fixCCTV', mData.cctv);
-    setVal('fixEtc', mData.etc_fixed);
-    setVal('fixNote', mData.note);
+    // 1루 고정비
+    setVal('fixInternet1', mData.internet1);
+    setVal('fixWater1', mData.water1);
+    setVal('fixCleaning1', mData.cleaning1);
+    setVal('fixOperMgmt1', mData.operMgmt1);
+    setVal('fixCCTV1', mData.cctv1);
+    setVal('fixBizCard1', mData.bizCard1);
+    setVal('fixEtc1', mData.etc_fixed1);
 
-    // 2. [NEW] 수수료 항목 자동 계산 (일일 데이터 합산)
-    let totalSales = 0;
-    let deliverySales = 0;
-    let cardSales = 0;
-
-    if (accountingData.daily) {
-        Object.keys(accountingData.daily).forEach(date => {
-            if (date.startsWith(monthStr)) {
-                const d = accountingData.daily[date];
-                totalSales += (d.sales || 0);
-                deliverySales += (d.delivery || 0);
-                cardSales += (d.card || 0);
-            }
-        });
-    }
-
-    // 계산식 적용
-    const autoCommission = Math.floor(totalSales * 0.30);
-    const autoDeliveryFee = Math.floor(deliverySales * 0.0495);
-    const autoCardFee = Math.floor(cardSales * 0.016);
-
-    // UI에 적용 (비활성화 상태여도 값은 보임)
-    setVal('fixCommission', autoCommission);
-    setVal('fixDeliveryFee', autoDeliveryFee);
-    setVal('fixCardFee', autoCardFee);
+    // 3루 고정비
+    setVal('fixInternet3', mData.internet3);
+    setVal('fixWater3', mData.water3);
+    setVal('fixCleaning3', mData.cleaning3);
+    setVal('fixOperMgmt3', mData.operMgmt3);
+    setVal('fixCCTV3', mData.cctv3);
+    setVal('fixBizCard3', mData.bizCard3);
+    setVal('fixEtc3', mData.etc_fixed3);
 }
-
 // [수정] 고정비 저장 (PUT 메서드 사용)
+
 async function saveFixedCost() {
     if (!currentUser) { openLoginModal(); return; }
     if (!['admin', 'manager'].includes(currentUser.role)) { alert("권한이 없습니다."); return; }
 
     const monthStr = getMonthStr(currentDashboardDate);
     
-    const getVal = (id) => parseInt(document.getElementById(id).value) || 0;
+    const getVal = (id) => {
+        const el = document.getElementById(id);
+        return el ? (parseInt(el.value) || 0) : 0;
+    };
     
-    // 자동계산 필드는 화면에 있는 값을 그대로 전송 (서버에서도 재계산하지만 확인용)
     const data = {
-        commission: getVal('fixCommission'),
-        deliveryFee: getVal('fixDeliveryFee'),
-        cardFee: getVal('fixCardFee'),
+        // 1루 고정비
+        internet1: getVal('fixInternet1'),
+        water1: getVal('fixWater1'),
+        cleaning1: getVal('fixCleaning1'),
+        operMgmt1: getVal('fixOperMgmt1'),
+        cctv1: getVal('fixCCTV1'),
+        bizCard1: getVal('fixBizCard1'),
+        etc_fixed1: getVal('fixEtc1'),
         
-        internet: getVal('fixInternet'),
-        water: getVal('fixWater'),
-        cleaning: getVal('fixCleaning'),
-        operMgmt: getVal('fixOperMgmt'),
-        cctv: getVal('fixCCTV'),
-        etc_fixed: getVal('fixEtc'),
-        note: document.getElementById('fixNote').value
+        // 3루 고정비
+        internet3: getVal('fixInternet3'),
+        water3: getVal('fixWater3'),
+        cleaning3: getVal('fixCleaning3'),
+        operMgmt3: getVal('fixOperMgmt3'),
+        cctv3: getVal('fixCCTV3'),
+        bizCard3: getVal('fixBizCard3'),
+        etc_fixed3: getVal('fixEtc3')
     };
 
-    // 저장 실패 원인이었던 POST -> PUT 변경
     try {
         const res = await fetch('/api/accounting/monthly', {
             method: 'PUT',
@@ -636,7 +682,6 @@ async function saveFixedCost() {
         alert('저장 실패 (네트워크 오류)'); 
     }
 }
-
 // 분석 HTML 생성
 function generateDetailAnalysisHtml(totalSales, varCost, deliverySales, alcSales, bevSales, alcCost, bevCost, delivCost) {
     let html = `<h4 style="color:#00796b; margin-bottom:10px; border-top:1px solid #eee; padding-top:15px;">🕵️ 유형별 원가 분석 (마진율)</h4>`;
@@ -678,6 +723,49 @@ function createAnalysisCard(title, row1, row2, row3, bg) {
 }
 
 // 예상 순익
+
+// 예상순익 매장 선택
+function selectPredStore(store) {
+    selectedPredStore = store;
+    
+    // 버튼 스타일 업데이트
+    document.querySelectorAll('#acc-prediction .store-select-btn').forEach(btn => {
+        btn.classList.remove('active');
+        btn.style.background = 'white';
+    });
+    
+    const activeBtn = document.getElementById('predStore' + (store === 'all' ? 'All' : store));
+    if(activeBtn) {
+        activeBtn.classList.add('active');
+        const color = store === 'all' ? '#4a148c' : (store === '1' ? '#1976D2' : '#0288D1');
+        activeBtn.style.background = color;
+        activeBtn.style.color = 'white';
+    }
+    
+    renderPredictionStats();
+}
+
+// 월간분석 매장 선택
+function selectDashStore(store) {
+    selectedDashStore = store;
+    
+    // 버튼 스타일 업데이트
+    document.querySelectorAll('#acc-dashboard .store-select-btn').forEach(btn => {
+        btn.classList.remove('active');
+        btn.style.background = 'white';
+    });
+    
+    const activeBtn = document.getElementById('dashStore' + (store === 'all' ? 'All' : store));
+    if(activeBtn) {
+        activeBtn.classList.add('active');
+        const color = store === 'all' ? '#333' : (store === '1' ? '#1976D2' : '#0288D1');
+        activeBtn.style.background = color;
+        activeBtn.style.color = 'white';
+    }
+    
+    renderDashboardStats();
+}
+
 function renderPredictionStats() {
     const today = new Date();
     const currentYear = currentDashboardDate.getFullYear();
@@ -703,51 +791,126 @@ function renderPredictionStats() {
     const mData = (accountingData.monthly && accountingData.monthly[monthStr]) ? accountingData.monthly[monthStr] : {};
     
     // 1. 일일 매출 및 변동비 집계
-    let salesTotal = 0;
-    let variableCostTotal = 0;
-    
-    // *수정: 수수료 계산을 위한 상세 매출 합계*
-    let deliverySalesTotal = 0; 
-    let cardSalesTotal = 0;
+    let salesTotal1 = 0, salesTotal3 = 0;
+    let deliverySalesTotal1 = 0, deliverySalesTotal3 = 0;
+    let cardSalesTotal1 = 0, cardSalesTotal3 = 0;
+    let foodTotal = 0, meatTotal = 0, etcTotal = 0;
 
     if (accountingData.daily) {
         Object.keys(accountingData.daily).forEach(date => {
             if (date.startsWith(monthStr)) {
                 const d = accountingData.daily[date];
-                salesTotal += (d.sales || 0);
-                variableCostTotal += (d.cost || 0);
                 
-                // 수수료 계산용
-                deliverySalesTotal += (d.delivery || 0); 
-                cardSalesTotal += (d.card || 0);
+                // 1루 매출
+                salesTotal1 += (d.sales1 || 0);
+                deliverySalesTotal1 += (d.delivery1 || 0);
+                cardSalesTotal1 += (d.card1 || 0);
+                
+                // 3루 매출
+                salesTotal3 += (d.sales3 || 0);
+                deliverySalesTotal3 += (d.delivery3 || 0);
+                cardSalesTotal3 += (d.card3 || 0);
+                
+                // 공통 지출 (전체)
+                foodTotal += (d.food || 0);
+                meatTotal += (d.meat || 0);
+                etcTotal += (d.etc || 0);
             }
         });
     }
 
-    // 2. 비용 계산 분리
+    const totalSales = salesTotal1 + salesTotal3;
     
-    // A. 매출 연동 수수료 (이미 발생한 매출에 대한 것이므로 비율 적용 X -> 100% 반영)
-    const currCommission = Math.floor(salesTotal * 0.30);       // 총매출 30%
-    const currDeliveryFee = Math.floor(deliverySalesTotal * 0.0495); // 배달매출 4.95%
-    const currCardFee = Math.floor(cardSalesTotal * 0.016);      // 카드매출 1.6%
-    
-    const salesBasedCost = currCommission + currDeliveryFee + currCardFee;
+    // 2. 매출 비율 계산
+    const ratio1 = totalSales > 0 ? (salesTotal1 / totalSales) : 0.5;
+    const ratio3 = totalSales > 0 ? (salesTotal3 / totalSales) : 0.5;
 
-    // B. 시간 연동 고정비 (날짜 비율 적용 O)
-    const fixedMisc = (mData.internet||0) + (mData.water||0) + (mData.cleaning||0) + 
-                      (mData.operMgmt||0) + (mData.cctv||0) + (mData.etc_fixed||0);
+    // 3. 선택된 매장에 따라 계산
+    let salesTotal, deliverySalesTotal, cardSalesTotal;
+    let fixedMisc, commission, deliveryFee, cardFee;
+    let food, meat, etc;
     
-    const estimatedStaffCost = getEstimatedStaffCost(monthStr); // 인건비
+    // 인건비 (전체)
+    const estimatedStaffCost = getEstimatedStaffCost(monthStr);
+    let staffCost;
     
-    const timeBasedCostFull = fixedMisc + estimatedStaffCost;
-    const timeBasedCostApplied = Math.floor(timeBasedCostFull * ratio); 
+    if (selectedPredStore === '1') {
+        // === 1루만 ===
+        salesTotal = salesTotal1;
+        deliverySalesTotal = deliverySalesTotal1;
+        cardSalesTotal = cardSalesTotal1;
+        
+        // 1루 수수료
+        commission = Math.floor(salesTotal1 * 0.30);
+        deliveryFee = Math.floor(deliverySalesTotal1 * 0.0495);
+        cardFee = Math.floor(cardSalesTotal1 * 0.016);
+        
+        // 1루 고정비
+        fixedMisc = (mData.internet1||0) + (mData.water1||0) + (mData.cleaning1||0) + 
+                    (mData.operMgmt1||0) + (mData.cctv1||0) + (mData.bizCard1||0) + (mData.etc_fixed1||0);
+        
+        // 매출 비율로 배분
+        staffCost = Math.floor(estimatedStaffCost * ratio1);
+        food = Math.floor(foodTotal * ratio1);
+        meat = Math.floor(meatTotal * ratio1);
+        etc = Math.floor(etcTotal * ratio1);
+        
+    } else if (selectedPredStore === '3') {
+        // === 3루만 ===
+        salesTotal = salesTotal3;
+        deliverySalesTotal = deliverySalesTotal3;
+        cardSalesTotal = cardSalesTotal3;
+        
+        // 3루 수수료
+        commission = Math.floor(salesTotal3 * 0.30);
+        deliveryFee = Math.floor(deliverySalesTotal3 * 0.0495);
+        cardFee = Math.floor(cardSalesTotal3 * 0.016);
+        
+        // 3루 고정비
+        fixedMisc = (mData.internet3||0) + (mData.water3||0) + (mData.cleaning3||0) + 
+                    (mData.operMgmt3||0) + (mData.cctv3||0) + (mData.bizCard3||0) + (mData.etc_fixed3||0);
+        
+        // 매출 비율로 배분
+        staffCost = Math.floor(estimatedStaffCost * ratio3);
+        food = Math.floor(foodTotal * ratio3);
+        meat = Math.floor(meatTotal * ratio3);
+        etc = Math.floor(etcTotal * ratio3);
+        
+    } else {
+        // === 전체 ===
+        salesTotal = salesTotal1 + salesTotal3;
+        deliverySalesTotal = deliverySalesTotal1 + deliverySalesTotal3;
+        cardSalesTotal = cardSalesTotal1 + cardSalesTotal3;
+        
+        // 전체 수수료
+        commission = Math.floor(salesTotal1 * 0.30) + Math.floor(salesTotal3 * 0.30);
+        deliveryFee = Math.floor(deliverySalesTotal1 * 0.0495) + Math.floor(deliverySalesTotal3 * 0.0495);
+        cardFee = Math.floor(cardSalesTotal1 * 0.016) + Math.floor(cardSalesTotal3 * 0.016);
+        
+        // 전체 고정비
+        fixedMisc = (mData.internet1||0) + (mData.water1||0) + (mData.cleaning1||0) + 
+                    (mData.operMgmt1||0) + (mData.cctv1||0) + (mData.bizCard1||0) + (mData.etc_fixed1||0) +
+                    (mData.internet3||0) + (mData.water3||0) + (mData.cleaning3||0) + 
+                    (mData.operMgmt3||0) + (mData.cctv3||0) + (mData.bizCard3||0) + (mData.etc_fixed3||0);
+        
+        // 전체 (배분 없음)
+        staffCost = estimatedStaffCost;
+        food = foodTotal;
+        meat = meatTotal;
+        etc = etcTotal;
+    }
 
-    // 3. 최종 합산
-    const totalCurrentCost = variableCostTotal + salesBasedCost + timeBasedCostApplied;
+    // 4. 최종 비용 계산
+    const salesBasedCost = commission + deliveryFee + cardFee;
+    const timeBasedCostFull = fixedMisc + staffCost;
+    const timeBasedCostApplied = Math.floor(timeBasedCostFull * ratio);
+    const variableCost = food + meat + etc;
+    
+    const totalCurrentCost = variableCost + salesBasedCost + timeBasedCostApplied;
     const netProfit = salesTotal - totalCurrentCost;
     const margin = salesTotal > 0 ? ((netProfit / salesTotal) * 100).toFixed(1) : 0;
 
-    // UI 업데이트
+    // 5. UI 업데이트
     document.getElementById('predTotalSales').textContent = salesTotal.toLocaleString() + '원';
     document.getElementById('predTotalCost').textContent = totalCurrentCost.toLocaleString() + '원';
     
@@ -756,64 +919,150 @@ function renderPredictionStats() {
     profitEl.style.color = netProfit >= 0 ? '#fff' : '#ffab91';
     document.getElementById('predMargin').textContent = `보정 마진율: ${margin}%`;
 
-    // 상세 바 차트 렌더링 (파라미터 변경됨)
-    // ratio: 시간연동비용에만 적용하기 위해 전달, salesBasedCost는 별도 전달
-    renderCostList('predCostList', mData, estimatedStaffCost, ratio, salesTotal, totalCurrentCost, monthStr, {
-        commission: currCommission,
-        deliveryFee: currDeliveryFee,
-        cardFee: currCardFee,
-        fixedMisc: fixedMisc
+    // 6. 상세 바 차트 렌더링
+    renderCostList('predCostList', mData, staffCost, ratio, salesTotal, totalCurrentCost, monthStr, {
+        commission: commission,
+        deliveryFee: deliveryFee,
+        cardFee: cardFee,
+        fixedMisc: fixedMisc,
+        food: food,
+        meat: meat,
+        etc: etc
     });
 }
-
 // 월간 분석
 function renderDashboardStats() {
     const monthStr = getMonthStr(currentDashboardDate);
     const mData = (accountingData.monthly && accountingData.monthly[monthStr]) ? accountingData.monthly[monthStr] : {};
     
-    let sales = { card:0, cash:0, delivery:0, total:0 };
-    let variableCostTotal = 0; 
+    let sales1 = { card:0, cash:0, delivery:0, total:0 };
+    let sales3 = { card:0, cash:0, delivery:0, total:0 };
+    let foodTotal = 0, meatTotal = 0, etcTotal = 0;
 
     if (accountingData.daily) {
         Object.keys(accountingData.daily).forEach(date => {
             if (date.startsWith(monthStr)) {
                 const d = accountingData.daily[date];
-                sales.card += (d.card||0); 
-                sales.cash += (d.cash||0);
-                sales.delivery += (d.delivery||0);
-                sales.total += (d.sales||0); // 총매출 필드 사용
                 
-                variableCostTotal += (d.cost || 0); // 식자재 등
+                // 1루 매출
+                sales1.card += (d.card1||0);
+                sales1.cash += (d.cash1||0);
+                sales1.delivery += (d.delivery1||0);
+                sales1.total += (d.sales1||0);
+                
+                // 3루 매출
+                sales3.card += (d.card3||0);
+                sales3.cash += (d.cash3||0);
+                sales3.delivery += (d.delivery3||0);
+                sales3.total += (d.sales3||0);
+                
+                // 공통 지출
+                foodTotal += (d.food||0);
+                meatTotal += (d.meat||0);
+                etcTotal += (d.etc||0);
             }
         });
     }
 
-    const staffCost = getEstimatedStaffCost(monthStr);
+    const totalSales = sales1.total + sales3.total;
+    
+    // 매출 비율 계산
+    const ratio1 = totalSales > 0 ? (sales1.total / totalSales) : 0.5;
+    const ratio3 = totalSales > 0 ? (sales3.total / totalSales) : 0.5;
 
-    // *수정: 고정비 합산 (새 변수명 적용)*
-    const fixedTotal = (mData.commission||0) + (mData.deliveryFee||0) + (mData.cardFee||0) + 
-                       (mData.internet||0) + (mData.water||0) + (mData.cleaning||0) + 
-                       (mData.operMgmt||0) + (mData.cctv||0) + (mData.etc_fixed||0) + 
-                       staffCost;
+    // 선택된 매장에 따라 표시
+    let sales, fixedMisc, commission, deliveryFee, cardFee;
+    let food, meat, etc;
+    
+    // 인건비 (전체)
+    const totalStaffCost = getEstimatedStaffCost(monthStr);
+    let staffCost;
+    
+    if (selectedDashStore === '1') {
+        // === 1루만 ===
+        sales = sales1;
+        
+        // 1루 수수료
+        commission = Math.floor(sales1.total * 0.30);
+        deliveryFee = Math.floor(sales1.delivery * 0.0495);
+        cardFee = Math.floor(sales1.card * 0.016);
+        
+        // 1루 고정비
+        fixedMisc = (mData.internet1||0) + (mData.water1||0) + (mData.cleaning1||0) + 
+                    (mData.operMgmt1||0) + (mData.cctv1||0) + (mData.bizCard1||0) + (mData.etc_fixed1||0);
+        
+        // 매출 비율로 배분
+        staffCost = Math.floor(totalStaffCost * ratio1);
+        food = Math.floor(foodTotal * ratio1);
+        meat = Math.floor(meatTotal * ratio1);
+        etc = Math.floor(etcTotal * ratio1);
+        
+    } else if (selectedDashStore === '3') {
+        // === 3루만 ===
+        sales = sales3;
+        
+        // 3루 수수료
+        commission = Math.floor(sales3.total * 0.30);
+        deliveryFee = Math.floor(sales3.delivery * 0.0495);
+        cardFee = Math.floor(sales3.card * 0.016);
+        
+        // 3루 고정비
+        fixedMisc = (mData.internet3||0) + (mData.water3||0) + (mData.cleaning3||0) + 
+                    (mData.operMgmt3||0) + (mData.cctv3||0) + (mData.bizCard3||0) + (mData.etc_fixed3||0);
+        
+        // 매출 비율로 배분
+        staffCost = Math.floor(totalStaffCost * ratio3);
+        food = Math.floor(foodTotal * ratio3);
+        meat = Math.floor(meatTotal * ratio3);
+        etc = Math.floor(etcTotal * ratio3);
+        
+    } else {
+        // === 전체 ===
+        sales = {
+            card: sales1.card + sales3.card,
+            cash: sales1.cash + sales3.cash,
+            delivery: sales1.delivery + sales3.delivery,
+            total: sales1.total + sales3.total
+        };
+        
+        // 전체 수수료
+        commission = Math.floor(sales1.total * 0.30) + Math.floor(sales3.total * 0.30);
+        deliveryFee = Math.floor(sales1.delivery * 0.0495) + Math.floor(sales3.delivery * 0.0495);
+        cardFee = Math.floor(sales1.card * 0.016) + Math.floor(sales3.card * 0.016);
+        
+        // 전체 고정비
+        fixedMisc = (mData.internet1||0) + (mData.water1||0) + (mData.cleaning1||0) + 
+                    (mData.operMgmt1||0) + (mData.cctv1||0) + (mData.bizCard1||0) + (mData.etc_fixed1||0) +
+                    (mData.internet3||0) + (mData.water3||0) + (mData.cleaning3||0) + 
+                    (mData.operMgmt3||0) + (mData.cctv3||0) + (mData.bizCard3||0) + (mData.etc_fixed3||0);
+        
+        // 전체 (배분 없음)
+        staffCost = totalStaffCost;
+        food = foodTotal;
+        meat = meatTotal;
+        etc = etcTotal;
+    }
 
-    const totalCost = fixedTotal + variableCostTotal;
+    // 최종 비용 계산
+    const variableCost = food + meat + etc;
+    const totalCost = variableCost + commission + deliveryFee + cardFee + fixedMisc + staffCost;
     const netProfit = sales.total - totalCost;
     const margin = sales.total > 0 ? ((netProfit / sales.total) * 100).toFixed(1) : 0;
 
+    // UI 업데이트
     document.getElementById('dashTotalSales').textContent = sales.total.toLocaleString() + '원';
     document.getElementById('dashTotalCost').textContent = totalCost.toLocaleString() + '원';
     
     const profitEl = document.getElementById('dashNetProfit');
     profitEl.textContent = netProfit.toLocaleString() + '원';
-    profitEl.style.color = netProfit >= 0 ? '#fff' : '#ffab91'; 
+    profitEl.style.color = netProfit >= 0 ? '#fff' : '#ffab91';
     document.getElementById('dashMargin').textContent = `순이익률: ${margin}%`;
     
-    // 인건비 항목이 없어서 추가하거나 기존 요소 활용
-    if(document.getElementById('dashStaffCost')) document.getElementById('dashStaffCost').textContent = staffCost.toLocaleString();
+    if(document.getElementById('dashStaffCost')) 
+        document.getElementById('dashStaffCost').textContent = staffCost.toLocaleString();
 
-    renderDashboardCharts(sales, totalCost, mData, staffCost, variableCostTotal, monthStr);
+    renderDashboardCharts(sales, totalCost, mData, staffCost, variableCost, monthStr);
 }
-
 // [수정] 예상 순익 (Prediction) 및 월간 분석 차트 (Cost List)
 function renderCostList(containerId, mData, staffCost, ratio, salesTotal, totalCost, monthStr, calculatedCosts = null) {
     const el = document.getElementById(containerId);
@@ -821,39 +1070,52 @@ function renderCostList(containerId, mData, staffCost, ratio, salesTotal, totalC
     
     if(totalCost === 0) { el.innerHTML = '<div style="text-align:center; padding:10px; color:#999;">데이터 없음</div>'; return; }
 
-    let cFood = 0, cMeat = 0, cEtc = 0;
-    if (accountingData.daily) {
-        Object.keys(accountingData.daily).forEach(date => {
-            if (date.startsWith(monthStr)) {
-                cFood += (accountingData.daily[date].food||0);
-                cMeat += (accountingData.daily[date].meat||0);
-                cEtc += (accountingData.daily[date].etc||0);
-            }
-        });
-    }
+    let cFood, cMeat, cEtc;
+    let fCommission, fDelivery, fCardFee, fMisc, fStaff;
 
-    let fCommission, fDelivery, fCardFee, fMisc;
-
-    // A. 예상순익 탭에서 호출된 경우 (이미 계산된 값 사용)
+    // A. 예상순익/월간분석 탭에서 호출된 경우 (calculatedCosts 있음)
     if (calculatedCosts) {
         fCommission = calculatedCosts.commission;
         fDelivery = calculatedCosts.deliveryFee;
         fCardFee = calculatedCosts.cardFee;
-        // 시간비례 고정비
+        
+        // 시간비례 고정비 (예상순익에서만 ratio 적용)
         fMisc = Math.floor(calculatedCosts.fixedMisc * ratio);
+        
+        // 인건비 (예상순익에서만 ratio 적용)
+        fStaff = Math.floor(staffCost * ratio);
+        
+        // 이미 배분된 값 사용
+        cFood = calculatedCosts.food || 0;
+        cMeat = calculatedCosts.meat || 0;
+        cEtc = calculatedCosts.etc || 0;
     } 
-    // B. 월간분석 탭에서 호출된 경우 (저장된 값 사용)
+    // B. 기존 방식 (calculatedCosts 없음 - 레거시)
     else {
+        // 전체 합산
+        cFood = 0;
+        cMeat = 0;
+        cEtc = 0;
+        
+        if (accountingData.daily) {
+            Object.keys(accountingData.daily).forEach(date => {
+                if (date.startsWith(monthStr)) {
+                    cFood += (accountingData.daily[date].food||0);
+                    cMeat += (accountingData.daily[date].meat||0);
+                    cEtc += (accountingData.daily[date].etc||0);
+                }
+            });
+        }
+        
         fCommission = mData.commission || 0;
         fDelivery = mData.deliveryFee || 0;
         fCardFee = mData.cardFee || 0;
         
         const fixedMiscSum = (mData.internet||0) + (mData.water||0) + (mData.cleaning||0) + 
                              (mData.operMgmt||0) + (mData.cctv||0) + (mData.etc_fixed||0);
-        fMisc = fixedMiscSum; // 월간분석은 전체이므로 ratio 1.0 (호출시 1.0으로 옴)
+        fMisc = fixedMiscSum;
+        fStaff = staffCost;
     }
-
-    const fStaff = Math.floor(staffCost * ratio);
 
     const items = [
         { label: '🏠 수수료(30%)', val: fCommission, color: '#ab47bc' },
@@ -907,6 +1169,13 @@ async function loadStaffData() {
         const json = await res.json();
         staffList = json.data;
         
+        // ✅ 역할 필드 초기화 추가
+        staffList.forEach(s => {
+            if (!s.roles) {
+                s.roles = ['일반'];
+            }
+        });
+        
         renderDailyView();
         renderWeeklyView();
         renderMonthlyView();
@@ -944,6 +1213,16 @@ function renderManageList() {
                     </div>
                 </div>
             </div>`;
+        const roles = s.roles || ['일반'];
+        const rolesBadge = roles.map(r => {
+            const roleColors = {
+                '포스': '#e91e63',
+                '삼겹살': '#ff5722',
+                '국수': '#ff9800',
+                '일반': '#9e9e9e'
+            };
+            return `<span style="background:${roleColors[r] || '#999'}; color:white; padding:2px 6px; border-radius:3px; font-size:11px; margin-right:3px;">${r}</span>`;
+        }).join('');
     });
 }
 
@@ -958,7 +1237,8 @@ function openEditModal(id) {
     
     document.getElementById('editStartDate').value = target.startDate || '';
     document.getElementById('editEndDate').value = target.endDate || '';
-    
+
+       
     const isAdmin = currentUser.role === 'admin';
     const salarySection = document.getElementById('modalSalarySection');
     if (isAdmin) {
@@ -968,6 +1248,14 @@ function openEditModal(id) {
     } else {
         salarySection.style.display = 'none';
     }
+
+    // ✅ 역할 체크박스 설정 추가
+    const roles = staff.roles || ['일반'];
+    document.getElementById('role-일반').checked = roles.includes('일반');
+    document.getElementById('role-포스').checked = roles.includes('포스');
+    document.getElementById('role-삼겹살').checked = roles.includes('삼겹살');
+    document.getElementById('role-국수').checked = roles.includes('국수');
+
     document.getElementById('editModalOverlay').style.display = 'flex';
 }
 
@@ -986,6 +1274,22 @@ async function saveStaffEdit() {
     const salary = parseInt(document.getElementById('editSalary').value) || 0;
 
     const updates = { time, startDate, endDate };
+
+    // ✅ 역할 수집
+    const roles = [];
+    if (document.getElementById('role-일반').checked) roles.push('일반');
+    if (document.getElementById('role-포스').checked) roles.push('포스');
+    if (document.getElementById('role-삼겹살').checked) roles.push('삼겹살');
+    if (document.getElementById('role-국수').checked) roles.push('국수');
+
+    if (roles.length === 0) {
+        alert('최소 하나의 역할을 선택해주세요.');
+        return;
+    }
+
+    const staffData = {
+        name, position, salaryType, salary, workDays, time, endDate, roles // ✅ roles 추가
+    };
     
     if (currentUser && currentUser.role === 'admin') {
         updates.salaryType = salaryType;
@@ -1085,111 +1389,162 @@ function calculateDuration(timeStr) {
 }
 
 function renderDailyView() {
-    const dayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const todayKey = dayMap[currentDate.getDay()];
-    
-    const year = currentDate.getFullYear();
-    const month = String(currentDate.getMonth() + 1).padStart(2, '0');
-    const day = String(currentDate.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${day}`;
-
-    const dateDisplay = document.getElementById('currentDateDisplay');
-    if(dateDisplay) dateDisplay.textContent = `${month}월 ${day}일 (${DAY_MAP[todayKey]})`;
-    
     const container = document.getElementById('dailyStaffList');
-    if(!container) return;
-    container.innerHTML = '';
+    if (!container) return;
 
-    let dailyWorkers = [];
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth() + 1;
+    const day = currentDate.getDate();
+    const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const dayMap = ['일', '월', '화', '수', '목', '금', '토'];
+    const dayName = dayMap[currentDate.getDay()];
+
+    const dayDisplay = document.getElementById('currentDateDisplay');
+    if(dayDisplay) dayDisplay.textContent = `${month}월 ${day}일 (${dayName})`;
+
+    // ✅ 근무자 목록 및 역할별 카운트
+    let workers = [];
+    let posCount = 0, samCount = 0, noodleCount = 0;
     
-    staffList.forEach(staff => {
+    staffList.forEach(s => {
         let isWorking = false;
-        let workTime = staff.time;
-        let isException = false;
-        let isOff = false;
+        let timeStr = s.time;
 
-        if (staff.exceptions && staff.exceptions[dateStr]) {
-            const ex = staff.exceptions[dateStr];
-            if (ex.type === 'work') { 
-                isWorking = true; workTime = ex.time; isException = true; 
+        if (s.exceptions && s.exceptions[dateStr]) {
+            const ex = s.exceptions[dateStr];
+            if (ex.type === 'work') {
+                isWorking = true;
+                timeStr = ex.time;
             } else if (ex.type === 'off') {
-                isWorking = true; 
-                isException = true;
-                isOff = true;
+                isWorking = false;
             }
         } else {
-            if (staff.workDays.includes(todayKey)) {
+            const dayKey = DAY_KEYS[currentDate.getDay()];
+            if (s.workDays && s.workDays.includes(dayKey)) {
                 isWorking = true;
             }
         }
-        
+
         if (isWorking) {
-            dailyWorkers.push({ ...staff, displayTime: workTime, isException, isOff });
+            const roles = s.roles || ['일반'];
+            workers.push({
+                name: s.name,
+                time: timeStr,
+                position: s.position,
+                roles: roles,
+                id: s.id
+            });
+            
+            // ✅ 역할별 카운트
+            if (roles.includes('포스')) posCount++;
+            if (roles.includes('삼겹살')) samCount++;
+            if (roles.includes('국수')) noodleCount++;
         }
     });
 
-    const realWorkCount = dailyWorkers.filter(w => !w.isOff).length;
-    
+    const totalCount = workers.length;
+
+    // ✅ 알림 메시지 생성
+    let alertMessages = [];
+    let alertLevel = 'normal';
+
+    // ✅ 알림 체크
+    let hasAlert = false;
+    if (totalCount < 10 || totalCount > 12 || posCount < 2 || samCount < 2 || noodleCount < 2) {
+        hasAlert = true;
+    }
+
+    const badgeColor = hasAlert ? '#f44336' : '#4CAF50';
+    countBadge = `<span class="count-badge" style="background:${badgeColor};">${totalCount}명</span>`;
+
+    if (totalCount < 10) {
+        alertMessages.push(`⚠️ 인원 부족: 총 ${totalCount}명 (최소 10명 필요)`);
+        alertLevel = 'danger';
+    } else if (totalCount > 12) {
+        alertMessages.push(`⚠️ 인원 초과: 총 ${totalCount}명 (최대 12명 권장)`);
+        alertLevel = 'danger';
+    }
+
+    if (posCount < 2) {
+        alertMessages.push(`🔴 포스 부족: ${posCount}명 (최소 2명 필요)`);
+        alertLevel = 'danger';
+    }
+    if (samCount < 2) {
+        alertMessages.push(`🔴 삼겹살 부족: ${samCount}명 (최소 2명 필요)`);
+        alertLevel = 'danger';
+    }
+    if (noodleCount < 2) {
+        alertMessages.push(`🔴 국수 부족: ${noodleCount}명 (최소 2명 필요)`);
+        alertLevel = 'danger';
+    }
+
+    // ✅ 인원수 요약 HTML
+    let summaryHtml = `
+        <div style="background:#f5f5f5; padding:10px; margin-bottom:15px; border-radius:5px; display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:10px; text-align:center;">
+            <div><strong>총 인원</strong><br/><span style="font-size:20px; color:${totalCount >= 10 && totalCount <= 12 ? '#4CAF50' : '#f44336'}">${totalCount}명</span></div>
+            <div><strong>🎯 포스</strong><br/><span style="font-size:20px; color:${posCount >= 2 ? '#4CAF50' : '#f44336'}">${posCount}명</span></div>
+            <div><strong>🥩 삼겹살</strong><br/><span style="font-size:20px; color:${samCount >= 2 ? '#4CAF50' : '#f44336'}">${samCount}명</span></div>
+            <div><strong>🍜 국수</strong><br/><span style="font-size:20px; color:${noodleCount >= 2 ? '#4CAF50' : '#f44336'}">${noodleCount}명</span></div>
+        </div>
+    `;
+
+    // ✅ 알림 영역
+    if (alertMessages.length > 0) {
+        const bgColor = alertLevel === 'danger' ? '#ffebee' : '#fff3e0';
+        const borderColor = alertLevel === 'danger' ? '#f44336' : '#ff9800';
+        summaryHtml = `
+            <div style="background:${bgColor}; border-left:5px solid ${borderColor}; padding:15px; margin-bottom:15px; border-radius:5px;">
+                ${alertMessages.map(msg => `<div style="margin-bottom:5px; font-weight:bold;">${msg}</div>`).join('')}
+            </div>
+        ` + summaryHtml;
+    }
+
     const badge = document.getElementById('dailyCountBadge');
     if(badge) {
-        badge.style.background = '#ff5722'; 
-        
-        if (realWorkCount >= 8) {
-            badge.style.background = '#d32f2f';
-            badge.innerHTML = `총 ${realWorkCount}명 근무<br><span style="font-size:11px; background:white; color:#d32f2f; padding:2px 5px; border-radius:4px; margin-top:4px; display:inline-block;">⚠️ 인원 과다 (비용 확인)</span>`;
-        } else if (realWorkCount > 0 && realWorkCount <= 6) {
-            badge.style.background = '#e65100'; 
-            badge.innerHTML = `총 ${realWorkCount}명 근무<br><span style="font-size:11px; background:white; color:#e65100; padding:2px 5px; border-radius:4px; margin-top:4px; display:inline-block;">⚠️ 인원 부족? (확인)</span>`;
-        } else {
-            badge.textContent = `총 ${realWorkCount}명 근무`;
-        }
+        badge.textContent = `총 ${totalCount}명`;
+        badge.style.background = (totalCount >= 10 && totalCount <= 12 && posCount >= 2 && samCount >= 2 && noodleCount >= 2) ? '#4CAF50' : '#f44336';
     }
-    
-    dailyWorkers.sort((a,b) => {
-        if(a.isOff && !b.isOff) return 1;
-        if(!a.isOff && b.isOff) return -1;
-        return getStartTimeValue(a.displayTime) - getStartTimeValue(b.displayTime);
-    });
 
-    if (dailyWorkers.length === 0) {
-        container.innerHTML = '<div class="empty-state">근무자가 없습니다.</div>';
+    // ✅ 근무자 카드
+    let cardsHtml = '';
+    if (workers.length === 0) {
+        cardsHtml = '<p style="text-align:center; color:#999; padding:20px;">오늘은 휴무일입니다.</p>';
     } else {
-        dailyWorkers.forEach(s => {
-            let rowClass = s.isOff ? 'reservation-item temp-off-row' : 'reservation-item';
-            let statusBadge = '';
-            
-            if (s.isOff) statusBadge = '<span class="badge" style="background:#9e9e9e; color:white;">⛔ 임시휴무</span>';
-            else if (s.isException) statusBadge = '<span class="badge alternative-badge">변동</span>';
+        workers.forEach(w => {
+            const rolesBadge = w.roles.map(r => {
+                const roleColors = {
+                    '포스': '#e91e63',
+                    '삼겹살': '#ff5722',
+                    '국수': '#ff9800',
+                    '일반': '#9e9e9e'
+                };
+                return `<span style="background:${roleColors[r] || '#999'}; color:white; padding:2px 6px; border-radius:3px; font-size:11px; margin-right:3px;">${r}</span>`;
+            }).join('');
 
-            let adminButtons = '';
-            if (s.isOff) {
-                adminButtons = `
-                <div style="margin-top:5px; border-top:1px dashed #ccc; padding-top:5px; text-align:right;">
-                     <button onclick="cancelException(${s.id}, '${dateStr}')" style="font-size:11px; padding:3px 6px; background:#666; color:white; border:none; border-radius:3px; cursor:pointer;">↩️ 휴무 취소 (근무복구)</button>
-                </div>`;
-            } else {
-                adminButtons = `
-                <div style="margin-top:5px; border-top:1px dashed #eee; padding-top:5px; text-align:right;">
-                    <button onclick="openTimeChangeModal(${s.id}, '${dateStr}', '${s.displayTime}')" style="font-size:11px; padding:3px 6px; background:#17a2b8; color:white; border:none; border-radius:3px; cursor:pointer; margin-right:5px;">⏰ 시간변경</button>
-                    <button onclick="setDailyException(${s.id}, '${dateStr}', 'off')" style="font-size:11px; padding:3px 6px; background:#dc3545; color:white; border:none; border-radius:3px; cursor:pointer;">⛔ 오늘휴무</button>
-                </div>`;
-            }
-
-            container.innerHTML += `
-                <div class="${rowClass}" style="border-left:5px solid ${s.isOff ? '#999' : '#4CAF50'};">
+            cardsHtml += `
+                <div class="reservation-item">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                        <div>
-                            <strong>${s.name}</strong> ${statusBadge}
-                            <div class="reservation-time" style="font-size:14px; color:${s.isOff ? '#999' : '#0066cc'}; font-weight:bold; margin-top:2px;">
-                                ${s.isOff ? '휴무' : s.displayTime}
+                        <div style="flex:1;">
+                            <div style="margin-bottom:5px;">
+                                <strong style="font-size:16px;">${w.name}</strong>
+                                <span style="color:#666; font-size:13px; margin-left:8px;">${w.position || '직원'}</span>
                             </div>
-                            <div style="font-size:12px; color:#666;">${s.position || '직원'}</div>
+                            <div style="margin-bottom:5px;">${rolesBadge}</div>
+                            <div class="reservation-time">${w.time || '시간 미정'}</div>
                         </div>
+                        ${currentUser && currentUser.role !== 'viewer' ? `
+                        <div style="display:flex; gap:5px;">
+                            <button onclick="openTimeChangeModal(${w.id}, '${dateStr}')" style="padding:5px 10px; background:#17a2b8; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">시간변경</button>
+                            <button onclick="markTempOff(${w.id}, '${dateStr}')" style="padding:5px 10px; background:#f44336; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">임시휴무</button>
+                        </div>
+                        ` : ''}
                     </div>
-                    ${adminButtons}
-                </div>`;
+                </div>
+            `;
         });
     }
+
+    container.innerHTML = summaryHtml + cardsHtml;
 }
 
 function changeDate(d) { currentDate.setDate(currentDate.getDate() + d); renderDailyView(); }
@@ -1240,6 +1595,22 @@ function renderWeeklyView() {
 
         let dayWorkers = [];
         staffList.forEach(s => {
+            // ✅ 입사일/퇴사일 체크 추가
+            const loopDateObj = new Date(dateStr);
+            loopDateObj.setHours(0, 0, 0, 0);
+            
+            if (s.startDate) {
+                const startDateObj = new Date(s.startDate);
+                startDateObj.setHours(0, 0, 0, 0);
+                if (loopDateObj < startDateObj) return; // 입사 전이면 표시 안함
+            }
+            
+            if (s.endDate) {
+                const endDateObj = new Date(s.endDate);
+                endDateObj.setHours(0, 0, 0, 0);
+                if (loopDateObj > endDateObj) return; // 퇴사 후면 표시 안함
+            }
+            
             let isWorking = false;
             let workTime = s.time;
             let isException = false;
@@ -1393,14 +1764,41 @@ function renderMonthlyView() {
         const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
         
         let count = 0;
+        let posCount = 0, samCount = 0, noodleCount = 0; // ✅ 역할별 카운트 변수 선언
+        
         staffList.forEach(staff => {
+            // ✅ 입사일/퇴사일 체크
+            const currentIterDateObj = new Date(dateStr);
+            currentIterDateObj.setHours(0, 0, 0, 0);
+            
+            if (staff.startDate) {
+                const startDateObj = new Date(staff.startDate);
+                startDateObj.setHours(0, 0, 0, 0);
+                if (currentIterDateObj < startDateObj) return;
+            }
+            
+            if (staff.endDate) {
+                const endDateObj = new Date(staff.endDate);
+                endDateObj.setHours(0, 0, 0, 0);
+                if (currentIterDateObj > endDateObj) return;
+            }
+            
             let isWorking = false;
+            // ✅ 변수명 수정: s → staff, dateKey 사용
             if (staff.exceptions && staff.exceptions[dateStr]) {
                 if (staff.exceptions[dateStr].type === 'work') isWorking = true;
             } else {
-                if (staff.workDays.includes(dayKey)) isWorking = true;
+                if (staff.workDays && staff.workDays.includes(dayKey)) isWorking = true;
             }
-            if(isWorking) count++;
+            
+            if (isWorking) {
+                count++; // ✅ count 증가
+                // ✅ 역할별 카운트
+                const roles = staff.roles || ['일반'];
+                if (roles.includes('포스')) posCount++;
+                if (roles.includes('삼겹살')) samCount++;
+                if (roles.includes('국수')) noodleCount++;
+            }
         });
         
         let dayClass = '';
@@ -1412,10 +1810,14 @@ function renderMonthlyView() {
             dayClass += ' today-highlight';
         }
 
-        let countStyle = 'background: #e3f2fd; color: #1565c0;';
-        if (count > 0 && (count <= 6 || count >= 8)) {
-            countStyle = 'background: #ffebee; color: #d32f2f; border: 1px solid #ffcdd2;';
+        // ✅ 알림 체크 (10~12명, 각 역할 2명 이상)
+        let hasAlert = false;
+        if (count < 10 || count > 12 || posCount < 2 || samCount < 2 || noodleCount < 2) {
+            hasAlert = true;
         }
+
+        const badgeColor = hasAlert ? '#f44336' : '#4CAF50';
+        let countStyle = `background: ${badgeColor}; color: white;`;
 
         container.innerHTML += `
             <div class="calendar-day ${dayClass}" onclick="goToDailyDetail(${year}, ${month}, ${day})">
@@ -1844,4 +2246,221 @@ async function downloadAllData() {
             alert("다운로드가 완료되었습니다.");
         } else alert("백업 데이터 생성 실패");
     } catch (e) { console.error(e); alert("서버 통신 오류"); }
+}
+
+// ==========================================
+// 직원 등록/수정 모달 함수들
+// ==========================================
+
+function openAddModal() {
+    if (!currentUser || currentUser.role === 'viewer') {
+        alert('권한이 없습니다.');
+        return;
+    }
+
+    document.getElementById('staffModalTitle').textContent = '직원 등록';
+    document.getElementById('staffId').value = '';
+    document.getElementById('staffName').value = '';
+    document.getElementById('staffPosition').value = '';
+    document.getElementById('staffSalaryType').value = 'hourly';
+    document.getElementById('staffSalary').value = '';
+    document.getElementById('staffTime').value = '';
+    document.getElementById('staffEndDate').value = '';
+
+    DAY_KEYS.forEach(day => {
+        const checkbox = document.getElementById(`day-${day}`);
+        if (checkbox) checkbox.checked = false;
+    });
+
+    // ✅ 역할 체크박스 초기화
+    document.getElementById('role-일반').checked = true;
+    document.getElementById('role-포스').checked = false;
+    document.getElementById('role-삼겹살').checked = false;
+    document.getElementById('role-국수').checked = false;
+
+    document.getElementById('staffModal').style.display = 'flex';
+}
+
+function closeStaffModal() {
+    document.getElementById('staffModal').style.display = 'none';
+}
+
+async function saveStaff() {
+    const id = document.getElementById('staffId').value;
+    const name = document.getElementById('staffName').value.trim();
+    const position = document.getElementById('staffPosition').value.trim();
+    const salaryType = document.getElementById('staffSalaryType').value;
+    const salary = parseInt(document.getElementById('staffSalary').value) || 0;
+    const time = document.getElementById('staffTime').value.trim();
+    const endDate = document.getElementById('staffEndDate').value;
+
+    if (!name) {
+        alert('이름을 입력하세요.');
+        return;
+    }
+
+    const workDays = [];
+    DAY_KEYS.forEach(day => {
+        const checkbox = document.getElementById(`day-${day}`);
+        if (checkbox && checkbox.checked) {
+            workDays.push(day);
+        }
+    });
+
+    // ✅ 역할 수집
+    const roles = [];
+    if (document.getElementById('role-일반').checked) roles.push('일반');
+    if (document.getElementById('role-포스').checked) roles.push('포스');
+    if (document.getElementById('role-삼겹살').checked) roles.push('삼겹살');
+    if (document.getElementById('role-국수').checked) roles.push('국수');
+
+    if (roles.length === 0) {
+        alert('최소 하나의 역할을 선택해주세요.');
+        return;
+    }
+
+    const staffData = {
+        name, position, salaryType, salary, workDays, time, endDate, roles
+    };
+
+    try {
+        if (id) {
+            // 수정
+            const res = await fetch(`/api/staff/${id}`, {
+                method: 'PUT',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ updates: staffData, actor: currentUser.name })
+            });
+            const json = await res.json();
+            if (json.success) {
+                alert('직원 정보가 수정되었습니다.');
+                closeStaffModal();
+                loadStaffData();
+            } else {
+                alert('수정 실패');
+            }
+        } else {
+            // 등록
+            staffData.id = Date.now();
+            const res = await fetch('/api/staff', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ staffList: [staffData], actor: currentUser.name })
+            });
+            const json = await res.json();
+            if (json.success) {
+                alert('직원이 등록되었습니다.');
+                closeStaffModal();
+                loadStaffData();
+            } else {
+                alert('등록 실패');
+            }
+        }
+    } catch (e) {
+        console.error(e);
+        alert('서버 통신 오류');
+    }
+}
+
+// 근무 예외 처리 모달
+function openExceptionModal(staffId, dateStr) {
+    if (!currentUser || currentUser.role === 'viewer') {
+        alert('권한이 없습니다.');
+        return;
+    }
+
+    const staff = staffList.find(s => s.id === staffId);
+    if (!staff) return;
+
+    document.getElementById('exceptionStaffName').textContent = staff.name;
+    document.getElementById('exceptionDate').textContent = dateStr;
+    document.getElementById('exceptionStaffId').value = staffId;
+    document.getElementById('exceptionDateVal').value = dateStr;
+
+    let currentException = null;
+    if (staff.exceptions && staff.exceptions[dateStr]) {
+        currentException = staff.exceptions[dateStr];
+    }
+
+    if (currentException) {
+        document.getElementById('exceptionType').value = currentException.type;
+        if (currentException.time) {
+            const [start, end] = currentException.time.split('~');
+            const [sh, sm] = start.trim().split(':');
+            const [eh, em] = end.trim().split(':');
+            document.getElementById('exStartHour').value = sh;
+            document.getElementById('exStartMin').value = sm;
+            document.getElementById('exEndHour').value = eh;
+            document.getElementById('exEndMin').value = em;
+        }
+    } else {
+        document.getElementById('exceptionType').value = 'work';
+        if (staff.time) {
+            const [start, end] = staff.time.split('~');
+            const [sh, sm] = start.trim().split(':');
+            const [eh, em] = end.trim().split(':');
+            document.getElementById('exStartHour').value = sh;
+            document.getElementById('exStartMin').value = sm;
+            document.getElementById('exEndHour').value = eh;
+            document.getElementById('exEndMin').value = em;
+        }
+    }
+
+    document.getElementById('exceptionModal').style.display = 'flex';
+}
+
+function closeExceptionModal() {
+    document.getElementById('exceptionModal').style.display = 'none';
+}
+
+async function saveException() {
+    const staffId = parseInt(document.getElementById('exceptionStaffId').value);
+    const dateStr = document.getElementById('exceptionDateVal').value;
+    const type = document.getElementById('exceptionType').value;
+
+    const sh = document.getElementById('exStartHour').value;
+    const sm = document.getElementById('exStartMin').value;
+    const eh = document.getElementById('exEndHour').value;
+    const em = document.getElementById('exEndMin').value;
+    const timeStr = `${sh}:${sm}~${eh}:${em}`;
+
+    try {
+        await fetch('/api/staff/exception', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                id: staffId, 
+                date: dateStr, 
+                type: type, 
+                time: timeStr,
+                actor: currentUser.name 
+            })
+        });
+        closeExceptionModal();
+        loadStaffData();
+    } catch(e) { 
+        alert('오류 발생'); 
+    }
+}
+
+async function deleteException() {
+    const staffId = parseInt(document.getElementById('exceptionStaffId').value);
+    const dateStr = document.getElementById('exceptionDateVal').value;
+
+    try {
+        await fetch('/api/staff/exception', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                id: staffId, 
+                date: dateStr, 
+                type: 'delete',
+                actor: currentUser.name 
+            })
+        });
+        closeExceptionModal();
+        loadStaffData();
+    } catch(e) { 
+        alert('오류 발생'); 
+    }
 }

@@ -284,11 +284,24 @@ app.post('/api/inventory/current', (req, res) => {
                 time: now.toTimeString().split(' ')[0].substring(0, 5),
                 inventory: {}
             };
+            
+            // itemKey 예: "1루_고센유통_양파" 또는 "고센유통_양파"
             for (const itemKey in inventory) {
-                const vendor = itemKey.split('_')[0];
+                const parts = itemKey.split('_');
+                let vendor;
+                
+                // "1루_고센유통_양파" 형식인 경우
+                if (parts[0] === '1루' || parts[0] === '3루') {
+                    vendor = parts[1]; // "고센유통"
+                } else {
+                    // "고센유통_양파" 형식인 경우 (하위 호환성)
+                    vendor = parts[0];
+                }
+                
                 if (!historyRecord.inventory[vendor]) historyRecord.inventory[vendor] = {};
                 historyRecord.inventory[vendor][itemKey] = inventory[itemKey];
             }
+            
             history.push(historyRecord);
             if (history.length > 100) history = history.slice(-100);
             writeJson(INVENTORY_HISTORY_FILE, history);

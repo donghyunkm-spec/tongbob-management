@@ -388,6 +388,14 @@ function renderUnifiedInventoryForm() {
     html += `<div style="background:white; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.1);">`;
 
     allDisplayItems.forEach(item => {
+        // [NEW] 위치 필터링: 현재 위치에 해당하지 않는 품목은 표시 안 함
+        if (item.locations && item.locations.length > 0) {
+            if (!item.locations.includes(currentLocation)) {
+                return; // skip
+            }
+        }
+        // locations 필드가 없는 기존 품목은 모든 위치에서 표시 (하위 호환성)
+        
         if (item.관리주기 === 'weekly' && !isTuesday && !showWeeklyForced) return;
 
         hasItems = true;
@@ -668,48 +676,38 @@ function getDaysUntilNextDelivery(vendor) {
     const today = new Date();
     let daysCount = 0;
     let checkDate = new Date(today);
-    checkDate.setDate(checkDate.getDate() + 1);
+    checkDate.setDate(checkDate.getDate() + 1); // 내일부터 시작
     
+    // 최대 7일까지만 확인
     for (let i = 0; i < 7; i++) {
         const dateStr = checkDate.toISOString().split('T')[0];
         const dow = checkDate.getDay();
         
-        const isStoreHoliday = holidays['store'] && holidays['store'].includes(dateStr);
-        const isSundayForVendor = (vendor === '고센유통' || vendor === '한강유통(고기)') && dow === 0;
-        const isVendorHoliday = holidays[vendor] && holidays[vendor].includes(dateStr);
-        
-        if (isSundayForVendor || isVendorHoliday) {
-            if (!isStoreHoliday) {
-                daysCount++;
-            }
-            checkDate.setDate(checkDate.getDate() + 1);
-            continue;
-        }
-        
-        if (!isStoreHoliday) {
-            daysCount++;
-        }
-
-        // 가게 휴무 여부 (재료 소모 안 함)
+        // 가게 휴무 여부
         const isStoreRegularHoliday = (dow === 1); // 월요일
         const isStoreTempHoliday = holidays['store'] && holidays['store'].includes(dateStr);
         const isStoreTempOpen = holidays['store_open'] && holidays['store_open'].includes(dateStr);
-        
         const isStoreClosed = (isStoreRegularHoliday && !isStoreTempOpen) || isStoreTempHoliday;
         
-        // 배송 가능 여부
-        const isDeliveryPossible = !isVendorSunday && !isVendorHoliday;
+        // 업체 배송 가능 여부
+        const isSundayForVendor = (vendor === '고센유통' || vendor === '한강유통(고기)') && dow === 0;
+        const isVendorHoliday = holidays[vendor] && holidays[vendor].includes(dateStr);
+        const isDeliveryPossible = !isSundayForVendor && !isVendorHoliday;
         
+        // 내일(i=0)은 항상 포함 (오늘 발주하는 이유)
         if (i === 0) {
-            // 내일(첫날)은 무조건 포함 (오늘 발주 넣는 이유니까)
-            daysCount++;
+            // 가게가 영업하는 날만 재료 소모
+            if (!isStoreClosed) {
+                daysCount++;
+            }
         } else {
-            // 그 다음날부터:
-            // 만약 그 날 배송이 가능하다면? -> 루프 종료 (새 물건 받을 수 있으니까)
-            if (isDeliveryPossible) break;
+            // 그 다음날부터: 배송 가능한 날이면 루프 종료
+            if (isDeliveryPossible) {
+                break;
+            }
             
-            // 배송 불가능한 날이라면? -> 버텨야 하므로 일수 추가
-            // 단, 가게가 쉬는 날이면 재료 안 쓰니까 추가 안 함
+            // 배송 불가능한 날이라면 버텨야 함
+            // 단, 가게가 쉬는 날은 재료를 안 쓰므로 카운트 안 함
             if (!isStoreClosed) {
                 daysCount++;
             }
@@ -762,6 +760,20 @@ function checkOrderConfirmation() {
             const neededTotal = usage * daysNeeded; // 배송 전까지 필요한 양
             
             let orderAmountRaw = Math.max(0, neededTotal - totalStock); // 부족분
+            
+            // 🔥 [NEW] 임계값/최소발주량 로직 적용
+            if (item.thresholdQty && item.minOrderQty) {
+                // 임계값과 최소발주량이 모두 설정된 경우
+                if (totalStock <= item.thresholdQty) {
+                    // 재고가 임계값 이하면 무조건 최소발주량으로 발주
+                    orderAmountRaw = item.minOrderQty;
+                } else {
+                    // 재고가 임계값 초과면 발주 안함
+                    orderAmountRaw = 0;
+                }
+            }
+            // 설정 안된 경우는 기존 방식대로 (orderAmountRaw 그대로 사용)
+            
             let displayQty = 0;
             let displayUnit = item.발주단위;
 
@@ -884,7 +896,16 @@ async function proceedToOrder() {
             const totalStock = s1 + s3;
             const usage = dailyUsage[rawItemKey] || 0;
             const needed = usage * daysNeeded;
-            const rawAmt = Math.max(0, needed - totalStock);
+            let rawAmt = Math.max(0, needed - totalStock);
+            
+            // 🔥 [NEW] 임계값/최소발주량 로직 적용
+            if (item.thresholdQty && item.minOrderQty) {
+                if (totalStock <= item.thresholdQty) {
+                    rawAmt = item.minOrderQty;
+                } else {
+                    rawAmt = 0;
+                }
+            }
             
             let finalQty = 0;
             let finalUnit = item.발주단위;
@@ -1354,6 +1375,9 @@ function getMeatVendorInfo(itemName) {
 function renderManageItems() {
     const container = document.getElementById('manageItemsList');
     
+    // [NEW] 필터 값 가져오기
+    const selectedVendor = document.getElementById('manageVendorSelect')?.value || 'all';
+    
     // [UI 개선] 상단 컨트롤 (Sticky) - 라디오 버튼 대신 토글 스타일 적용
     let headerHtml = `
         <div class="sticky-header-bar" style="background:#f8f9fa; flex-direction: column; align-items: stretch;">
@@ -1383,9 +1407,16 @@ function renderManageItems() {
         </div>
     `;
 
-    // 2. 통합 리스트 생성 (전역 정렬을 위해)
+    // 2. 통합 리스트 생성 (전역 정렬을 위해) - [NEW] 필터 적용
     let flatList = [];
-    Object.keys(items).forEach(vendor => {
+    
+    // [NEW] 선택된 업체에 따라 필터링
+    const vendorsToShow = (selectedVendor === 'all') 
+        ? Object.keys(items) 
+        : [selectedVendor];
+    
+    vendorsToShow.forEach(vendor => {
+        if (!items[vendor]) return; // 업체가 없으면 스킵
         items[vendor].forEach((item, idx) => {
             flatList.push({
                 ...item,
@@ -1413,6 +1444,14 @@ function renderManageItems() {
                     <span style="font-size:11px; background:#e3f2fd; color:#1565C0; padding:2px 4px; border-radius:3px;">${item.vendor}</span>
                     <span style="font-weight:bold; margin-left:5px;">${item.품목명}</span>
                     <span style="color:#999; font-size:12px;">(현재순서: ${item.sortKey===9999 ? '없음' : item.sortKey})</span>
+                    ${item.locations && item.locations.length > 0 
+                        ? `<span style="background:#e8f5e9; color:#2e7d32; font-size:10px; padding:2px 5px; border-radius:3px; margin-left:5px;">📍 ${item.locations.join(', ')}</span>` 
+                        : '<span style="background:#f5f5f5; color:#888; font-size:10px; padding:2px 5px; border-radius:3px; margin-left:5px;">📍 모든 위치</span>'}
+                    ${item.thresholdQty || item.minOrderQty 
+                        ? `<span style="background:#fff3e0; color:#e65100; font-size:10px; padding:2px 5px; border-radius:3px; margin-left:5px;">
+                            📊 임계:${item.thresholdQty || '-'} / 최소:${item.minOrderQty || '-'}
+                           </span>` 
+                        : ''}
                 </div>
                 
                 <div class="mrg-actions">
@@ -1541,24 +1580,59 @@ function moveItem(vendor, index, direction) {
     renderManageItems(); 
 }
 
-function deleteItem(vendor, index) {
+async function deleteItem(vendor, index) {
     if (!confirm('정말 이 품목을 삭제하시겠습니까? (재고 데이터도 함께 사라질 수 있습니다)')) return;
     
+    const deletedItem = items[vendor][index];
     items[vendor].splice(index, 1);
-    renderManageItems();
+    
+    // 서버에 즉시 저장
+    try {
+        const res = await fetch(`${API_BASE}/api/inventory/items`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: items })
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+            showAlert(`'${deletedItem.품목명}' 삭제되었습니다.`, 'success');
+            renderManageItems();
+        } else {
+            // 실패 시 복구
+            items[vendor].splice(index, 0, deletedItem);
+            showAlert('삭제 실패: 서버 오류', 'error');
+        }
+    } catch (e) {
+        // 실패 시 복구
+        items[vendor].splice(index, 0, deletedItem);
+        showAlert('삭제 실패: 네트워크 오류', 'error');
+        console.error(e);
+    }
 }
 
-// [수정됨] 새 품목 추가 (중요도, 관리주기 받기)
-function addNewItem() {
+// [수정됨] 새 품목 추가 (중요도, 관리주기, 위치 정보 포함, 서버 저장 포함)
+async function addNewItem() {
     const vendor = document.getElementById('newItemVendor').value;
     const name = document.getElementById('newItemName').value.trim();
     const unit = document.getElementById('newItemUnit').value.trim();
-    // [NEW] 입력값 가져오기
     const importance = document.getElementById('newItemImportance').value;
     const cycle = document.getElementById('newItemCycle').value;
     
+    // [NEW] 위치 정보 수집
+    const loc1 = document.getElementById('newItemLoc1');
+    const loc3 = document.getElementById('newItemLoc3');
+    const locations = [];
+    if (loc1 && loc1.checked) locations.push('1루');
+    if (loc3 && loc3.checked) locations.push('3루');
+    
     if (!name) {
         showAlert('품목명을 입력하세요', 'error');
+        return;
+    }
+    
+    if (locations.length === 0) {
+        showAlert('최소 1개 이상의 위치를 선택하세요', 'error');
         return;
     }
     
@@ -1570,20 +1644,46 @@ function addNewItem() {
         return;
     }
     
-    items[vendor].push({
+    const newItem = {
         "품목명": name,
         "발주단위": unit || '개',
-        "중요도": importance, // [NEW]
-        "관리주기": cycle     // [NEW] (daily or weekly)
-    });
+        "중요도": importance,
+        "관리주기": cycle,
+        "locations": locations  // [NEW] 위치 정보
+    };
     
-    document.getElementById('newItemName').value = '';
-    document.getElementById('newItemUnit').value = '';
+    items[vendor].push(newItem);
     
-    showAlert(`'${name}' 추가되었습니다.`, 'success');
-    
-    if (document.getElementById('manageVendorSelect').value === vendor) {
-        renderManageItems();
+    // 서버에 즉시 저장
+    try {
+        const res = await fetch(`${API_BASE}/api/inventory/items`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: items })
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+            document.getElementById('newItemName').value = '';
+            document.getElementById('newItemUnit').value = '';
+            if (loc1) loc1.checked = true;
+            if (loc3) loc3.checked = true;
+            
+            showAlert(`'${name}' 추가되었습니다. (위치: ${locations.join(', ')})`, 'success');
+            
+            if (document.getElementById('manageVendorSelect').value === vendor) {
+                renderManageItems();
+            }
+        } else {
+            // 실패 시 복구
+            items[vendor].pop();
+            showAlert('추가 실패: 서버 오류', 'error');
+        }
+    } catch (e) {
+        // 실패 시 복구
+        items[vendor].pop();
+        showAlert('추가 실패: 네트워크 오류', 'error');
+        console.error(e);
     }
 }
 
@@ -1599,6 +1699,19 @@ function openEditItemModal(vendor, index) {
     document.getElementById('editUnit').value = item.발주단위;
     document.getElementById('editImportance').value = item.중요도 || '중';
     document.getElementById('editCycle').value = item.관리주기 || 'daily';
+    
+    // 🔥 [NEW] 임계값/최소발주량 설정
+    document.getElementById('editThreshold').value = item.thresholdQty || '';
+    document.getElementById('editMinOrder').value = item.minOrderQty || '';
+    
+    // [NEW] 위치 정보 설정
+    const editLoc1 = document.getElementById('editLoc1');
+    const editLoc3 = document.getElementById('editLoc3');
+    if (editLoc1 && editLoc3) {
+        const locations = item.locations || ['1루', '3루']; // 기본값: 모든 위치
+        editLoc1.checked = locations.includes('1루');
+        editLoc3.checked = locations.includes('3루');
+    }
 
     document.getElementById('editItemModal').classList.add('active');
 }
@@ -1617,9 +1730,27 @@ function saveEditItem() {
     const newUnit = document.getElementById('editUnit').value.trim();
     const newImp = document.getElementById('editImportance').value;
     const newCycle = document.getElementById('editCycle').value;
+    
+    // 🔥 [NEW] 임계값/최소발주량 수집
+    const thresholdVal = document.getElementById('editThreshold').value.trim();
+    const minOrderVal = document.getElementById('editMinOrder').value.trim();
+    const newThreshold = thresholdVal ? parseFloat(thresholdVal) : null;
+    const newMinOrder = minOrderVal ? parseFloat(minOrderVal) : null;
+    
+    // [NEW] 위치 정보 수집
+    const editLoc1 = document.getElementById('editLoc1');
+    const editLoc3 = document.getElementById('editLoc3');
+    const newLocations = [];
+    if (editLoc1 && editLoc1.checked) newLocations.push('1루');
+    if (editLoc3 && editLoc3.checked) newLocations.push('3루');
 
     if (!newName) {
         showAlert('품목명을 입력해주세요.', 'error');
+        return;
+    }
+    
+    if (newLocations.length === 0) {
+        showAlert('최소 1개 이상의 위치를 선택하세요', 'error');
         return;
     }
 
@@ -1629,7 +1760,10 @@ function saveEditItem() {
         "품목명": newName,
         "발주단위": newUnit,
         "중요도": newImp,
-        "관리주기": newCycle
+        "관리주기": newCycle,
+        "locations": newLocations,  // [NEW] 위치 정보
+        "thresholdQty": newThreshold,  // 🔥 [NEW] 임계값
+        "minOrderQty": newMinOrder     // 🔥 [NEW] 최소발주량
     };
 
     closeEditItemModal();
