@@ -778,6 +778,32 @@ app.get('/api/debug/files', (req, res) => {
     }
 });
 
+// === [백업] 전체 데이터 백업 API ===
+app.get('/api/backup/all', (req, res) => {
+    try {
+        const backupData = {
+            timestamp: new Date().toISOString(),
+            staff: readJson(STAFF_FILE, []),
+            logs: readJson(LOG_FILE, []),
+            accounting: readJson(ACCOUNTING_FILE, { monthly: {}, daily: {} }),
+            inventory_items: readJson(INVENTORY_ITEMS_FILE, {}),
+            inventory_current: readJson(INVENTORY_CURRENT_FILE, {}),
+            inventory_usage: readJson(INVENTORY_USAGE_FILE, {}),
+            inventory_orders: readJson(INVENTORY_ORDERS_FILE, []),
+            inventory_holidays: readJson(INVENTORY_HOLIDAYS_FILE, {}),
+            inventory_last_orders: readJson(INVENTORY_LAST_ORDERS_FILE, {}),
+            inventory_history: readJson(INVENTORY_HISTORY_FILE, [])
+        };
+        
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="backup_${new Date().toISOString().split('T')[0]}.json"`);
+        res.json(backupData);
+    } catch(e) {
+        console.error('백업 실패:', e);
+        res.status(500).json({ error: '백업 생성 실패' });
+    }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`);
 });

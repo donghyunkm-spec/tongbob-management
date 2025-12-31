@@ -283,6 +283,9 @@ async function onLoginSuccess(user) {
         const salarySection = document.getElementById('salarySection');
         if(salarySection) salarySection.style.display = 'block';
         
+        const backupSection = document.getElementById('backupSection');
+        if(backupSection) backupSection.style.display = 'block';
+        
         const backupBtn = document.getElementById('adminBackupBtn');
         if(backupBtn) backupBtn.style.display = 'block';
         
@@ -1220,8 +1223,26 @@ function renderManageList() {
     list.innerHTML = '';
     
     const isAdmin = currentUser && currentUser.role === 'admin';
+    
+    // ✅ 정렬: 1. 월급 직원 먼저(금액 많은 순), 2. 전문분야 있는 직원
+    const sortedStaff = [...staffList].sort((a, b) => {
+        // 1순위: 월급 직원 먼저
+        const aIsMonthly = a.salaryType === 'monthly' ? 1 : 0;
+        const bIsMonthly = b.salaryType === 'monthly' ? 1 : 0;
+        if (aIsMonthly !== bIsMonthly) return bIsMonthly - aIsMonthly;
+        
+        // 2순위: 월급 직원끼리는 금액 많은 순
+        if (aIsMonthly && bIsMonthly) {
+            return (b.salary || 0) - (a.salary || 0);
+        }
+        
+        // 3순위: 전문분야 있는 직원 우선
+        const aHasSpecial = (a.roles && a.roles.some(r => r !== '일반')) ? 1 : 0;
+        const bHasSpecial = (b.roles && b.roles.some(r => r !== '일반')) ? 1 : 0;
+        return bHasSpecial - aHasSpecial;
+    });
 
-    staffList.forEach(s => {
+    sortedStaff.forEach(s => {
         const daysStr = s.workDays.map(d => DAY_MAP[d]).join(',');
         const salaryInfo = isAdmin ? 
             `<div style="font-size:12px; color:#28a745; margin-top:3px;">
@@ -1564,12 +1585,15 @@ function calculateDuration(timeStr) {
 // 스마트 역할 배치 함수 (일별/월별 공통 사용)
 // ==========================================
 function calculateSmartRoleCount(workers) {
+    // ✅ 0단계: 임시휴무 직원 제외
+    const activeWorkers = workers.filter(w => !w.isTempOff);
+    
     // 1단계: 직원 분류
     let specialistStaff = [];  // 전문 역할만 1개 가진 직원
     let multiRoleStaff = [];   // 2개 이상 전문 역할 가진 직원
     let generalStaff = [];     // 일반만 가진 직원
     
-    workers.forEach(w => {
+    activeWorkers.forEach(w => {
         const roles = w.roles || ['일반'];
         const specialRoles = roles.filter(r => r !== '일반');
         
@@ -1647,12 +1671,13 @@ function renderDailyView() {
     const dayDisplay = document.getElementById('currentDateDisplay');
     if(dayDisplay) dayDisplay.textContent = `${month}월 ${day}일 (${dayName})`;
 
-    // ✅ 근무자 목록 수집
+    // ✅ 근무자 목록 수집 (임시휴무도 포함)
     let workers = [];
     
     staffList.forEach(s => {
         let isWorking = false;
         let timeStr = s.time;
+        let isTempOff = false;
 
         if (s.exceptions && s.exceptions[dateStr]) {
             const ex = s.exceptions[dateStr];
@@ -1660,7 +1685,8 @@ function renderDailyView() {
                 isWorking = true;
                 timeStr = ex.time;
             } else if (ex.type === 'off') {
-                isWorking = false;
+                isWorking = true; // ✅ 임시휴무도 목록에 표시
+                isTempOff = true;
             }
         } else {
             const dayKey = DAY_KEYS[currentDate.getDay()];
@@ -1677,25 +1703,48 @@ function renderDailyView() {
                 position: s.position,
                 roles: roles,
                 id: s.id,
-                assignedRole: null
+                assignedRole: null,
+                salaryType: s.salaryType, // ✅ 정렬을 위해 추가
+                salary: s.salary, // ✅ 정렬을 위해 추가
+                isTempOff: isTempOff // ✅ 임시휴무 여부
             });
         }
     });
+    
+    // ✅ 정렬: 1. 월급 직원 먼저, 2. 출근시간 순, 3. 전문분야 우선
+    workers.sort((a, b) => {
+        // 1순위: 월급 직원 우선
+        const aIsMonthly = a.salaryType === 'monthly' ? 1 : 0;
+        const bIsMonthly = b.salaryType === 'monthly' ? 1 : 0;
+        if (aIsMonthly !== bIsMonthly) return bIsMonthly - aIsMonthly;
+        
+        // 2순위: 출근시간 빠른 순
+        const aStartTime = getStartTimeValue(a.time);
+        const bStartTime = getStartTimeValue(b.time);
+        if (aStartTime !== bStartTime) return aStartTime - bStartTime;
+        
+        // 3순위: 전문분야 있는 직원 우선 (일반만 있으면 후순위)
+        const aHasSpecial = a.roles.some(r => r !== '일반') ? 1 : 0;
+        const bHasSpecial = b.roles.some(r => r !== '일반') ? 1 : 0;
+        return bHasSpecial - aHasSpecial;
+    });
 
-    const totalCount = workers.length;
+    // ✅ 임시휴무 직원 제외한 실제 근무자
+    const activeWorkers = workers.filter(w => !w.isTempOff);
+    const totalCount = activeWorkers.length;
 
-    // ✅ 스마트 배치 로직으로 역할별 카운트 계산
-    const roleCounts = calculateSmartRoleCount(workers);
+    // ✅ 스마트 배치 로직으로 역할별 카운트 계산 (임시휴무 제외)
+    const roleCounts = calculateSmartRoleCount(activeWorkers);
     let posCount = roleCounts.posCount;
     let samCount = roleCounts.samCount;
     let noodleCount = roleCounts.noodleCount;
     
-    // ✅ 배치된 역할 정보를 workers에 반영 (UI 표시용)
+    // ✅ 배치된 역할 정보를 activeWorkers에 반영 (UI 표시용)
     let specialistStaff = [];
     let multiRoleStaff = [];
     let generalStaff = [];
     
-    workers.forEach(w => {
+    activeWorkers.forEach(w => {
         const specialRoles = w.roles.filter(r => r !== '일반');
         if (w.roles.includes('일반') && specialRoles.length === 0) {
             generalStaff.push(w);
@@ -1835,23 +1884,34 @@ function renderDailyView() {
                 }).join('');
             }
 
+            // ✅ 임시휴무 직원 스타일 및 버튼 처리
+            const cardClass = w.isTempOff ? 'reservation-item temp-off-row' : 'reservation-item';
+            const nameStyle = w.isTempOff ? 'style="opacity:0.6;"' : '';
+            const timeDisplay = w.isTempOff ? '⛔ 임시휴무' : (w.time || '시간 미정');
+            
+            const actionButtons = currentUser && currentUser.role !== 'viewer' ? 
+                (w.isTempOff ? 
+                    `<div style="display:flex; gap:5px;">
+                        <button onclick="cancelException(${w.id}, '${dateStr}')" style="padding:5px 10px; background:#4CAF50; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">✓ 복구</button>
+                    </div>` :
+                    `<div style="display:flex; gap:5px;">
+                        <button onclick="openTimeChangeModal(${w.id}, '${dateStr}')" style="padding:5px 10px; background:#17a2b8; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">시간변경</button>
+                        <button onclick="markTempOff(${w.id}, '${dateStr}')" style="padding:5px 10px; background:#f44336; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">임시휴무</button>
+                    </div>`
+                ) : '';
+
             cardsHtml += `
-                <div class="reservation-item">
+                <div class="${cardClass}">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                        <div style="flex:1;">
+                        <div style="flex:1;" ${nameStyle}>
                             <div style="margin-bottom:5px;">
                                 <strong style="font-size:16px;">${w.name}</strong>
                                 <span style="color:#666; font-size:13px; margin-left:8px;">${w.position || '직원'}</span>
                             </div>
                             <div style="margin-bottom:5px;">${rolesBadge}</div>
-                            <div class="reservation-time">${w.time || '시간 미정'}</div>
+                            <div class="reservation-time">${timeDisplay}</div>
                         </div>
-                        ${currentUser && currentUser.role !== 'viewer' ? `
-                        <div style="display:flex; gap:5px;">
-                            <button onclick="openTimeChangeModal(${w.id}, '${dateStr}')" style="padding:5px 10px; background:#17a2b8; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">시간변경</button>
-                            <button onclick="markTempOff(${w.id}, '${dateStr}')" style="padding:5px 10px; background:#f44336; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">임시휴무</button>
-                        </div>
-                        ` : ''}
+                        ${actionButtons}
                     </div>
                 </div>
             `;
@@ -2098,16 +2158,25 @@ function renderMonthlyView() {
             }
             
             let isWorking = false;
-            // ✅ 변수명 수정: s → staff, dateKey 사용
+            let isTempOff = false;
+            
+            // ✅ 예외 처리 (임시 근무 / 임시 휴무)
             if (staff.exceptions && staff.exceptions[dateStr]) {
-                if (staff.exceptions[dateStr].type === 'work') isWorking = true;
+                const exType = staff.exceptions[dateStr].type;
+                if (exType === 'work') {
+                    isWorking = true;
+                } else if (exType === 'off') {
+                    // 임시 휴무 - 카운트에서 제외
+                    isTempOff = true;
+                    isWorking = false;
+                }
             } else {
                 if (staff.workDays && staff.workDays.includes(dayKey)) isWorking = true;
             }
             
-            if (isWorking) {
+            if (isWorking && !isTempOff) {
                 count++;
-                tempWorkers.push({ roles: staff.roles || ['일반'] });
+                tempWorkers.push({ roles: staff.roles || ['일반'], isTempOff: false });
             }
         });
         
@@ -2786,5 +2855,69 @@ async function deleteException() {
         loadStaffData();
     } catch(e) { 
         alert('오류 발생'); 
+    }
+}
+
+// ==========================================
+// 백업 기능
+// ==========================================
+
+async function downloadBackup() {
+    if (!currentUser) {
+        alert('로그인이 필요합니다.');
+        openLoginModal();
+        return;
+    }
+    
+    // 관리자만 백업 가능
+    if (currentUser.role !== 'admin') {
+        alert('관리자만 백업을 다운로드할 수 있습니다.');
+        return;
+    }
+    
+    if (!confirm('전체 데이터를 백업하시겠습니까?\n백업 파일이 로컬 PC에 다운로드됩니다.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/backup/all');
+        
+        if (!response.ok) {
+            throw new Error('백업 생성 실패');
+        }
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        // 파일명: backup_YYYY-MM-DD_HHMMSS.json
+        const now = new Date();
+        const dateStr = now.toISOString().split('T')[0];
+        const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '');
+        a.download = `backup_${dateStr}_${timeStr}.json`;
+        
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        alert('백업이 완료되었습니다!\n다운로드 폴더를 확인하세요.');
+        
+        // 백업 로그 남기기
+        await fetch('/api/logs', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                actor: currentUser.name,
+                action: '데이터백업',
+                target: '전체 시스템',
+                details: '전체 데이터 백업 다운로드'
+            })
+        });
+        
+    } catch(e) {
+        console.error('백업 실패:', e);
+        alert('백업 중 오류가 발생했습니다: ' + e.message);
     }
 }
