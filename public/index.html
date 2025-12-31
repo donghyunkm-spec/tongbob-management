@@ -237,23 +237,27 @@
                 <label>역할 (복수 선택 가능)</label>
                 <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:8px; background:#f5f5f5; padding:10px; border-radius:5px;">
                     <label style="display:flex; align-items:center; gap:5px;">
-                        <input type="checkbox" id="role-일반" onchange="handleRoleChange('일반')">
+                        <input type="checkbox" id="role-일반" onchange="handleRoleChange('일반', event)">
                         <span style="padding:3px 8px; background:#9e9e9e; color:white; border-radius:3px; font-size:12px;">일반</span>
                     </label>
                     <label style="display:flex; align-items:center; gap:5px;">
-                        <input type="checkbox" id="role-포스" onchange="handleRoleChange('포스')">
+                        <input type="checkbox" id="role-포스" onchange="handleRoleChange('포스', event)">
                         <span style="padding:3px 8px; background:#e91e63; color:white; border-radius:3px; font-size:12px;">🎯 포스</span>
                     </label>
                     <label style="display:flex; align-items:center; gap:5px;">
-                        <input type="checkbox" id="role-삼겹살" onchange="handleRoleChange('삼겹살')">
+                        <input type="checkbox" id="role-삼겹살" onchange="handleRoleChange('삼겹살', event)">
                         <span style="padding:3px 8px; background:#ff5722; color:white; border-radius:3px; font-size:12px;">🥩 삼겹살</span>
                     </label>
                     <label style="display:flex; align-items:center; gap:5px;">
-                        <input type="checkbox" id="role-국수" onchange="handleRoleChange('국수')">
+                        <input type="checkbox" id="role-국수" onchange="handleRoleChange('국수', event)">
                         <span style="padding:3px 8px; background:#ff9800; color:white; border-radius:3px; font-size:12px;">🍜 국수</span>
                     </label>
                 </div>
                 <p style="font-size:11px; color:#666; margin-top:5px;">* 일반: 숙련자가 아닌 알바 / 포스/삼겹살/국수: 숙련자 전문 역할</p>
+            </div>
+            <div class="modal-field">
+                <label>입사일 (선택)</label>
+                <input type="date" id="staffStartDate" style="width:100%; padding:8px;">
             </div>
             <div class="modal-field">
                 <label>퇴사일 (선택)</label>
@@ -442,6 +446,28 @@
                     </div>
                 </div>
             </div>
+            <div class="modal-field">
+                <label>역할 (복수 선택 가능)</label>
+                <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:8px; background:#f5f5f5; padding:10px; border-radius:5px;">
+                    <label style="display:flex; align-items:center; gap:5px;">
+                        <input type="checkbox" id="edit-role-일반" onchange="handleRoleChange('일반', event)">
+                        <span style="padding:3px 8px; background:#9e9e9e; color:white; border-radius:3px; font-size:12px;">일반</span>
+                    </label>
+                    <label style="display:flex; align-items:center; gap:5px;">
+                        <input type="checkbox" id="edit-role-포스" onchange="handleRoleChange('포스', event)">
+                        <span style="padding:3px 8px; background:#e91e63; color:white; border-radius:3px; font-size:12px;">🎯 포스</span>
+                    </label>
+                    <label style="display:flex; align-items:center; gap:5px;">
+                        <input type="checkbox" id="edit-role-삼겹살" onchange="handleRoleChange('삼겹살', event)">
+                        <span style="padding:3px 8px; background:#ff5722; color:white; border-radius:3px; font-size:12px;">🥩 삼겹살</span>
+                    </label>
+                    <label style="display:flex; align-items:center; gap:5px;">
+                        <input type="checkbox" id="edit-role-국수" onchange="handleRoleChange('국수', event)">
+                        <span style="padding:3px 8px; background:#ff9800; color:white; border-radius:3px; font-size:12px;">🍜 국수</span>
+                    </label>
+                </div>
+                <p style="font-size:11px; color:#666; margin-top:5px;">* 일반: 숙련자가 아닌 알바 / 포스/삼겹살/국수: 숙련자 전문 역할</p>
+            </div>
             <div id="modalSalarySection" style="display:none; background:#f0f8ff; padding:10px; border-radius:5px;">
                 <div class="modal-field">
                     <label>💰 급여 형태</label>
@@ -607,10 +633,15 @@
                 <div class="form-container">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <h2>직원 등록/관리</h2>
-                        <div id="salarySection" style="display:none;">
-                            <button onclick="calculateMonthlySalary()" style="background:#673ab7; color:white; border:none; padding:8px 15px; border-radius:5px; font-weight:bold;">
-                                💰 급여 예측
+                        <div style="display:flex; gap:10px;">
+                            <button onclick="openAddModal()" style="background:#4CAF50; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">
+                                ➕ 직원 등록
                             </button>
+                            <div id="salarySection" style="display:none;">
+                                <button onclick="calculateMonthlySalary()" style="background:#673ab7; color:white; border:none; padding:8px 15px; border-radius:5px; font-weight:bold;">
+                                    💰 급여 예측
+                                </button>
+                            </div>
                         </div>
                     </div>
                     
@@ -998,23 +1029,26 @@
     <!-- 역할 체크박스 핸들러 스크립트 -->
     <script>
     // 역할 체크박스 핸들러 - 일반과 숙련자 역할 상호배타적 처리
-    function handleRoleChange(role) {
-        const generalCheck = document.getElementById('role-일반');
-        const posCheck = document.getElementById('role-포스');
-        const samCheck = document.getElementById('role-삼겹살');
-        const noodleCheck = document.getElementById('role-국수');
+    function handleRoleChange(role, event) {
+        // 호출된 체크박스 ID로 모달 구분 (등록: role-, 수정: edit-role-)
+        const prefix = event && event.target.id.startsWith('edit-') ? 'edit-role-' : 'role-';
+        
+        const generalCheck = document.getElementById(prefix + '일반');
+        const posCheck = document.getElementById(prefix + '포스');
+        const samCheck = document.getElementById(prefix + '삼겹살');
+        const noodleCheck = document.getElementById(prefix + '국수');
 
         if (role === '일반') {
-            if (generalCheck.checked) {
+            if (generalCheck && generalCheck.checked) {
                 // 일반 선택 시 숙련자 역할 모두 해제
-                posCheck.checked = false;
-                samCheck.checked = false;
-                noodleCheck.checked = false;
+                if (posCheck) posCheck.checked = false;
+                if (samCheck) samCheck.checked = false;
+                if (noodleCheck) noodleCheck.checked = false;
             }
         } else {
             // 숙련자 역할 선택 시 일반 해제
-            if (posCheck.checked || samCheck.checked || noodleCheck.checked) {
-                generalCheck.checked = false;
+            if ((posCheck && posCheck.checked) || (samCheck && samCheck.checked) || (noodleCheck && noodleCheck.checked)) {
+                if (generalCheck) generalCheck.checked = false;
             }
         }
     }

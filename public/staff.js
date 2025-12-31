@@ -1250,11 +1250,11 @@ function openEditModal(id) {
     }
 
     // ✅ 역할 체크박스 설정 추가
-    const roles = staff.roles || ['일반'];
-    document.getElementById('role-일반').checked = roles.includes('일반');
-    document.getElementById('role-포스').checked = roles.includes('포스');
-    document.getElementById('role-삼겹살').checked = roles.includes('삼겹살');
-    document.getElementById('role-국수').checked = roles.includes('국수');
+    const roles = target.roles || ['일반'];
+    document.getElementById('edit-role-일반').checked = roles.includes('일반');
+    document.getElementById('edit-role-포스').checked = roles.includes('포스');
+    document.getElementById('edit-role-삼겹살').checked = roles.includes('삼겹살');
+    document.getElementById('edit-role-국수').checked = roles.includes('국수');
 
     document.getElementById('editModalOverlay').style.display = 'flex';
 }
@@ -1273,23 +1273,19 @@ async function saveStaffEdit() {
     const salaryType = document.getElementById('editSalaryType').value;
     const salary = parseInt(document.getElementById('editSalary').value) || 0;
 
-    const updates = { time, startDate, endDate };
-
     // ✅ 역할 수집
     const roles = [];
-    if (document.getElementById('role-일반').checked) roles.push('일반');
-    if (document.getElementById('role-포스').checked) roles.push('포스');
-    if (document.getElementById('role-삼겹살').checked) roles.push('삼겹살');
-    if (document.getElementById('role-국수').checked) roles.push('국수');
+    if (document.getElementById('edit-role-일반').checked) roles.push('일반');
+    if (document.getElementById('edit-role-포스').checked) roles.push('포스');
+    if (document.getElementById('edit-role-삼겹살').checked) roles.push('삼겹살');
+    if (document.getElementById('edit-role-국수').checked) roles.push('국수');
 
     if (roles.length === 0) {
         alert('최소 하나의 역할을 선택해주세요.');
         return;
     }
 
-    const staffData = {
-        name, position, salaryType, salary, workDays, time, endDate, roles // ✅ roles 추가
-    };
+    const updates = { time, startDate, endDate, roles };
     
     if (currentUser && currentUser.role === 'admin') {
         updates.salaryType = salaryType;
@@ -1388,6 +1384,101 @@ function calculateDuration(timeStr) {
     return (endMin - startMin) / 60;
 }
 
+// ==========================================
+// 스마트 역할 배치 함수 (일별/월별 공통 사용)
+// ==========================================
+function calculateSmartRoleCount(workers) {
+    // 1단계: 직원 분류
+    let specialistStaff = [];  // 전문 역할만 1개 가진 직원
+    let multiRoleStaff = [];   // 2개 이상 전문 역할 가진 직원
+    let generalStaff = [];     // 일반만 가진 직원
+    
+    workers.forEach(w => {
+        const roles = w.roles || ['일반'];
+        const specialRoles = roles.filter(r => r !== '일반');
+        
+        if (roles.includes('일반') && specialRoles.length === 0) {
+            generalStaff.push(w);
+        } else if (specialRoles.length === 1) {
+            specialistStaff.push(w);
+        } else if (specialRoles.length >= 2) {
+            multiRoleStaff.push(w);
+        }
+    });
+
+    // 2단계: 전문가 우선 배치 (1개 역할만 가진 사람)
+    let posCount = 0, samCount = 0, noodleCount = 0;
+    
+    specialistStaff.forEach(w => {
+        const roles = w.roles || ['일반'];
+        const role = roles.find(r => r !== '일반');
+        
+        if (role === '포스') posCount++;
+        else if (role === '삼겹살') samCount++;
+        else if (role === '국수') noodleCount++;
+    });
+
+    // 3단계: 멀티 역할 직원을 부족한 파트에 우선 배치
+    multiRoleStaff.forEach(w => {
+        const roles = w.roles || ['일반'];
+        const specialRoles = roles.filter(r => r !== '일반');
+        
+        // 부족한 순서대로 정렬
+        let needs = [];
+        if (posCount < 2 && specialRoles.includes('포스')) {
+            needs.push({ role: '포스', count: posCount, priority: 2 - posCount });
+        }
+        if (samCount < 2 && specialRoles.includes('삼겹살')) {
+            needs.push({ role: '삼겹살', count: samCount, priority: 2 - samCount });
+        }
+        if (noodleCount < 2 && specialRoles.includes('국수')) {
+            needs.push({ role: '국수', count: noodleCount, priority: 2 - noodleCount });
+        }
+        
+        // 가장 부족한 파트에 배치
+        if (needs.length > 0) {
+            needs.sort((a, b) => b.priority - a.priority);
+            const assignedRole = needs[0].role;
+            
+            if (assignedRole === '포스') posCount++;
+            else if (assignedRole === '삼겹살') samCount++;
+            else if (assignedRole === '국수') noodleCount++;
+        } else {
+            // 모든 파트가 충분하면 첫 번째 역할에 배치
+            if (specialRoles[0] === '포스') posCount++;
+            else if (specialRoles[0] === '삼겹살') samCount++;
+            else if (specialRoles[0] === '국수') noodleCount++;
+        }
+    });
+
+    // 4단계: "일반" 직원은 전문가가 있는 파트에만 보조로 추가
+    if (generalStaff.length > 0) {
+        // 전문가가 있는 파트 확인
+        const hasPos = posCount > 0;
+        const hasSam = samCount > 0;
+        const hasNoodle = noodleCount > 0;
+        
+        // 일반 직원을 균등하게 분배 (전문가가 있는 파트에만)
+        generalStaff.forEach((w, idx) => {
+            // 부족한 파트 우선, 전문가가 있는 곳에만
+            if (posCount < 2 && hasPos) {
+                posCount++;
+            } else if (samCount < 2 && hasSam) {
+                samCount++;
+            } else if (noodleCount < 2 && hasNoodle) {
+                noodleCount++;
+            } else {
+                // 모두 충족되면 가장 적은 곳에 추가
+                if (hasPos && posCount <= samCount && posCount <= noodleCount) posCount++;
+                else if (hasSam && samCount <= noodleCount) samCount++;
+                else if (hasNoodle) noodleCount++;
+            }
+        });
+    }
+    
+    return { posCount, samCount, noodleCount };
+}
+
 function renderDailyView() {
     const container = document.getElementById('dailyStaffList');
     if (!container) return;
@@ -1404,7 +1495,6 @@ function renderDailyView() {
 
     // ✅ 근무자 목록 및 역할별 카운트
     let workers = [];
-    let posCount = 0, samCount = 0, noodleCount = 0;
     
     staffList.forEach(s => {
         let isWorking = false;
@@ -1432,15 +1522,105 @@ function renderDailyView() {
                 time: timeStr,
                 position: s.position,
                 roles: roles,
-                id: s.id
+                id: s.id,
+                assignedRole: null  // 배치될 역할
             });
-            
-            // ✅ 역할별 카운트
-            if (roles.includes('포스')) posCount++;
-            if (roles.includes('삼겹살')) samCount++;
-            if (roles.includes('국수')) noodleCount++;
         }
     });
+
+    const totalCount = workers.length;
+
+    // ✅✅✅ 새로운 스마트 배치 로직 ✅✅✅
+    // 1단계: 직원 분류
+    let specialistStaff = [];  // 전문 역할만 1개 가진 직원
+    let multiRoleStaff = [];   // 2개 이상 전문 역할 가진 직원
+    let generalStaff = [];     // 일반만 가진 직원
+    
+    workers.forEach(w => {
+        const specialRoles = w.roles.filter(r => r !== '일반');
+        
+        if (w.roles.includes('일반') && specialRoles.length === 0) {
+            generalStaff.push(w);
+        } else if (specialRoles.length === 1) {
+            specialistStaff.push(w);
+        } else if (specialRoles.length >= 2) {
+            multiRoleStaff.push(w);
+        }
+    });
+
+    // 2단계: 전문가 우선 배치 (1개 역할만 가진 사람)
+    let posCount = 0, samCount = 0, noodleCount = 0;
+    
+    specialistStaff.forEach(w => {
+        const role = w.roles.find(r => r !== '일반');
+        w.assignedRole = role;
+        
+        if (role === '포스') posCount++;
+        else if (role === '삼겹살') samCount++;
+        else if (role === '국수') noodleCount++;
+    });
+
+    // 3단계: 멀티 역할 직원을 부족한 파트에 우선 배치
+    multiRoleStaff.forEach(w => {
+        const specialRoles = w.roles.filter(r => r !== '일반');
+        
+        // 부족한 순서대로 정렬
+        let needs = [];
+        if (posCount < 2 && specialRoles.includes('포스')) {
+            needs.push({ role: '포스', count: posCount, priority: 2 - posCount });
+        }
+        if (samCount < 2 && specialRoles.includes('삼겹살')) {
+            needs.push({ role: '삼겹살', count: samCount, priority: 2 - samCount });
+        }
+        if (noodleCount < 2 && specialRoles.includes('국수')) {
+            needs.push({ role: '국수', count: noodleCount, priority: 2 - noodleCount });
+        }
+        
+        // 가장 부족한 파트에 배치
+        if (needs.length > 0) {
+            needs.sort((a, b) => b.priority - a.priority);
+            const assignedRole = needs[0].role;
+            w.assignedRole = assignedRole;
+            
+            if (assignedRole === '포스') posCount++;
+            else if (assignedRole === '삼겹살') samCount++;
+            else if (assignedRole === '국수') noodleCount++;
+        } else {
+            // 모든 파트가 충분하면 첫 번째 역할에 배치
+            w.assignedRole = specialRoles[0];
+            if (specialRoles[0] === '포스') posCount++;
+            else if (specialRoles[0] === '삼겹살') samCount++;
+            else if (specialRoles[0] === '국수') noodleCount++;
+        }
+    });
+
+    // 4단계: "일반" 직원은 전문가가 있는 파트에만 보조로 추가
+    let generalCount = generalStaff.length;
+    if (generalCount > 0) {
+        // 전문가가 있는 파트 확인
+        const hasPos = posCount > 0;
+        const hasSam = samCount > 0;
+        const hasNoodle = noodleCount > 0;
+        
+        // 일반 직원을 균등하게 분배 (전문가가 있는 파트에만)
+        generalStaff.forEach((w, idx) => {
+            w.assignedRole = '일반(보조)';
+            
+            // 부족한 파트 우선, 전문가가 있는 곳에만
+            if (posCount < 2 && hasPos) {
+                posCount++;
+            } else if (samCount < 2 && hasSam) {
+                samCount++;
+            } else if (noodleCount < 2 && hasNoodle) {
+                noodleCount++;
+            } else {
+                // 모두 충족되면 가장 적은 곳에 추가
+                if (hasPos && posCount <= samCount && posCount <= noodleCount) posCount++;
+                else if (hasSam && samCount <= noodleCount) samCount++;
+                else if (hasNoodle) noodleCount++;
+            }
+        });
+    }
 
     const totalCount = workers.length;
 
@@ -1511,15 +1691,32 @@ function renderDailyView() {
         cardsHtml = '<p style="text-align:center; color:#999; padding:20px;">오늘은 휴무일입니다.</p>';
     } else {
         workers.forEach(w => {
-            const rolesBadge = w.roles.map(r => {
-                const roleColors = {
-                    '포스': '#e91e63',
-                    '삼겹살': '#ff5722',
-                    '국수': '#ff9800',
-                    '일반': '#9e9e9e'
-                };
-                return `<span style="background:${roleColors[r] || '#999'}; color:white; padding:2px 6px; border-radius:3px; font-size:11px; margin-right:3px;">${r}</span>`;
-            }).join('');
+            const roleColors = {
+                '포스': '#e91e63',
+                '삼겹살': '#ff5722',
+                '국수': '#ff9800',
+                '일반': '#9e9e9e'
+            };
+            
+            // 배치된 역할 강조 표시
+            let rolesBadge = '';
+            if (w.assignedRole) {
+                const displayRole = w.assignedRole === '일반(보조)' ? '일반' : w.assignedRole;
+                const bgColor = roleColors[displayRole] || '#999';
+                rolesBadge = `<span style="background:${bgColor}; color:white; padding:3px 8px; border-radius:3px; font-size:12px; margin-right:3px; font-weight:bold; border: 2px solid #fff; box-shadow: 0 0 0 2px ${bgColor};">✓ ${w.assignedRole}</span>`;
+                
+                // 나머지 가능한 역할 (흐리게)
+                w.roles.forEach(r => {
+                    if (r !== displayRole && r !== '일반') {
+                        rolesBadge += `<span style="background:#ccc; color:#666; padding:2px 6px; border-radius:3px; font-size:11px; margin-right:3px; opacity:0.6;">${r}</span>`;
+                    }
+                });
+            } else {
+                // assignedRole이 없는 경우 (이전 방식)
+                rolesBadge = w.roles.map(r => {
+                    return `<span style="background:${roleColors[r] || '#999'}; color:white; padding:2px 6px; border-radius:3px; font-size:11px; margin-right:3px;">${r}</span>`;
+                }).join('');
+            }
 
             cardsHtml += `
                 <div class="reservation-item">
@@ -1764,7 +1961,7 @@ function renderMonthlyView() {
         const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
         
         let count = 0;
-        let posCount = 0, samCount = 0, noodleCount = 0; // ✅ 역할별 카운트 변수 선언
+        let tempWorkers = []; // 임시 워커 목록
         
         staffList.forEach(staff => {
             // ✅ 입사일/퇴사일 체크
@@ -1792,14 +1989,16 @@ function renderMonthlyView() {
             }
             
             if (isWorking) {
-                count++; // ✅ count 증가
-                // ✅ 역할별 카운트
-                const roles = staff.roles || ['일반'];
-                if (roles.includes('포스')) posCount++;
-                if (roles.includes('삼겹살')) samCount++;
-                if (roles.includes('국수')) noodleCount++;
+                count++;
+                tempWorkers.push({ roles: staff.roles || ['일반'] });
             }
         });
+        
+        // ✅ 스마트 배치 로직으로 역할별 카운트
+        const roleCounts = calculateSmartRoleCount(tempWorkers);
+        let posCount = roleCounts.posCount;
+        let samCount = roleCounts.samCount;
+        let noodleCount = roleCounts.noodleCount;
         
         let dayClass = '';
         if (currentIterDate.getDay() === 0) dayClass = 'sunday';
@@ -2265,6 +2464,7 @@ function openAddModal() {
     document.getElementById('staffSalaryType').value = 'hourly';
     document.getElementById('staffSalary').value = '';
     document.getElementById('staffTime').value = '';
+    document.getElementById('staffStartDate').value = '';
     document.getElementById('staffEndDate').value = '';
 
     DAY_KEYS.forEach(day => {
@@ -2292,6 +2492,7 @@ async function saveStaff() {
     const salaryType = document.getElementById('staffSalaryType').value;
     const salary = parseInt(document.getElementById('staffSalary').value) || 0;
     const time = document.getElementById('staffTime').value.trim();
+    const startDate = document.getElementById('staffStartDate').value;
     const endDate = document.getElementById('staffEndDate').value;
 
     if (!name) {
@@ -2320,7 +2521,7 @@ async function saveStaff() {
     }
 
     const staffData = {
-        name, position, salaryType, salary, workDays, time, endDate, roles
+        name, position, salaryType, salary, workDays, time, startDate, endDate, roles
     };
 
     try {
