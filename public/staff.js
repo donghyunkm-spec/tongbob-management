@@ -1418,7 +1418,7 @@ function calculateSmartRoleCount(workers) {
         else if (role === '국수') noodleCount++;
     });
 
-    // 3단계: 멀티 역할 직원을 부족한 파트에 우선 배치
+    // 3단계: 멀티 역할 직원을 부족한 파트에 우선 배치 (1명당 1개 파트만)
     multiRoleStaff.forEach(w => {
         const roles = w.roles || ['일반'];
         const specialRoles = roles.filter(r => r !== '일반');
@@ -1435,7 +1435,7 @@ function calculateSmartRoleCount(workers) {
             needs.push({ role: '국수', count: noodleCount, priority: 2 - noodleCount });
         }
         
-        // 가장 부족한 파트에 배치
+        // 가장 부족한 파트에 배치 (1개 파트만)
         if (needs.length > 0) {
             needs.sort((a, b) => b.priority - a.priority);
             const assignedRole = needs[0].role;
@@ -1451,30 +1451,8 @@ function calculateSmartRoleCount(workers) {
         }
     });
 
-    // 4단계: "일반" 직원은 전문가가 있는 파트에만 보조로 추가
-    if (generalStaff.length > 0) {
-        // 전문가가 있는 파트 확인
-        const hasPos = posCount > 0;
-        const hasSam = samCount > 0;
-        const hasNoodle = noodleCount > 0;
-        
-        // 일반 직원을 균등하게 분배 (전문가가 있는 파트에만)
-        generalStaff.forEach((w, idx) => {
-            // 부족한 파트 우선, 전문가가 있는 곳에만
-            if (posCount < 2 && hasPos) {
-                posCount++;
-            } else if (samCount < 2 && hasSam) {
-                samCount++;
-            } else if (noodleCount < 2 && hasNoodle) {
-                noodleCount++;
-            } else {
-                // 모두 충족되면 가장 적은 곳에 추가
-                if (hasPos && posCount <= samCount && posCount <= noodleCount) posCount++;
-                else if (hasSam && samCount <= noodleCount) samCount++;
-                else if (hasNoodle) noodleCount++;
-            }
-        });
-    }
+    // 4단계: "일반" 직원은 보조 역할만 (카운트에 포함 안 함)
+    // 일반 직원은 posCount, samCount, noodleCount에 추가하지 않음!
     
     return { posCount, samCount, noodleCount };
 }
@@ -1493,7 +1471,7 @@ function renderDailyView() {
     const dayDisplay = document.getElementById('currentDateDisplay');
     if(dayDisplay) dayDisplay.textContent = `${month}월 ${day}일 (${dayName})`;
 
-    // ✅ 근무자 목록 및 역할별 카운트
+    // ✅ 근무자 목록 수집
     let workers = [];
     
     staffList.forEach(s => {
@@ -1523,22 +1501,26 @@ function renderDailyView() {
                 position: s.position,
                 roles: roles,
                 id: s.id,
-                assignedRole: null  // 배치될 역할
+                assignedRole: null
             });
         }
     });
 
     const totalCount = workers.length;
 
-    // ✅✅✅ 새로운 스마트 배치 로직 ✅✅✅
-    // 1단계: 직원 분류
-    let specialistStaff = [];  // 전문 역할만 1개 가진 직원
-    let multiRoleStaff = [];   // 2개 이상 전문 역할 가진 직원
-    let generalStaff = [];     // 일반만 가진 직원
+    // ✅ 스마트 배치 로직으로 역할별 카운트 계산
+    const roleCounts = calculateSmartRoleCount(workers);
+    let posCount = roleCounts.posCount;
+    let samCount = roleCounts.samCount;
+    let noodleCount = roleCounts.noodleCount;
+    
+    // ✅ 배치된 역할 정보를 workers에 반영 (UI 표시용)
+    let specialistStaff = [];
+    let multiRoleStaff = [];
+    let generalStaff = [];
     
     workers.forEach(w => {
         const specialRoles = w.roles.filter(r => r !== '일반');
-        
         if (w.roles.includes('일반') && specialRoles.length === 0) {
             generalStaff.push(w);
         } else if (specialRoles.length === 1) {
@@ -1547,114 +1529,73 @@ function renderDailyView() {
             multiRoleStaff.push(w);
         }
     });
-
-    // 2단계: 전문가 우선 배치 (1개 역할만 가진 사람)
-    let posCount = 0, samCount = 0, noodleCount = 0;
     
+    // 전문가 배치
     specialistStaff.forEach(w => {
-        const role = w.roles.find(r => r !== '일반');
-        w.assignedRole = role;
-        
-        if (role === '포스') posCount++;
-        else if (role === '삼겹살') samCount++;
-        else if (role === '국수') noodleCount++;
+        w.assignedRole = w.roles.find(r => r !== '일반');
     });
-
-    // 3단계: 멀티 역할 직원을 부족한 파트에 우선 배치
+    
+    // 멀티 역할 배치 (부족한 파트 우선)
+    let tempPos = specialistStaff.filter(w => w.roles.includes('포스')).length;
+    let tempSam = specialistStaff.filter(w => w.roles.includes('삼겹살')).length;
+    let tempNoodle = specialistStaff.filter(w => w.roles.includes('국수')).length;
+    
     multiRoleStaff.forEach(w => {
         const specialRoles = w.roles.filter(r => r !== '일반');
-        
-        // 부족한 순서대로 정렬
         let needs = [];
-        if (posCount < 2 && specialRoles.includes('포스')) {
-            needs.push({ role: '포스', count: posCount, priority: 2 - posCount });
+        if (tempPos < 2 && specialRoles.includes('포스')) {
+            needs.push({ role: '포스', priority: 2 - tempPos });
         }
-        if (samCount < 2 && specialRoles.includes('삼겹살')) {
-            needs.push({ role: '삼겹살', count: samCount, priority: 2 - samCount });
+        if (tempSam < 2 && specialRoles.includes('삼겹살')) {
+            needs.push({ role: '삼겹살', priority: 2 - tempSam });
         }
-        if (noodleCount < 2 && specialRoles.includes('국수')) {
-            needs.push({ role: '국수', count: noodleCount, priority: 2 - noodleCount });
+        if (tempNoodle < 2 && specialRoles.includes('국수')) {
+            needs.push({ role: '국수', priority: 2 - tempNoodle });
         }
         
-        // 가장 부족한 파트에 배치
         if (needs.length > 0) {
             needs.sort((a, b) => b.priority - a.priority);
-            const assignedRole = needs[0].role;
-            w.assignedRole = assignedRole;
-            
-            if (assignedRole === '포스') posCount++;
-            else if (assignedRole === '삼겹살') samCount++;
-            else if (assignedRole === '국수') noodleCount++;
+            w.assignedRole = needs[0].role;
+            if (needs[0].role === '포스') tempPos++;
+            else if (needs[0].role === '삼겹살') tempSam++;
+            else if (needs[0].role === '국수') tempNoodle++;
         } else {
-            // 모든 파트가 충분하면 첫 번째 역할에 배치
             w.assignedRole = specialRoles[0];
-            if (specialRoles[0] === '포스') posCount++;
-            else if (specialRoles[0] === '삼겹살') samCount++;
-            else if (specialRoles[0] === '국수') noodleCount++;
         }
     });
-
-    // 4단계: "일반" 직원은 전문가가 있는 파트에만 보조로 추가
-    let generalCount = generalStaff.length;
-    if (generalCount > 0) {
-        // 전문가가 있는 파트 확인
-        const hasPos = posCount > 0;
-        const hasSam = samCount > 0;
-        const hasNoodle = noodleCount > 0;
-        
-        // 일반 직원을 균등하게 분배 (전문가가 있는 파트에만)
-        generalStaff.forEach((w, idx) => {
-            w.assignedRole = '일반(보조)';
-            
-            // 부족한 파트 우선, 전문가가 있는 곳에만
-            if (posCount < 2 && hasPos) {
-                posCount++;
-            } else if (samCount < 2 && hasSam) {
-                samCount++;
-            } else if (noodleCount < 2 && hasNoodle) {
-                noodleCount++;
-            } else {
-                // 모두 충족되면 가장 적은 곳에 추가
-                if (hasPos && posCount <= samCount && posCount <= noodleCount) posCount++;
-                else if (hasSam && samCount <= noodleCount) samCount++;
-                else if (hasNoodle) noodleCount++;
-            }
-        });
-    }
-
-    const totalCount = workers.length;
+    
+    // 일반 직원 배치
+    generalStaff.forEach(w => {
+        w.assignedRole = '일반';
+    });
 
     // ✅ 알림 메시지 생성
     let alertMessages = [];
     let alertLevel = 'normal';
 
-    // ✅ 알림 체크
-    let hasAlert = false;
-    if (totalCount < 10 || totalCount > 12 || posCount < 2 || samCount < 2 || noodleCount < 2) {
-        hasAlert = true;
-    }
-
-    const badgeColor = hasAlert ? '#f44336' : '#4CAF50';
-    countBadge = `<span class="count-badge" style="background:${badgeColor};">${totalCount}명</span>`;
-
-    if (totalCount < 10) {
-        alertMessages.push(`⚠️ 인원 부족: 총 ${totalCount}명 (최소 10명 필요)`);
+    // 총 인원 체크 (9명 이하 부족, 13명 이상 과다)
+    if (totalCount <= 9) {
+        alertMessages.push(`⚠️ 총 근무인원이 부족합니다 (${totalCount}명, 최소 10명 필요)`);
         alertLevel = 'danger';
-    } else if (totalCount > 12) {
-        alertMessages.push(`⚠️ 인원 초과: 총 ${totalCount}명 (최대 12명 권장)`);
+    } else if (totalCount >= 13) {
+        alertMessages.push(`⚠️ 총 근무인원이 너무 많습니다 (${totalCount}명, 최대 12명 권장)`);
         alertLevel = 'danger';
     }
 
+    // 숙련자 인원 체크 (각 파트당 2명 필요)
     if (posCount < 2) {
-        alertMessages.push(`🔴 포스 부족: ${posCount}명 (최소 2명 필요)`);
+        const lack = 2 - posCount;
+        alertMessages.push(`🔴 포스 인원이 ${lack}명 부족합니다 (현재 ${posCount}명)`);
         alertLevel = 'danger';
     }
     if (samCount < 2) {
-        alertMessages.push(`🔴 삼겹살 부족: ${samCount}명 (최소 2명 필요)`);
+        const lack = 2 - samCount;
+        alertMessages.push(`🔴 삼겹살 인원이 ${lack}명 부족합니다 (현재 ${samCount}명)`);
         alertLevel = 'danger';
     }
     if (noodleCount < 2) {
-        alertMessages.push(`🔴 국수 부족: ${noodleCount}명 (최소 2명 필요)`);
+        const lack = 2 - noodleCount;
+        alertMessages.push(`🔴 국수 인원이 ${lack}명 부족합니다 (현재 ${noodleCount}명)`);
         alertLevel = 'danger';
     }
 
@@ -1662,9 +1603,9 @@ function renderDailyView() {
     let summaryHtml = `
         <div style="background:#f5f5f5; padding:10px; margin-bottom:15px; border-radius:5px; display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:10px; text-align:center;">
             <div><strong>총 인원</strong><br/><span style="font-size:20px; color:${totalCount >= 10 && totalCount <= 12 ? '#4CAF50' : '#f44336'}">${totalCount}명</span></div>
-            <div><strong>🎯 포스</strong><br/><span style="font-size:20px; color:${posCount >= 2 ? '#4CAF50' : '#f44336'}">${posCount}명</span></div>
-            <div><strong>🥩 삼겹살</strong><br/><span style="font-size:20px; color:${samCount >= 2 ? '#4CAF50' : '#f44336'}">${samCount}명</span></div>
-            <div><strong>🍜 국수</strong><br/><span style="font-size:20px; color:${noodleCount >= 2 ? '#4CAF50' : '#f44336'}">${noodleCount}명</span></div>
+            <div><strong>🎯 포스</strong><br/><span style="font-size:20px; color:${posCount === 2 ? '#4CAF50' : '#f44336'}">${posCount}명</span></div>
+            <div><strong>🥩 삼겹살</strong><br/><span style="font-size:20px; color:${samCount === 2 ? '#4CAF50' : '#f44336'}">${samCount}명</span></div>
+            <div><strong>🍜 국수</strong><br/><span style="font-size:20px; color:${noodleCount === 2 ? '#4CAF50' : '#f44336'}">${noodleCount}명</span></div>
         </div>
     `;
 
@@ -1682,7 +1623,7 @@ function renderDailyView() {
     const badge = document.getElementById('dailyCountBadge');
     if(badge) {
         badge.textContent = `총 ${totalCount}명`;
-        badge.style.background = (totalCount >= 10 && totalCount <= 12 && posCount >= 2 && samCount >= 2 && noodleCount >= 2) ? '#4CAF50' : '#f44336';
+        badge.style.background = (totalCount >= 10 && totalCount <= 12 && posCount === 2 && samCount === 2 && noodleCount === 2) ? '#4CAF50' : '#f44336';
     }
 
     // ✅ 근무자 카드
@@ -1701,7 +1642,7 @@ function renderDailyView() {
             // 배치된 역할 강조 표시
             let rolesBadge = '';
             if (w.assignedRole) {
-                const displayRole = w.assignedRole === '일반(보조)' ? '일반' : w.assignedRole;
+                const displayRole = w.assignedRole === '일반' ? '일반' : w.assignedRole;
                 const bgColor = roleColors[displayRole] || '#999';
                 rolesBadge = `<span style="background:${bgColor}; color:white; padding:3px 8px; border-radius:3px; font-size:12px; margin-right:3px; font-weight:bold; border: 2px solid #fff; box-shadow: 0 0 0 2px ${bgColor};">✓ ${w.assignedRole}</span>`;
                 
@@ -2009,9 +1950,9 @@ function renderMonthlyView() {
             dayClass += ' today-highlight';
         }
 
-        // ✅ 알림 체크 (10~12명, 각 역할 2명 이상)
+        // ✅ 알림 체크 (총 인원 10~12명, 각 숙련자 역할 정확히 2명)
         let hasAlert = false;
-        if (count < 10 || count > 12 || posCount < 2 || samCount < 2 || noodleCount < 2) {
+        if (count <= 9 || count >= 13 || posCount !== 2 || samCount !== 2 || noodleCount !== 2) {
             hasAlert = true;
         }
 
@@ -2199,6 +2140,12 @@ async function setDailyException(id, dateStr, action) {
         if (!newTime) return;
         await callExceptionApi({ id, date: dateStr, type: 'work', time: newTime });
     }
+}
+
+async function markTempOff(id, dateStr) {
+    if (!currentUser) { openLoginModal(); return; }
+    if (!confirm('이 직원을 임시 휴무 처리하시겠습니까?')) return;
+    await callExceptionApi({ id, date: dateStr, type: 'off' });
 }
 
 function initTimeOptions() {
