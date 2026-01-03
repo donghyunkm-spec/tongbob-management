@@ -721,19 +721,47 @@ function getDaysUntilNextDelivery(vendor) {
 
 function getDeliveryInfo(vendor) {
     const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
     const daysNeeded = getDaysUntilNextDelivery(vendor);
-    const endDate = new Date(tomorrow);
-    endDate.setDate(endDate.getDate() + daysNeeded - 1);
     
-    const tomorrowStr = `${tomorrow.getMonth()+1}/${tomorrow.getDate()}(${WEEKDAYS[tomorrow.getDay()]})`;
-    const endDateStr = `${endDate.getMonth()+1}/${endDate.getDate()}(${WEEKDAYS[endDate.getDay()]})`;
+    // 실제 배송일 찾기 (다음 배송 가능하고 가게도 영업하는 날)
+    let deliveryDate = new Date(today);
+    deliveryDate.setDate(deliveryDate.getDate() + 1); // 내일부터
+    
+    for (let i = 0; i < 7; i++) {
+        const dow = deliveryDate.getDay();
+        const dateStr = deliveryDate.toISOString().split('T')[0];
+        
+        // 가게 영업 여부
+        const isStoreRegularHoliday = (dow === 1); // 월요일
+        const isStoreTempHoliday = holidays['store'] && holidays['store'].includes(dateStr);
+        const isStoreTempOpen = holidays['store_open'] && holidays['store_open'].includes(dateStr);
+        const isStoreOpen = (!isStoreRegularHoliday || isStoreTempOpen) && !isStoreTempHoliday;
+        
+        // 업체 배송 가능 여부
+        const isSundayForVendor = (vendor === '고센유통' || vendor === '한강유통(고기)') && dow === 0;
+        const isVendorHoliday = holidays[vendor] && holidays[vendor].includes(dateStr);
+        const isDeliveryPossible = !isSundayForVendor && !isVendorHoliday;
+        
+        // 배송 가능하고 가게도 영업하는 날
+        if (isDeliveryPossible && isStoreOpen) {
+            break;
+        }
+        deliveryDate.setDate(deliveryDate.getDate() + 1);
+    }
+    
+    const year = deliveryDate.getFullYear();
+    const month = deliveryDate.getMonth() + 1;
+    const date = deliveryDate.getDate();
+    const dayOfWeek = WEEKDAYS[deliveryDate.getDay()];
     
     return {
-        deliveryDate: tomorrowStr,
-        endDate: endDateStr,
+        deliveryDate: deliveryDate,
+        year: year,
+        month: month,
+        date: date,
+        dayOfWeek: dayOfWeek,
+        shortFormat: `${month}/${date}(${dayOfWeek})`,
+        fullFormat: `${year}년 ${month}월 ${date}일 ${dayOfWeek}요일`,
         days: daysNeeded
     };
 }
@@ -840,8 +868,8 @@ function showConfirmModal(confirmItems) {
             hasAnyItem = true;
             const dInfo = getDeliveryInfo(vendor); 
             html += `<div class="delivery-info-box">
-                <h3>📦 ${vendor} (${dInfo.days}일치 확보)</h3>
-                <p>도착예정: ${dInfo.deliveryDate}</p>
+                <h3>📦 ${dInfo.fullFormat} 배송 품목</h3>
+                <p style="font-size:14px; color:#666;">${vendor} ${dInfo.days}일치로 계산된 재고량입니다</p>
             </div>
             <table class="confirm-table">
                 <thead><tr><th>품목</th><th>재고(1루+3루)</th><th>발주량</th></tr></thead>
@@ -991,13 +1019,12 @@ function copyVendorOrder(vendor) {
     const itemContainer = document.getElementById(`order_${vendor}`);
     if (!itemContainer) return;
     const itemsText = itemContainer.textContent.trim();
-    const today = new Date();
-    const month = today.getMonth() + 1;
-    const date = today.getDate();
+    
+    const dInfo = getDeliveryInfo(vendor);
     
     let copyText = (vendor === '고센유통') 
-        ? `안녕하세요 통빱 발주하겠습니다.\n\n${month}월 ${date}일\n\n${itemsText}\n\n감사합니다.`
-        : `[${vendor} 발주] ${month}/${date}\n\n${itemsText}`;
+        ? `안녕하세요 통빱입니다.\n${dInfo.month}월 ${dInfo.date}일 ${dInfo.dayOfWeek}요일 입고 품목 주문합니다.\n\n${itemsText}\n\n감사합니다.`
+        : `안녕하세요 통빱입니다.\n${dInfo.month}월 ${dInfo.date}일 ${dInfo.dayOfWeek}요일 입고 품목 주문합니다.\n\n${itemsText}\n\n감사합니다.`;
     
     navigator.clipboard.writeText(copyText).then(() => {
         showAlert(`${vendor} 발주서 복사 완료!`, 'success');
@@ -1016,24 +1043,27 @@ function copyToKakao() {
     const date = today.getDate();
     const time = `${today.getHours()}:${String(today.getMinutes()).padStart(2, '0')}`;
 
-    let copyText = `📦 [발주 리스트 복사]\n📅 ${month}/${date} (${time})\n----------------------------\n`;
+    let copyText = `📦 [발주 리스트]\n📅 ${month}/${date} (${time}) 작성\n----------------------------\n`;
     
     // 화면에 렌더링된 데이터를 기반으로 텍스트 생성
     const orderSections = document.querySelectorAll('.order-section');
     
     orderSections.forEach(section => {
-        const vendor = section.querySelector('h3').textContent.split('(')[0].trim(); // 업체명만 추출
-        const itemsText = section.querySelector('.order-items').innerText; // 내부 텍스트 가져오기
+        const vendorFullText = section.querySelector('h3').textContent; // "고센유통 (2일치)" 형태
+        const vendor = vendorFullText.split('(')[0].trim(); // 업체명만 추출
+        const itemsText = section.querySelector('.order-items').innerText;
+        
+        // 업체별 배송일 정보 가져오기
+        const dInfo = getDeliveryInfo(vendor);
         
         copyText += `\n■ ${vendor}\n`;
+        copyText += `   ${dInfo.month}월 ${dInfo.date}일 ${dInfo.dayOfWeek}요일 입고 (${dInfo.days}일치)\n`;
         
-        // 기존 텍스트(품목명 3kg)를 한 줄씩 처리
+        // 품목 리스트
         const lines = itemsText.split('\n');
         lines.forEach(line => {
             if(line.trim()) {
-                // "▫️ 품목명 : 3kg" 형태로 변환
-                // 현재 innerText가 "양파 3망" 형태라면 보기 좋게 꾸밈
-                copyText += `▫️ ${line.trim()}\n`; 
+                copyText += `   ▫️ ${line.trim()}\n`; 
             }
         });
     });
@@ -1041,7 +1071,7 @@ function copyToKakao() {
     copyText += `\n----------------------------\n통빱 재고관리`;
 
     navigator.clipboard.writeText(copyText).then(() => {
-        showAlert('영수증 형태로 복사 완료! 📋', 'success');
+        showAlert('발주 리스트 복사 완료! 📋', 'success');
     }).catch(err => {
         console.error('복사 실패:', err);
         showAlert('복사 실패', 'error');

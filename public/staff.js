@@ -497,7 +497,7 @@ function loadHistoryTable(filterKey = 'all') {
     const labelMap = {
         'card': '💳 카드', 'cash': '💵 현금', 'delivery': '🛵 배달',
         'sales': '💰 총매출',
-        'food': '🥬 고센', 'meat': '🥩 고기', 'etc': '🍦 잡비'
+        'food': '🥬 고센유통', 'meat': '🥩 한강유통(고기)', 'etc': '🍦 잡비'
     };
 
     const rows = []; 
@@ -509,9 +509,18 @@ function loadHistoryTable(filterKey = 'all') {
             
             const d = accountingData.daily[date];
             
+            // 1루+3루 합산 계산
+            const cardTotal = (d.card1||0) + (d.card3||0);
+            const cashTotal = (d.cash1||0) + (d.cash3||0);
+            const deliveryTotal = (d.delivery1||0) + (d.delivery3||0);
+            const transferTotal = (d.transfer1||0) + (d.transfer3||0);
+            
             // 필터링
             let valToCheck = 0;
             if (filterKey === 'sales') valToCheck = d.sales;
+            else if (filterKey === 'card') valToCheck = cardTotal;
+            else if (filterKey === 'cash') valToCheck = cashTotal;
+            else if (filterKey === 'delivery') valToCheck = deliveryTotal;
             else if (filterKey !== 'all') valToCheck = d[filterKey];
 
             if (filterKey !== 'all') {
@@ -529,12 +538,13 @@ function loadHistoryTable(filterKey = 'all') {
                 const label = labelMap[filterKey] || filterKey;
                 details.push(`<span style="background:#fff9c4; font-weight:bold;">${label}: ${valToCheck.toLocaleString()}</span>`);
             } else {
-                if(d.card) details.push(`💳${d.card.toLocaleString()}`);
-                if(d.cash) details.push(`💵${d.cash.toLocaleString()}`);
-                if(d.delivery) details.push(`🛵${d.delivery.toLocaleString()}`);
-                if(d.transfer) details.push(`(이체:${d.transfer.toLocaleString()})`);
+                if(cardTotal) details.push(`💳${cardTotal.toLocaleString()}`);
+                if(cashTotal) details.push(`💵${cashTotal.toLocaleString()}`);
+                if(deliveryTotal) details.push(`🛵${deliveryTotal.toLocaleString()}`);
+                if(transferTotal) details.push(`(이체:${transferTotal.toLocaleString()})`);
                 
                 if(d.food) details.push(`고센:${d.food.toLocaleString()}`);
+                if(d.meat) details.push(`고기:${d.meat.toLocaleString()}`);
                 if(d.etc) details.push(`잡비:${d.etc.toLocaleString()}`);
             }
 
