@@ -474,19 +474,54 @@ function renderUnifiedInventoryForm() {
     const formContainer = document.getElementById('inventoryForm');
     if (!formContainer) return;
     
-    // 상단 컨트롤 바 (버튼 추가됨)
+    // 1. 저장된 날짜 확인 로직
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    // 1루 마지막 저장일 확인
+    const lastDate1 = inventory['meta_last_save_1루'] || '기록없음';
+    const isToday1 = (lastDate1 === todayStr);
+    // 날짜 포맷 예쁘게 (2024-05-20 -> 5/20)
+    const displayDate1 = isToday1 ? '오늘 완료' : (lastDate1 === '기록없음' ? '기록없음' : lastDate1.substring(5).replace('-','/') + ' (과거)');
+    const badgeStyle1 = isToday1 
+        ? 'background:#e8f5e9; color:#2e7d32; border:1px solid #c8e6c9;' // 오늘: 초록
+        : 'background:#fff3e0; color:#e65100; border:1px solid #ffe0b2;'; // 과거: 주황
+        
+    // 3루 마지막 저장일 확인
+    const lastDate3 = inventory['meta_last_save_3루'] || '기록없음';
+    const isToday3 = (lastDate3 === todayStr);
+    const displayDate3 = isToday3 ? '오늘 완료' : (lastDate3 === '기록없음' ? '기록없음' : lastDate3.substring(5).replace('-','/') + ' (과거)');
+    const badgeStyle3 = isToday3 
+        ? 'background:#e8f5e9; color:#2e7d32; border:1px solid #c8e6c9;' 
+        : 'background:#fff3e0; color:#e65100; border:1px solid #ffe0b2;';
+
+    // 2. 상단 HTML 구성
     let html = `
         <div class="sticky-header-bar">
             <div style="display:flex; gap:5px; flex:1;">
-                <button class="btn-loc-select ${currentLocation==='1루'?'active':''}" onclick="setLocation('1루')">⚾ 1루</button>
-                <button class="btn-loc-select ${currentLocation==='3루'?'active':''}" onclick="setLocation('3루')">⚾ 3루</button>
+                <button class="btn-loc-select ${currentLocation==='1루'?'active':''}" onclick="setLocation('1루')">
+                    ⚾ 1루
+                    <span style="display:block; font-size:10px; font-weight:normal; margin-top:2px;">${isToday1 ? '✅' : '⚠️'}</span>
+                </button>
+                <button class="btn-loc-select ${currentLocation==='3루'?'active':''}" onclick="setLocation('3루')">
+                    ⚾ 3루
+                    <span style="display:block; font-size:10px; font-weight:normal; margin-top:2px;">${isToday3 ? '✅' : '⚠️'}</span>
+                </button>
             </div>
             <button onclick="saveInventory()" class="btn-sticky-action">💾 저장</button>
         </div>
         
+        <div style="margin-bottom:10px; display:flex; gap:5px; font-size:12px; justify-content:center;">
+            <div style="padding:4px 8px; border-radius:12px; ${badgeStyle1}">
+                1루 저장: <strong>${displayDate1}</strong>
+            </div>
+            <div style="padding:4px 8px; border-radius:12px; ${badgeStyle3}">
+                3루 저장: <strong>${displayDate3}</strong>
+            </div>
+        </div>
+
         <div style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; background:#f1f3f5; padding:8px; border-radius:8px;">
             <div style="display:flex; gap:5px;">
-                <button onclick="recallLastInput()" class="btn-recall">🔄 ${currentLocation} 불러오기</button>
+                <button onclick="recallLastInput()" class="btn-recall">🔄 불러오기</button>
                 <button onclick="resetCurrentInput()" class="btn-reset">🗑️ 초기화</button>
             </div>
             
@@ -501,6 +536,7 @@ function renderUnifiedInventoryForm() {
         </div>
     `;
 
+    // ... (이 아래는 기존 코드와 동일합니다) ...
     const today = new Date();
     const isTuesday = today.getDay() === 2;
     
@@ -535,11 +571,9 @@ function renderUnifiedInventoryForm() {
         const rawItemKey = `${item.vendor}_${item.품목명}`;
         const locItemKey = `${currentLocation}_${rawItemKey}`;
         
-        // [중요] 값이 없거나 0이면 빈칸으로 표시 (사용자가 입력 여부를 알 수 있게)
         const currentStock = inventory[locItemKey]; 
         const displayValue = (currentStock === undefined || currentStock === 0) ? '' : currentStock;
         
-        // 전일 재고 (참고용 - lastSavedInventory에서 가져옴)
         let yesterdayStock = '-';
         if (lastSavedInventory[locItemKey] !== undefined) {
              yesterdayStock = lastSavedInventory[locItemKey];
@@ -754,9 +788,12 @@ function renderStandardForm() {
 
 // [수정 3] 저장 함수 (저장 후 UI가 깨지지 않도록 보장)
 async function saveInventory() {
-    saveCurrentInputToMemory(); // 1. 현재 입력값 메모리에 저장
+    saveCurrentInputToMemory(); 
 
-    // 버튼 피드백 (저장 중...)
+    // [NEW] 현재 작업 중인 위치(1루/3루)에 '오늘 날짜' 도장을 찍습니다.
+    const todayStr = new Date().toISOString().split('T')[0]; // "2024-05-20" 형식
+    inventory[`meta_last_save_${currentLocation}`] = todayStr;
+
     const saveBtn = document.querySelector('.btn-sticky-action');
     if(saveBtn) {
         saveBtn.textContent = '⏳ 저장중...';
@@ -764,7 +801,6 @@ async function saveInventory() {
     }
 
     try {
-        // 2. 서버로 전송
         const response = await fetch(`${API_BASE}/api/inventory/current`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -773,7 +809,12 @@ async function saveInventory() {
         const result = await response.json();
         
         if (result.success) {
-            inventory = result.inventory; // 서버에서 최신본 동기화
+            lastSavedInventory = { ...result.inventory };
+            inventory = result.inventory; 
+            
+            // 저장 후 화면을 다시 그려서 날짜 배지를 갱신합니다.
+            renderUnifiedInventoryForm();
+            
             showAlert('저장되었습니다.', 'success');
         } else {
             showAlert('저장 실패: 서버 오류', 'error');
@@ -782,7 +823,6 @@ async function saveInventory() {
         console.error(e);
         showAlert('저장 실패 (네트워크 오류)', 'error');
     } finally {
-        // 버튼 상태만 복구 (전체 폼 재렌더링 제거)
         if(saveBtn) {
             saveBtn.textContent = '💾 저장';
             saveBtn.disabled = false;
