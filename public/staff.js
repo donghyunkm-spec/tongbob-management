@@ -497,7 +497,7 @@ function loadHistoryTable(filterKey = 'all') {
     const labelMap = {
         'card': '💳 카드', 'cash': '💵 현금', 'delivery': '🛵 배달',
         'sales': '💰 총매출',
-        'food': '🥬 고센유통', 'meat': '🥩 한강유통(고기)', 'etc': '🍦 잡비'
+        'food': '🥬 고센', 'meat': '🥩 고기', 'etc': '🍦 잡비'
     };
 
     const rows = []; 
@@ -509,18 +509,9 @@ function loadHistoryTable(filterKey = 'all') {
             
             const d = accountingData.daily[date];
             
-            // 1루+3루 합산 계산
-            const cardTotal = (d.card1||0) + (d.card3||0);
-            const cashTotal = (d.cash1||0) + (d.cash3||0);
-            const deliveryTotal = (d.delivery1||0) + (d.delivery3||0);
-            const transferTotal = (d.transfer1||0) + (d.transfer3||0);
-            
             // 필터링
             let valToCheck = 0;
             if (filterKey === 'sales') valToCheck = d.sales;
-            else if (filterKey === 'card') valToCheck = cardTotal;
-            else if (filterKey === 'cash') valToCheck = cashTotal;
-            else if (filterKey === 'delivery') valToCheck = deliveryTotal;
             else if (filterKey !== 'all') valToCheck = d[filterKey];
 
             if (filterKey !== 'all') {
@@ -538,13 +529,12 @@ function loadHistoryTable(filterKey = 'all') {
                 const label = labelMap[filterKey] || filterKey;
                 details.push(`<span style="background:#fff9c4; font-weight:bold;">${label}: ${valToCheck.toLocaleString()}</span>`);
             } else {
-                if(cardTotal) details.push(`💳${cardTotal.toLocaleString()}`);
-                if(cashTotal) details.push(`💵${cashTotal.toLocaleString()}`);
-                if(deliveryTotal) details.push(`🛵${deliveryTotal.toLocaleString()}`);
-                if(transferTotal) details.push(`(이체:${transferTotal.toLocaleString()})`);
+                if(d.card) details.push(`💳${d.card.toLocaleString()}`);
+                if(d.cash) details.push(`💵${d.cash.toLocaleString()}`);
+                if(d.delivery) details.push(`🛵${d.delivery.toLocaleString()}`);
+                if(d.transfer) details.push(`(이체:${d.transfer.toLocaleString()})`);
                 
                 if(d.food) details.push(`고센:${d.food.toLocaleString()}`);
-                if(d.meat) details.push(`고기:${d.meat.toLocaleString()}`);
                 if(d.etc) details.push(`잡비:${d.etc.toLocaleString()}`);
             }
 
@@ -2612,41 +2602,79 @@ async function loadAccountingLogs() {
 }
 
 async function downloadAllData() {
-    if (!currentUser || currentUser.role !== 'admin') { alert("사장님만 가능한 기능입니다."); return; }
+    if (!currentUser || currentUser.role !== 'admin') { 
+        alert("사장님만 가능한 기능입니다."); 
+        return; 
+    }
 
-    if (!confirm(`모든 데이터를 다운로드하시겠습니까?\n(직원, 매출, 로그 포함)`)) return;
+    if (!confirm('전체 데이터를 백업하시겠습니까?\n백업 파일들이 로컬 PC에 다운로드됩니다.')) {
+        return;
+    }
 
     try {
-        const res = await fetch(`/api/backup`);
-        // 백업 API가 서버에 구현되어 있어야 함 (기존 코드에선 경로만 있었음)
-        // 만약 서버에 /api/backup이 없다면 작동하지 않을 수 있음
-        // (제공해주신 server.js에는 /api/backup 라우트가 없습니다. 필요시 추가 필요)
+        const response = await fetch('/api/backup/all');
         
-        if(res.status === 404) {
-            alert("서버에 백업 기능이 구현되지 않았습니다.");
-            return;
+        if (!response.ok) {
+            throw new Error('백업 생성 실패');
         }
-
-        const json = await res.json();
-
-        if (json.success) {
-            const dataStr = JSON.stringify(json.data, null, 2);
-            const date = new Date();
-            const dateStr = date.getFullYear() + String(date.getMonth() + 1).padStart(2, '0') + String(date.getDate()).padStart(2, '0');
-            const fileName = `backup_${dateStr}.json`;
-
-            const blob = new Blob([dataStr], { type: "application/json" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
+        
+        const backupData = await response.json();
+        
+        // 파일명 날짜/시간 형식
+        const now = new Date();
+        const dateStr = now.toISOString().split('T')[0];
+        const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '');
+        const prefix = `backup_${dateStr}_${timeStr}`;
+        
+        // 각 카테고리별로 파일 생성
+        const files = [
+            { name: `${prefix}_staff.json`, data: backupData.staff },
+            { name: `${prefix}_logs.json`, data: backupData.logs },
+            { name: `${prefix}_accounting.json`, data: backupData.accounting },
+            { name: `${prefix}_items.json`, data: backupData.inventory_items },
+            { name: `${prefix}_inventory.json`, data: backupData.inventory_current },
+            { name: `${prefix}_daily_usage.json`, data: backupData.inventory_usage },
+            { name: `${prefix}_orders.json`, data: backupData.inventory_orders },
+            { name: `${prefix}_holidays.json`, data: backupData.inventory_holidays },
+            { name: `${prefix}_last_orders.json`, data: backupData.inventory_last_orders },
+            { name: `${prefix}_inventory_history.json`, data: backupData.inventory_history }
+        ];
+        
+        // 각 파일 순차적으로 다운로드
+        for (const file of files) {
+            const blob = new Blob([JSON.stringify(file.data, null, 2)], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
             a.href = url;
-            a.download = fileName;
+            a.download = file.name;
+            
             document.body.appendChild(a);
             a.click();
+            window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            alert("다운로드가 완료되었습니다.");
-        } else alert("백업 데이터 생성 실패");
-    } catch (e) { console.error(e); alert("서버 통신 오류"); }
+            
+            // 브라우저가 파일을 처리할 시간 확보
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        alert(`백업이 완료되었습니다!\n총 ${files.length}개 파일이 다운로드되었습니다.\n다운로드 폴더를 확인하세요.`);
+        
+        // 백업 로그 남기기
+        await fetch('/api/logs', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                actor: currentUser.name,
+                action: '데이터백업',
+                target: '전체 시스템',
+                details: `${files.length}개 파일 백업 완료`
+            })
+        });
+        
+    } catch (e) { 
+        console.error(e); 
+        alert('백업 중 오류가 발생했습니다: ' + e.message);
+    }
 }
 
 // ==========================================
@@ -2885,7 +2913,7 @@ async function downloadBackup() {
         return;
     }
     
-    if (!confirm('전체 데이터를 백업하시겠습니까?\n백업 파일이 로컬 PC에 다운로드됩니다.')) {
+    if (!confirm('전체 데이터를 백업하시겠습니까?\n백업 파일들이 로컬 PC에 다운로드됩니다.')) {
         return;
     }
     
@@ -2896,23 +2924,46 @@ async function downloadBackup() {
             throw new Error('백업 생성 실패');
         }
         
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
+        const backupData = await response.json();
         
-        // 파일명: backup_YYYY-MM-DD_HHMMSS.json
+        // 파일명 날짜/시간 형식
         const now = new Date();
         const dateStr = now.toISOString().split('T')[0];
         const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '');
-        a.download = `backup_${dateStr}_${timeStr}.json`;
+        const prefix = `backup_${dateStr}_${timeStr}`;
         
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+        // 각 카테고리별로 파일 생성
+        const files = [
+            { name: `${prefix}_staff.json`, data: backupData.staff },
+            { name: `${prefix}_logs.json`, data: backupData.logs },
+            { name: `${prefix}_accounting.json`, data: backupData.accounting },
+            { name: `${prefix}_items.json`, data: backupData.inventory_items },
+            { name: `${prefix}_inventory.json`, data: backupData.inventory_current },
+            { name: `${prefix}_daily_usage.json`, data: backupData.inventory_usage },
+            { name: `${prefix}_orders.json`, data: backupData.inventory_orders },
+            { name: `${prefix}_holidays.json`, data: backupData.inventory_holidays },
+            { name: `${prefix}_last_orders.json`, data: backupData.inventory_last_orders },
+            { name: `${prefix}_inventory_history.json`, data: backupData.inventory_history }
+        ];
         
-        alert('백업이 완료되었습니다!\n다운로드 폴더를 확인하세요.');
+        // 각 파일 순차적으로 다운로드
+        for (const file of files) {
+            const blob = new Blob([JSON.stringify(file.data, null, 2)], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = file.name;
+            
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            // 브라우저가 파일을 처리할 시간 확보
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        alert(`백업이 완료되었습니다!\n총 ${files.length}개 파일이 다운로드되었습니다.\n다운로드 폴더를 확인하세요.`);
         
         // 백업 로그 남기기
         await fetch('/api/logs', {
@@ -2922,7 +2973,7 @@ async function downloadBackup() {
                 actor: currentUser.name,
                 action: '데이터백업',
                 target: '전체 시스템',
-                details: '전체 데이터 백업 다운로드'
+                details: `${files.length}개 파일 백업 완료`
             })
         });
         

@@ -19,6 +19,7 @@ let currentWarnings = {};
 let showWeeklyForced = false; 
 // [추가] 재고 확인 탭용 날짜 변수
 let checkDateOffset = 0; // 0: 오늘, -1: 어제 ...
+let currentConfirmItems = {}; // [NEW] 수정 가능한 발주 확인용 데이터 저장
 
 // [NEW] 현재 작업 중인 매장 위치 (1루 or 3루)
 let currentLocation = '1루'; // '1루' or '3루'
@@ -845,6 +846,7 @@ function checkOrderConfirmation() {
     }
 
     // 발주할 게 있든 없든 모달 띄우기 (사용자 피드백 확실하게)
+    currentConfirmItems = confirmItems; // [NEW] 전역 저장
     showConfirmModal(confirmItems);
 }
 
@@ -875,11 +877,19 @@ function showConfirmModal(confirmItems) {
                 <thead><tr><th>품목</th><th>재고(1루+3루)</th><th>발주량</th></tr></thead>
                 <tbody>`;
             
-            list.forEach(i => {
+            list.forEach((i, idx) => {
                 html += `<tr>
                     <td>${i.품목명}<br><span style="font-size:10px;color:red">${i.reason}</span></td>
                     <td>${i.currentStock} <span style="font-size:10px; color:#888;">(${i.stock1}+${i.stock3})</span></td>
-                    <td><strong style="color:#1976D2; font-size:15px;">${i.orderAmount} ${i.displayUnit}</strong></td>
+                    <td>
+                        <input type="number" 
+                               value="${i.orderAmount}" 
+                               data-vendor="${vendor}" 
+                               data-index="${idx}"
+                               onchange="updateOrderAmount('${vendor}', ${idx}, this.value)"
+                               style="width:70px; padding:5px; text-align:right; font-size:15px; font-weight:bold; color:#1976D2; border:2px solid #1976D2; border-radius:4px;">
+                        <span style="margin-left:5px; font-size:13px;">${i.displayUnit}</span>
+                    </td>
                 </tr>`;
             });
             html += `</tbody></table>`;
@@ -908,49 +918,31 @@ function closeConfirmModal() {
     document.getElementById('confirmModal').classList.remove('active');
 }
 
+// [NEW] 발주량 수정 함수
+function updateOrderAmount(vendor, index, newValue) {
+    const value = parseFloat(newValue) || 0;
+    if (currentConfirmItems[vendor] && currentConfirmItems[vendor][index]) {
+        currentConfirmItems[vendor][index].orderAmount = value;
+        console.log(`[DEBUG] ${vendor} - ${currentConfirmItems[vendor][index].품목명}: ${value}로 수정됨`);
+    }
+}
+
 async function proceedToOrder() {
     closeConfirmModal();
     const orderData = { '고센유통': [], '한강유통(고기)': [], '인터넷발주': [] };
     const currentInventoryCopy = { ...inventory };
 
-    for (const vendor in items) {
-        const vendorItems = items[vendor];
-        const daysNeeded = getDaysUntilNextDelivery(vendor);
-        
-        vendorItems.forEach(item => {
-            const rawItemKey = `${vendor}_${item.품목명}`;
-            const s1 = inventory[`1루_${rawItemKey}`] || 0;
-            const s3 = inventory[`3루_${rawItemKey}`] || 0;
-            const totalStock = s1 + s3;
-            const usage = dailyUsage[rawItemKey] || 0;
-            const needed = usage * daysNeeded;
-            let rawAmt = Math.max(0, needed - totalStock);
-            
-            // 🔥 [NEW] 임계값/최소발주량 로직 적용
-            if (item.thresholdQty && item.minOrderQty) {
-                if (totalStock <= item.thresholdQty) {
-                    rawAmt = item.minOrderQty;
-                } else {
-                    rawAmt = 0;
-                }
-            }
-            
-            let finalQty = 0;
-            let finalUnit = item.발주단위;
-            
-            if (vendor === '한강유통(고기)') {
-                const mInfo = getMeatVendorInfo(item.품목명);
-                finalUnit = mInfo.unit;
-                if(rawAmt > 0) finalQty = (mInfo.type==='weight' && mInfo.unit==='kg') 
-                    ? Math.ceil(rawAmt/mInfo.weight)*mInfo.weight : Math.ceil(rawAmt/mInfo.weight);
-            } else if (vendor === '고센유통') {
-                if(rawAmt > 0) finalQty = Math.ceil(rawAmt);
-            } else {
-                finalQty = Math.round(rawAmt*10)/10;
-            }
-
-            if (finalQty > 0) {
-                orderData[vendor].push({ ...item, orderAmount: finalQty, daysNeeded, displayUnit: finalUnit });
+    // currentConfirmItems의 수정된 값을 사용
+    for (const vendor in currentConfirmItems) {
+        const items = currentConfirmItems[vendor];
+        items.forEach(item => {
+            if (item.orderAmount > 0) {
+                orderData[vendor].push({
+                    ...item,
+                    orderAmount: item.orderAmount,
+                    daysNeeded: item.daysNeeded,
+                    displayUnit: item.displayUnit
+                });
             }
         });
     }
