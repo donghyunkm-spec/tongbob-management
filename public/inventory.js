@@ -1,35 +1,37 @@
-let currentStandardVendor = 'all';
+// ==========================================
+// 1. 변수 선언 및 초기화 (덮어쓰기)
+// ==========================================
+
+// 전역 변수
 let items = {};
-let inventory = {}; // 키 포맷 변경: "1루_업체_품목명", "3루_업체_품목명"
+let inventory = {};          // 현재 화면에 입력 중인 값 (초기값: 0/빈칸)
+let lastSavedInventory = {}; // [NEW] 서버에 저장된 마지막 값 (불러오기용 백업)
 let dailyUsage = {};
 let holidays = {
-    'store': [],         // 임시 휴무
-    'store_open': [],    // [NEW] 임시 영업 (월요일 경기 등)
-    '고센유통': [],
-    '한강유통(고기)': [],
-    '인터넷발주': []
+    'store': [], 'store_open': [],
+    '고센유통': [], '한강유통(고기)': [], '인터넷발주': []
 };
 let lastOrderDates = {};
-let recentHistory = []; 
+let recentHistory = [];
 
 // 화면 상태 변수
-let currentSortOrder = 'default'; 
-let allItemsWithInfo = []; 
-let currentWarnings = {}; 
-let showWeeklyForced = false; 
-// [추가] 재고 확인 탭용 날짜 변수
-let checkDateOffset = 0; // 0: 오늘, -1: 어제 ...
-let currentConfirmItems = {}; // [NEW] 수정 가능한 발주 확인용 데이터 저장
-
-// [NEW] 현재 작업 중인 매장 위치 (1루 or 3루)
 let currentLocation = '1루'; // '1루' or '3루'
-let manageSortMode = '1루';  // '1루' or '3루'
+let currentStandardVendor = 'all';
+let currentSortOrder = 'default';
+let showWeeklyForced = false;
+let checkDateOffset = 0;
+let currentConfirmItems = {}; 
+let currentWarnings = {};
+let manageSortMode = '1루';
+
+// 재고확인 필터 변수
+let checkSearchText = '';
+let checkSortKey = 'vendor';
+let checkVendorFilter = 'all';
 
 const vendorIdMap = {
-    'store': 'store',
-    '고센유통': 'goshen',
-    '한강유통(고기)': 'meat',
-    '인터넷발주': 'internet'
+    'store': 'store', '고센유통': 'goshen',
+    '한강유통(고기)': 'meat', '인터넷발주': 'internet'
 };
 
 const API_BASE = '';
@@ -45,14 +47,19 @@ function isInventoryAuthorized() {
     return true;
 }
 
-// 초기화
+// 초기화 함수
 async function initInventoryTab() {
     if (!isInventoryAuthorized()) return;
+    
+    // [중요] 탭에 들어올 때 입력창을 깨끗하게 비웁니다.
+    inventory = {}; 
+    
     await loadInventoryDataAll();
     renderUnifiedInventoryForm();
     loadHolidays();
 }
 
+// 데이터 로드 함수 (저장된 값 백업하기)
 async function loadInventoryDataAll() {
     try {
         const [itemsRes, invRes, usageRes, lastRes, holRes] = await Promise.all([
@@ -70,7 +77,12 @@ async function loadInventoryDataAll() {
         const holData = await holRes.json();
         
         if(itemsData.success) items = itemsData.items;
-        if(invData.success) inventory = invData.inventory;
+        
+        // [핵심] 서버에서 가져온 값은 lastSavedInventory에 보관
+        if(invData.success) {
+            lastSavedInventory = invData.inventory || {}; 
+        }
+        
         if(usageData.success) dailyUsage = usageData.usage;
         if(lastData.success) lastOrderDates = lastData.lastOrders;
         if(holData.success) holidays = holData.holidays;
@@ -80,6 +92,41 @@ async function loadInventoryDataAll() {
     } catch (e) {
         console.error("데이터 로드 실패", e);
     }
+}
+
+// [NEW] 최근 값 불러오기 기능
+function recallLastInput() {
+    if(!confirm(`${currentLocation}의 마지막 저장된 재고값을 불러오시겠습니까?\n(현재 입력한 내용은 덮어씌워집니다)`)) return;
+
+    // 현재 위치(1루 or 3루)에 해당하는 키만 복사
+    const prefix = `${currentLocation}_`;
+    let count = 0;
+    
+    // 백업해둔 데이터(lastSavedInventory)에서 현재 매장 것만 가져옴
+    Object.keys(lastSavedInventory).forEach(key => {
+        if(key.startsWith(prefix)) {
+            inventory[key] = lastSavedInventory[key];
+            count++;
+        }
+    });
+
+    renderUnifiedInventoryForm();
+    showAlert(`${count}개 품목 값을 불러왔습니다.`, 'success');
+}
+
+// [NEW] 입력 초기화 기능
+function resetCurrentInput() {
+    if(!confirm(`${currentLocation} 입력값을 모두 0으로 초기화하시겠습니까?`)) return;
+    
+    const prefix = `${currentLocation}_`;
+    Object.keys(inventory).forEach(key => {
+        if(key.startsWith(prefix)) {
+            delete inventory[key]; // 값을 비움
+        }
+    });
+    
+    renderUnifiedInventoryForm();
+    showAlert(`${currentLocation} 입력이 초기화되었습니다.`, 'info');
 }
 
 // 기존 showInvTab 함수 수정 (check 탭 진입 시 초기화)
@@ -107,6 +154,7 @@ function showInvTab(tabName) {
 }
 
 // [수정] 재고 확인 렌더링 (날짜별 로직 추가)
+// [수정] 재고 확인 렌더링 (필터/정렬/정보표시 기능 추가)
 function renderInventoryCheck() {
     const container = document.getElementById('inventoryCheckList');
     const dateDisplay = document.getElementById('checkDateDisplay');
@@ -118,9 +166,7 @@ function renderInventoryCheck() {
     const targetDate = new Date();
     targetDate.setDate(targetDate.getDate() + checkDateOffset);
     const dateStr = targetDate.toISOString().split('T')[0];
-    const todayStr = new Date().toISOString().split('T')[0];
     
-    // 헤더 텍스트 설정
     let dayLabel = `${targetDate.getMonth()+1}/${targetDate.getDate()}`;
     if (checkDateOffset === 0) dayLabel += " (오늘)";
     else if (checkDateOffset === -1) dayLabel += " (어제)";
@@ -128,48 +174,107 @@ function renderInventoryCheck() {
     
     if(dateDisplay) dateDisplay.innerText = dayLabel;
 
-    // 2. 발주 버튼 활성화 여부 (오늘일 때만 가능)
-    if(orderBtn) {
-        if (checkDateOffset === 0) {
-            orderBtn.style.display = 'block';
-        } else {
-            orderBtn.style.display = 'none';
-        }
-    }
+    // 2. 발주 버튼 활성화 여부
+    if(orderBtn) orderBtn.style.display = (checkDateOffset === 0) ? 'block' : 'none';
 
-    // 3. 데이터 준비
+    // 3. 데이터 준비 (현재 메모리 or 과거 기록)
     let displayInventory = {};
-    
     if (checkDateOffset === 0) {
-        // 오늘: 현재 작업 중인 메모리 사용
         displayInventory = { ...inventory };
     } else if (checkDateOffset > 0) {
-        // 미래
         container.innerHTML = `<div style="padding:50px; text-align:center; color:#999;">미래의 데이터는 볼 수 없습니다.</div>`;
         return;
     } else {
-        // 과거: recentHistory에서 찾기
         const record = recentHistory.find(r => r.date === dateStr);
         if (record) {
-            // 구조 평탄화 (history는 { vendor: { key: val } } 구조일 수 있음)
-            // server.js의 저장 구조에 따라 다르지만, 여기서는 history에 1루/3루 키가 다 들어있다고 가정
-            // 만약 history가 vendor별로 묶여있다면 풀어줘야 함.
-            // server.js 코드를 보니 history.inventory[vendor][itemKey] = val 형태임.
-            Object.values(record.inventory).forEach(vendorObj => {
-                Object.assign(displayInventory, vendorObj);
-            });
+            Object.values(record.inventory).forEach(vendorObj => Object.assign(displayInventory, vendorObj));
         } else {
             container.innerHTML = `<div style="padding:50px; text-align:center; color:#999;">${dateStr} 기록이 없습니다.</div>`;
             return;
         }
     }
 
-    // 4. 테이블 그리기
-    let html = `
+    // 4. [NEW] 데이터 가공 (리스트 평탄화)
+    let allCheckItems = [];
+    Object.keys(items).forEach(vendor => {
+        items[vendor].forEach(item => {
+            const rawItemKey = `${vendor}_${item.품목명}`;
+            const stock1 = displayInventory[`1루_${rawItemKey}`] || 0;
+            const stock3 = displayInventory[`3루_${rawItemKey}`] || 0;
+            const totalStock = stock1 + stock3;
+            const usage = dailyUsage[rawItemKey] || 0;
+            const diff = totalStock - usage; 
+
+            allCheckItems.push({
+                ...item,
+                vendor,
+                rawItemKey,
+                stock1,
+                stock3,
+                totalStock,
+                usage,
+                diff
+            });
+        });
+    });
+
+    // 5. [NEW] 필터링 적용
+    let filteredItems = allCheckItems.filter(item => {
+        // 업체 필터
+        if (checkVendorFilter !== 'all' && item.vendor !== checkVendorFilter) return false;
+        // 검색어 필터
+        if (checkSearchText && !item.품목명.includes(checkSearchText)) return false;
+        return true;
+    });
+
+    // 6. [NEW] 정렬 적용
+    if (checkSortKey === 'diff_asc') {
+        filteredItems.sort((a, b) => a.diff - b.diff); // 부족한 순 (작은값 먼저)
+    } else if (checkSortKey === 'diff_desc') {
+        filteredItems.sort((a, b) => b.diff - a.diff); // 여유있는 순
+    } else if (checkSortKey === 'name') {
+        filteredItems.sort((a, b) => a.품목명.localeCompare(b.품목명));
+    } else {
+        // vendor (기본): 업체명 -> 품목순서
+        // 평탄화된 리스트이므로 다시 묶어서 보여주거나 정렬로 처리
+        // 여기서는 단순 정렬로 처리 (업체명 > 품목명)
+        filteredItems.sort((a, b) => {
+            if (a.vendor !== b.vendor) return a.vendor.localeCompare(b.vendor);
+            // 기존 sortKey가 있다면 사용, 없으면 이름순
+            const sortA = (currentLocation === '1루') ? (a.sort1 ?? 9999) : (a.sort3 ?? 9999);
+            const sortB = (currentLocation === '1루') ? (b.sort1 ?? 9999) : (b.sort3 ?? 9999);
+            return sortA - sortB;
+        });
+    }
+
+    // 7. [NEW] 컨트롤 바 HTML 생성 (필터/정렬 UI)
+    let controlHtml = `
+        <div class="check-controls" style="margin-bottom:10px; display:flex; gap:5px; flex-wrap:wrap; background:#f1f3f5; padding:8px; border-radius:5px;">
+            <select onchange="updateCheckVendor(this.value)" style="width:auto; padding:5px; font-size:12px; height:32px;">
+                <option value="all" ${checkVendorFilter==='all'?'selected':''}>전체 업체</option>
+                <option value="고센유통" ${checkVendorFilter==='고센유통'?'selected':''}>고센</option>
+                <option value="한강유통(고기)" ${checkVendorFilter==='한강유통(고기)'?'selected':''}>고기</option>
+                <option value="인터넷발주" ${checkVendorFilter==='인터넷발주'?'selected':''}>인터넷</option>
+            </select>
+            
+            <input type="text" placeholder="품목명 검색" value="${checkSearchText}" 
+                oninput="updateCheckSearch(this.value)" 
+                style="flex:1; min-width:100px; padding:5px; height:32px; font-size:13px;">
+                
+            <div class="sort-btn-group" style="display:flex; gap:2px;">
+                <button onclick="updateCheckSort('vendor')" class="sort-btn ${checkSortKey==='vendor'?'active':''}" title="업체별 보기">📂</button>
+                <button onclick="updateCheckSort('name')" class="sort-btn ${checkSortKey==='name'?'active':''}" title="이름순">가나다</button>
+                <button onclick="updateCheckSort('diff_asc')" class="sort-btn ${checkSortKey==='diff_asc'?'active':''}" title="부족한 순">🔥부족</button>
+            </div>
+        </div>
+    `;
+
+    // 8. 테이블 그리기
+    let tableHtml = `
         <table class="check-table">
             <thead>
                 <tr>
-                    <th>품목명</th>
+                    <th style="min-width:110px;">품목명</th>
                     <th>1루</th>
                     <th>3루</th>
                     <th style="background:#e3f2fd;">합계</th>
@@ -180,42 +285,73 @@ function renderInventoryCheck() {
             <tbody>
     `;
 
-    // 전체 품목 순회 (업체별)
-    Object.keys(items).forEach(vendor => {
-        const vendorItems = items[vendor];
-        // 업체명 헤더 (Sticky 아님, 스크롤 됨)
-        html += `<tr style="background:#f8f9fa;"><td colspan="6" style="text-align:left; font-size:12px; font-weight:bold; color:#555; padding-left:10px;">📦 ${vendor}</td></tr>`;
+    // 그룹 헤더 표시 여부 (기본 정렬일 때만 업체 구분선 표시)
+    let lastVendor = '';
 
-        vendorItems.forEach(item => {
-            const rawItemKey = `${vendor}_${item.품목명}`;
-            const stock1 = displayInventory[`1루_${rawItemKey}`] || 0;
-            const stock3 = displayInventory[`3루_${rawItemKey}`] || 0;
-            const totalStock = stock1 + stock3;
-            const usage = dailyUsage[rawItemKey] || 0;
-            const diff = totalStock - usage; // 차이 = 합계 - 사용량
+    if (filteredItems.length === 0) {
+        tableHtml += `<tr><td colspan="6" style="text-align:center; padding:20px; color:#999;">검색 결과가 없습니다.</td></tr>`;
+    } else {
+        filteredItems.forEach(item => {
+            // 정렬 모드가 'vendor'일 때만 업체 헤더 삽입
+            if (checkSortKey === 'vendor' && item.vendor !== lastVendor) {
+                tableHtml += `<tr style="background:#f8f9fa;"><td colspan="6" style="text-align:left; font-size:12px; font-weight:bold; color:#555; padding-left:10px;">📦 ${item.vendor}</td></tr>`;
+                lastVendor = item.vendor;
+            }
 
             let displayUnit = item.발주단위;
-            if (vendor === '한강유통(고기)') displayUnit = getMeatVendorInfo(item.품목명).inputUnit;
+            if (item.vendor === '한강유통(고기)') displayUnit = getMeatVendorInfo(item.품목명).inputUnit;
 
-            // 차이 색상: 양수면 초록, 음수면 빨강
-            const diffClass = (diff >= 0) ? 'diff-plus' : 'diff-minus';
-            const diffSign = (diff > 0) ? '+' : '';
+            const diffClass = (item.diff >= 0) ? 'diff-plus' : 'diff-minus';
+            const diffSign = (item.diff > 0) ? '+' : '';
 
-            html += `
+            // [NEW] 임계값/최소발주량 뱃지 생성
+            let infoBadge = '';
+            if (item.thresholdQty || item.minOrderQty) {
+                infoBadge = `<div style="margin-top:2px; font-size:10px; color:#e65100; display:inline-block; background:#fff3e0; padding:1px 4px; border-radius:3px; border:1px solid #ffe0b2;">
+                    📉임계:${item.thresholdQty!==null ? item.thresholdQty : '-'} / 📦최소:${item.minOrderQty!==null ? item.minOrderQty : '-'}
+                </div>`;
+            }
+
+            // 정렬 모드가 vendor가 아닐 땐 품목명 옆에 업체명 작게 표시
+            let vendorBadge = '';
+            if (checkSortKey !== 'vendor') {
+                vendorBadge = `<span style="font-size:10px; color:#888; background:#eee; padding:1px 3px; border-radius:2px; margin-right:4px;">${item.vendor.substr(0,2)}</span>`;
+            }
+
+            tableHtml += `
                 <tr>
-                    <td>${item.품목명}</td>
-                    <td>${stock1}</td>
-                    <td>${stock3}</td>
-                    <td class="check-val" style="background:#e3f2fd;">${totalStock}</td>
-                    <td>${usage}</td>
-                    <td class="${diffClass} check-val">${diffSign}${parseFloat(diff.toFixed(1))}</td>
+                    <td style="text-align:left; line-height:1.3;">
+                        ${vendorBadge}${item.품목명}
+                        ${infoBadge}
+                    </td>
+                    <td>${item.stock1}</td>
+                    <td>${item.stock3}</td>
+                    <td class="check-val" style="background:#e3f2fd;">${item.totalStock}</td>
+                    <td>${item.usage}</td>
+                    <td class="${diffClass} check-val">${diffSign}${parseFloat(item.diff.toFixed(1))}</td>
                 </tr>
             `;
         });
-    });
+    }
 
-    html += `</tbody></table>`;
-    container.innerHTML = html;
+    tableHtml += `</tbody></table>`;
+    container.innerHTML = controlHtml + tableHtml;
+}
+
+// [NEW] 재고확인 탭용 헬퍼 함수들
+function updateCheckVendor(val) {
+    checkVendorFilter = val;
+    renderInventoryCheck();
+}
+
+function updateCheckSearch(val) {
+    checkSearchText = val;
+    renderInventoryCheck();
+}
+
+function updateCheckSort(key) {
+    checkSortKey = key;
+    renderInventoryCheck();
 }
 
 // [신규] 발주 프로세스 시작 버튼 (경고창 -> 발주창)
@@ -336,11 +472,12 @@ function saveCurrentInputToMemory() {
     });
 }
 
+// 3. 재고 입력 화면 렌더링 (교체)
 function renderUnifiedInventoryForm() {
     const formContainer = document.getElementById('inventoryForm');
     if (!formContainer) return;
     
-    // 상단 컨트롤 바 (Sticky) - 여기가 유일한 컨트롤 영역이 됩니다.
+    // 상단 컨트롤 바 (버튼 추가됨)
     let html = `
         <div class="sticky-header-bar">
             <div style="display:flex; gap:5px; flex:1;">
@@ -350,16 +487,20 @@ function renderUnifiedInventoryForm() {
             <button onclick="saveInventory()" class="btn-sticky-action">💾 저장</button>
         </div>
         
-        <div style="margin-bottom:10px; display:flex; gap:10px; justify-content:flex-end; font-size:12px;">
-             <button class="filter-btn" id="sortOrderBtn" onclick="toggleSortOrder()" style="padding:5px 10px; border:1px solid #ddd; background:white; border-radius:15px;">
-                ${currentSortOrder === 'lastOrder' ? '📅 기본 순서로' : '📅 발주일 오래된 순'}
-             </button>
-             <button id="toggleWeeklyBtn" onclick="toggleWeeklyItems()" style="padding:5px 10px; border:1px solid #ddd; background:white; border-radius:15px;">
-                ${showWeeklyForced ? '✅ 주간품목 포함' : '🔄 주간품목 보기'}
-             </button>
-             <button class="filter-btn" onclick="showLongTermNoOrder()" style="padding:5px 10px; border:1px solid #ddd; background:white; border-radius:15px; color:#d32f2f;">
-                ⚠️ 미발주
-             </button>
+        <div style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; background:#f1f3f5; padding:8px; border-radius:8px;">
+            <div style="display:flex; gap:5px;">
+                <button onclick="recallLastInput()" class="btn-recall">🔄 ${currentLocation} 불러오기</button>
+                <button onclick="resetCurrentInput()" class="btn-reset">🗑️ 초기화</button>
+            </div>
+            
+            <div style="display:flex; gap:5px;">
+                 <button id="toggleWeeklyBtn" onclick="toggleWeeklyItems()" class="btn-option">
+                    ${showWeeklyForced ? '✅ 주간포함' : '주간숨김'}
+                 </button>
+                 <button onclick="showLongTermNoOrder()" class="btn-option" style="color:#d32f2f;">
+                    ⚠️ 미발주
+                 </button>
+            </div>
         </div>
     `;
 
@@ -374,12 +515,11 @@ function renderUnifiedInventoryForm() {
         });
     });
 
-    // 정렬 로직
     if (currentSortOrder === 'lastOrder') {
         allDisplayItems.sort((a, b) => {
             const dateA = lastOrderDates[`${a.vendor}_${a.품목명}`] || '0000-00-00';
             const dateB = lastOrderDates[`${b.vendor}_${b.품목명}`] || '0000-00-00';
-            return dateA.localeCompare(dateB); // 오래된(작은) 날짜가 먼저 오도록
+            return dateA.localeCompare(dateB);
         });
     } else {
         allDisplayItems.sort((a, b) => a.sortKey - b.sortKey);
@@ -389,31 +529,23 @@ function renderUnifiedInventoryForm() {
     html += `<div style="background:white; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.1);">`;
 
     allDisplayItems.forEach(item => {
-        // [NEW] 위치 필터링: 현재 위치에 해당하지 않는 품목은 표시 안 함
         if (item.locations && item.locations.length > 0) {
-            if (!item.locations.includes(currentLocation)) {
-                return; // skip
-            }
+            if (!item.locations.includes(currentLocation)) return; 
         }
-        // locations 필드가 없는 기존 품목은 모든 위치에서 표시 (하위 호환성)
-        
         if (item.관리주기 === 'weekly' && !isTuesday && !showWeeklyForced) return;
 
         hasItems = true;
         const rawItemKey = `${item.vendor}_${item.품목명}`;
         const locItemKey = `${currentLocation}_${rawItemKey}`;
         
-        const currentStock = inventory[locItemKey] || 0;
+        // [중요] 값이 없거나 0이면 빈칸으로 표시 (사용자가 입력 여부를 알 수 있게)
+        const currentStock = inventory[locItemKey]; 
+        const displayValue = (currentStock === undefined || currentStock === 0) ? '' : currentStock;
         
-        // 전일 재고 찾기
+        // 전일 재고 (참고용 - lastSavedInventory에서 가져옴)
         let yesterdayStock = '-';
-        let prevVal = null;
-        const lastRecord = recentHistory.find(r => r.date !== today.toISOString().split('T')[0]);
-        if (lastRecord && lastRecord.inventory[item.vendor]) {
-             // 데이터 구조 호환성 체크 (벤더별 묶음 vs 플랫 키)
-             // 기존 server.js 로직상 history.inventory[vendor][locItemKey] 형태로 저장됨
-             prevVal = lastRecord.inventory[item.vendor][locItemKey];
-             if(prevVal !== undefined) yesterdayStock = prevVal;
+        if (lastSavedInventory[locItemKey] !== undefined) {
+             yesterdayStock = lastSavedInventory[locItemKey];
         }
 
         let displayUnit = item.발주단위;
@@ -437,18 +569,12 @@ function renderUnifiedInventoryForm() {
                 <div class="irc-controls">
                     <div class="irc-stat-box prev-stat">
                         <span class="irc-stat-val" style="color:#888;">${yesterdayStock}</span>
-                        <span>전일</span>
+                        <span>최근</span>
                     </div>
-
-                    <button type="button" class="btn-up-copy" 
-                        onclick="setStockValue('${locItemKey}', ${prevVal !== null ? prevVal : 0})"
-                        style="margin-right:5px;">
-                        불러<br>오기
-                    </button>
 
                     <div class="irc-input-wrapper">
                         <input type="number" id="current_${locItemKey}" class="irc-input" 
-                            value="${currentStock === 0 ? '' : currentStock}" 
+                            value="${displayValue}" 
                             placeholder="0" inputmode="decimal" 
                             onchange="updateInventoryMemory('${locItemKey}', this.value)">
                     </div>
@@ -769,44 +895,39 @@ function getDeliveryInfo(vendor) {
 
 // 발주 확인 로직
 function checkOrderConfirmation() {
-    console.log('[DEBUG] checkOrderConfirmation 시작');
+    // 1. 발주할 것(confirmItems)과 안할 것(checkItems) 분리
     const confirmItems = { '고센유통': [], '한강유통(고기)': [], '인터넷발주': [] };
+    const checkItems = { '고센유통': [], '한강유통(고기)': [], '인터넷발주': [] };
     
+    let missingInputCount = 0; // 재고 0개인 품목 수
+
     for (const vendor in items) {
         const vendorItems = items[vendor];
-        console.log(`[DEBUG] ${vendor} 품목 수:`, vendorItems.length);
-        const daysNeeded = getDaysUntilNextDelivery(vendor); // 다음 배송일까지 필요한 일수
+        const daysNeeded = getDaysUntilNextDelivery(vendor); 
         
         vendorItems.forEach(item => {
             const rawItemKey = `${vendor}_${item.품목명}`;
             
-            // 통합 재고 (1루 + 3루)
+            // 통합 재고 계산
             const stock1 = inventory[`1루_${rawItemKey}`] || 0;
             const stock3 = inventory[`3루_${rawItemKey}`] || 0;
             const totalStock = stock1 + stock3;
             
             const usage = dailyUsage[rawItemKey] || 0;
-            const neededTotal = usage * daysNeeded; // 배송 전까지 필요한 양
+            const neededTotal = usage * daysNeeded; 
             
-            let orderAmountRaw = Math.max(0, neededTotal - totalStock); // 부족분
+            // 발주량 계산
+            let orderAmountRaw = Math.max(0, neededTotal - totalStock);
             
-            // 🔥 [NEW] 임계값/최소발주량 로직 적용
+            // 임계값/최소발주량 로직
             if (item.thresholdQty && item.minOrderQty) {
-                // 임계값과 최소발주량이 모두 설정된 경우
-                if (totalStock <= item.thresholdQty) {
-                    // 재고가 임계값 이하면 무조건 최소발주량으로 발주
-                    orderAmountRaw = item.minOrderQty;
-                } else {
-                    // 재고가 임계값 초과면 발주 안함
-                    orderAmountRaw = 0;
-                }
+                if (totalStock <= item.thresholdQty) orderAmountRaw = item.minOrderQty;
+                else orderAmountRaw = 0;
             }
-            // 설정 안된 경우는 기존 방식대로 (orderAmountRaw 그대로 사용)
             
+            // 단위 및 수량 보정
             let displayQty = 0;
             let displayUnit = item.발주단위;
-
-            // 단위 변환 (고기 등)
             if (vendor === '한강유통(고기)') {
                 const meatInfo = getMeatVendorInfo(item.품목명);
                 displayUnit = meatInfo.unit;
@@ -820,98 +941,114 @@ function checkOrderConfirmation() {
                 displayQty = Math.round(orderAmountRaw * 10) / 10;
             }
             
-            // 0개라도 리스트에는 포함시켜서 보여주는 게 좋음 (상태 확인용)
-            // 하지만 모달에는 '발주할 것'만 띄우는 게 일반적.
-            // 여기서는 0개 이상인 것만 담되, 중요 품목이 0이면 경고
-            let reason = '';
-            if (displayQty === 0 && item.중요도 === '상' && totalStock < neededTotal) {
-                 // 재고가 부족한데 발주량이 0? (단위 이슈 등) -> 일단 포함
-                 reason = '확인필요';
-            }
-            
-            if (displayQty > 0 || reason) {
-                const obj = {
-                    ...item,
-                    itemKey: rawItemKey,
-                    currentStock: totalStock,
-                    stock1, stock3,
-                    orderAmount: displayQty,
-                    displayUnit,
-                    reason,
-                    daysNeeded // 며칠치인지
-                };
-                confirmItems[vendor].push(obj);
+            const itemData = {
+                ...item,
+                itemKey: rawItemKey,
+                currentStock: totalStock,
+                orderAmount: displayQty,
+                displayUnit,
+                daysNeeded
+            };
+
+            // 분류 작업
+            if (displayQty > 0) {
+                confirmItems[vendor].push(itemData);
+            } else {
+                checkItems[vendor].push(itemData);
+                // 발주도 안 하는데 재고도 0이면 실수일 확률 높음 -> 카운트
+                if(totalStock === 0) missingInputCount++;
             }
         });
     }
 
-    // 발주할 게 있든 없든 모달 띄우기 (사용자 피드백 확실하게)
-    currentConfirmItems = confirmItems; // [NEW] 전역 저장
-    showConfirmModal(confirmItems);
+    currentConfirmItems = confirmItems; 
+    showConfirmModal(confirmItems, checkItems, missingInputCount);
 }
 
-// 모달 표시
-function showConfirmModal(confirmItems) {
-    console.log('[DEBUG] showConfirmModal 호출됨');
-    console.log('[DEBUG] confirmItems:', confirmItems);
-    
+function showConfirmModal(confirmItems, checkItems, missingInputCount) {
     const modal = document.getElementById('confirmModal');
     const content = document.getElementById('confirmContent');
     
-    console.log('[DEBUG] modal element:', modal);
-    console.log('[DEBUG] content element:', content);
-    
     let html = '';
-    let hasAnyItem = false;
-    
+    let hasOrder = false;
+
+    // --- [1부] 발주 예정 리스트 (오렌지색 테두리 강조) ---
+    html += `<div style="background:#fff3e0; border:2px solid #ff9800; border-radius:8px; padding:10px; margin-bottom:20px;">
+        <h3 style="color:#e65100; margin-top:0; border-bottom:1px solid #ffe0b2; padding-bottom:5px;">📦 발주 예정 품목</h3>`;
+
     for (const vendor in confirmItems) {
         const list = confirmItems[vendor];
         if (list.length > 0) {
-            hasAnyItem = true;
-            const dInfo = getDeliveryInfo(vendor); 
-            html += `<div class="delivery-info-box">
-                <h3>📦 ${dInfo.fullFormat} 배송 품목</h3>
-                <p style="font-size:14px; color:#666;">${vendor} ${dInfo.days}일치로 계산된 재고량입니다</p>
-            </div>
-            <table class="confirm-table">
-                <thead><tr><th>품목</th><th>재고(1루+3루)</th><th>발주량</th></tr></thead>
+            hasOrder = true;
+            html += `<h4 style="margin:10px 0 5px 0; font-size:14px;">${vendor}</h4>
+            <table class="confirm-table" style="background:white;">
+                <thead><tr><th>품목</th><th>현재재고</th><th>발주량</th></tr></thead>
                 <tbody>`;
-            
             list.forEach((i, idx) => {
                 html += `<tr>
-                    <td>${i.품목명}<br><span style="font-size:10px;color:red">${i.reason}</span></td>
-                    <td>${i.currentStock} <span style="font-size:10px; color:#888;">(${i.stock1}+${i.stock3})</span></td>
+                    <td style="font-weight:bold;">${i.품목명}</td>
+                    <td>${i.currentStock}</td>
                     <td>
-                        <input type="number" 
-                               value="${i.orderAmount}" 
-                               data-vendor="${vendor}" 
-                               data-index="${idx}"
+                        <input type="number" value="${i.orderAmount}" 
+                               data-vendor="${vendor}" data-index="${idx}"
                                onchange="updateOrderAmount('${vendor}', ${idx}, this.value)"
-                               style="width:70px; padding:5px; text-align:right; font-size:15px; font-weight:bold; color:#1976D2; border:2px solid #1976D2; border-radius:4px;">
-                        <span style="margin-left:5px; font-size:13px;">${i.displayUnit}</span>
+                               style="width:60px; padding:4px; text-align:right; font-weight:bold; border:2px solid #1976D2; border-radius:4px;">
+                        ${i.displayUnit}
                     </td>
                 </tr>`;
             });
             html += `</tbody></table>`;
         }
     }
+    if(!hasOrder) html += `<p style="text-align:center; color:#666;">발주할 품목이 없습니다.</p>`;
+    html += `</div>`;
 
-    if (!hasAnyItem) {
-        html = `
-            <div style="text-align:center; padding:30px;">
-                <p style="font-size:16px; margin-bottom:10px;">✅ 모든 재고가 충분합니다.</p>
-                <p style="color:#888; font-size:13px;">(설정된 사용량 기반)</p>
-            </div>
-        `;
+    // --- [2부] 미발주 품목 검토 (회색 박스) ---
+    const warningMsg = missingInputCount > 0 
+        ? `<span style="color:red; font-weight:bold;">⚠️ 재고 0개 품목이 ${missingInputCount}개 있습니다. 누락인지 확인하세요!</span>`
+        : `<span>✅ 모든 재고가 확인되었습니다.</span>`;
+
+    html += `<div style="background:#f1f3f5; border:1px solid #ddd; border-radius:8px; padding:10px;">
+        <h3 style="color:#333; margin-top:0; display:flex; justify-content:space-between; align-items:center;">
+            <span>📋 현황 검토 (발주X)</span>
+            <button onclick="toggleCheckList()" style="font-size:12px; padding:4px 8px; background:white; border:1px solid #999; border-radius:4px; cursor:pointer;">펼치기/접기</button>
+        </h3>
+        <p style="font-size:12px; margin-bottom:10px;">${warningMsg}</p>
+        
+        <div id="checkListContainer" style="display:block; max-height:300px; overflow-y:auto;">`;
+
+    for (const vendor in checkItems) {
+        const list = checkItems[vendor];
+        if (list.length > 0) {
+            html += `<h4 style="margin:10px 0 5px 0; font-size:13px; color:#555;">${vendor}</h4>
+            <table class="confirm-table" style="background:white; font-size:12px;">
+                <thead><tr><th>품목</th><th>현재재고</th><th>상태</th></tr></thead>
+                <tbody>`;
+            list.forEach(i => {
+                // 재고 0이면 빨간색 배경으로 강조
+                const stockStyle = i.currentStock === 0 ? 'color:red; font-weight:bold; background:#ffebee;' : '';
+                const statusIcon = i.currentStock === 0 ? '⚠️ 0개' : '✔️ 충분';
+                
+                html += `<tr style="${stockStyle}">
+                    <td>${i.품목명}</td>
+                    <td>${i.currentStock} ${i.displayUnit}</td>
+                    <td>${statusIcon}</td>
+                </tr>`;
+            });
+            html += `</tbody></table>`;
+        }
     }
+    html += `</div></div>`;
 
     content.innerHTML = html;
-    console.log('[DEBUG] 모달 HTML 설정 완료');
-    console.log('[DEBUG] modal 현재 class:', modal.className);
-    
     modal.classList.add('active');
-    console.log('[DEBUG] modal active 클래스 추가 후:', modal.className);
-    console.log('[DEBUG] 모달 표시 완료');
+}
+
+// [추가] 토글 함수
+function toggleCheckList() {
+    const el = document.getElementById('checkListContainer');
+    if(el.style.display === 'none') el.style.display = 'block';
+    else el.style.display = 'none';
 }
 
 function closeConfirmModal() {
