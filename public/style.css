@@ -1779,3 +1779,80 @@ input[type="checkbox"] {
     cursor: pointer;
 }
 .btn-option:hover { background: #eee; }
+
+/* style.css 하단에 추가 */
+
+/* 설명서 탭 스타일 */
+.manual-box {
+    background: white;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.manual-title {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #f1f3f5;
+    color: #444;
+    font-size: 18px;
+}
+
+.manual-content {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #555;
+}
+
+.manual-card {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 6px;
+    margin: 10px 0;
+    border-left: 4px solid #2196F3;
+}
+
+.manual-card.warning {
+    background: #fff3e0;
+    border-left: 4px solid #ff9800;
+}
+
+.manual-card h4 {
+    margin-top: 0;
+    color: #333;
+    font-size: 15px;
+}
+
+.manual-formula {
+    background: white;
+    padding: 10px;
+    border-radius: 4px;
+    text-align: center;
+    border: 1px dashed #ccc;
+    margin: 10px 0;
+    font-family: monospace;
+    font-size: 13px;
+    color: #333;
+}
+
+.tip-box {
+    background: #e8f5e9;
+    padding: 10px;
+    border-radius: 5px;
+    color: #2e7d32;
+    font-size: 13px;
+    margin-top: 10px;
+}
+
+.badge-btn {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #1976D2;
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+    vertical-align: middle;
+}

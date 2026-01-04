@@ -883,6 +883,7 @@
                     <button class="tab" onclick="showInvTab('standard')">사용량</button>
                     <button class="tab" onclick="showInvTab('manageItems')">품목관리</button>
                     <button class="tab" onclick="showInvTab('holidays')">휴일</button>
+                    <button class="tab" onclick="showInvTab('manual')" style="background:#e3f2fd; color:#0d47a1;">📖 설명서</button>
                     <button class="tab" onclick="showInvTab('orderHistory')">발주내역</button>
                 </div>
             </div>
@@ -1048,6 +1049,11 @@
                         </select>
                     </div>
                     <div id="orderHistoryList" class="history-list"></div>
+                </div>
+            </div>
+            <div id="manual-tab" class="inv-tab-content" style="display:none;">
+                <div class="form-container">
+                    <div id="manualContent"></div>
                 </div>
             </div>
         </div>
