@@ -50,10 +50,7 @@ function isInventoryAuthorized() {
 // 초기화 함수
 async function initInventoryTab() {
     if (!isInventoryAuthorized()) return;
-    
-    // [중요] 탭에 들어올 때 입력창을 깨끗하게 비웁니다.
-    inventory = {}; 
-    
+  
     await loadInventoryDataAll();
     renderUnifiedInventoryForm();
     loadHolidays();
