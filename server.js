@@ -227,43 +227,6 @@ app.post('/api/staff/:id/restore', (req, res) => {
     }
 });
 
-// ✅ 완전 삭제 API (30일 이상 지난 데이터만)
-app.delete('/api/staff/:id/permanent', (req, res) => {
-    const actor = req.query.actor || 'Unknown';
-    let staff = readJson(STAFF_FILE, []);
-    const target = staff.find(s => s.id == req.params.id);
-    
-    if (!target) {
-        return res.status(404).json({ success: false, message: '직원을 찾을 수 없습니다.' });
-    }
-    
-    if (!target.deleted) {
-        return res.status(400).json({ success: false, message: '삭제된 직원만 완전 삭제할 수 있습니다.' });
-    }
-    
-    // 30일 경과 확인
-    const deletedDate = new Date(target.deletedAt);
-    const now = new Date();
-    const daysDiff = Math.floor((now - deletedDate) / (1000 * 60 * 60 * 24));
-    
-    if (daysDiff < 30) {
-        return res.status(400).json({ 
-            success: false, 
-            message: `삭제 후 30일이 지나야 완전 삭제 가능합니다. (현재 ${daysDiff}일 경과)` 
-        });
-    }
-    
-    // 완전 삭제
-    staff = staff.filter(s => s.id != req.params.id);
-    
-    if (writeJson(STAFF_FILE, staff)) {
-        addLog(actor, '직원완전삭제', target.name, `영구 삭제 (${daysDiff}일 경과)`);
-        res.json({ success: true });
-    } else {
-        res.status(500).json({ success: false });
-    }
-});
-
 app.post('/api/staff/exception', async (req, res) => {
     const { id, date, type, time, actor } = req.body;
     let staff = readJson(STAFF_FILE, []);

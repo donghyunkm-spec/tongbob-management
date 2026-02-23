@@ -1344,10 +1344,6 @@ function renderDeletedStaffList(deletedStaff) {
                     </div>
                     <div style="display:flex; gap:5px; flex-direction:column;">
                         <button class="edit-btn" onclick="restoreStaff(${s.id})" style="background:#4CAF50;">복구</button>
-                        <button class="delete-btn" onclick="permanentDeleteStaff(${s.id}, ${canPermanentDelete})" 
-                                ${!canPermanentDelete ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
-                            완전삭제 ${!canPermanentDelete ? '(30일 후)' : ''}
-                        </button>
                     </div>
                 </div>
             </div>`;
@@ -1381,45 +1377,6 @@ async function restoreStaff(id) {
     } catch(e) {
         console.error('복구 실패:', e);
         alert('복구 중 오류가 발생했습니다.');
-    }
-}
-
-// ✅ 완전 삭제
-async function permanentDeleteStaff(id, canDelete) {
-    if (!currentUser || currentUser.role !== 'admin') {
-        alert('관리자만 가능합니다.');
-        return;
-    }
-    
-    if (!canDelete) {
-        alert('삭제 후 30일이 지나야 완전 삭제가 가능합니다.');
-        return;
-    }
-    
-    if (!confirm('⚠️ 경고: 이 작업은 되돌릴 수 없습니다.\n\n직원의 모든 데이터가 영구적으로 삭제됩니다.\n정말 완전 삭제하시겠습니까?')) return;
-    
-    // 한 번 더 확인
-    const confirmText = prompt('완전 삭제를 진행하려면 "영구삭제" 를 입력하세요:');
-    if (confirmText !== '영구삭제') {
-        alert('취소되었습니다.');
-        return;
-    }
-    
-    try {
-        const res = await fetch(`/api/staff/${id}/permanent?actor=${encodeURIComponent(currentUser.name)}`, {
-            method: 'DELETE'
-        });
-        
-        const json = await res.json();
-        if (json.success) {
-            alert('완전 삭제되었습니다.');
-            await loadDeletedStaff();
-        } else {
-            alert('삭제 실패: ' + (json.message || '알 수 없는 오류'));
-        }
-    } catch(e) {
-        console.error('완전 삭제 실패:', e);
-        alert('삭제 중 오류가 발생했습니다.');
     }
 }
 
