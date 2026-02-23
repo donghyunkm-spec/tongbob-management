@@ -1497,11 +1497,15 @@ input:focus, select:focus {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 5px;
-    border-bottom: 1px solid #eee;
+    padding: 14px 10px;
+    border-bottom: 2px solid #e0e0e0;
     background: white;
+    border-left: 4px solid #4CAF50;
 }
-.item-row-compact:nth-child(even) { background-color: #fcfcfc; }
+.item-row-compact:nth-child(even) {
+    background-color: #f5f5f5;
+    border-left-color: #81C784;
+}
 
 .irc-name {
     flex: 2; /* 이름 공간 확보 */

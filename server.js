@@ -9,9 +9,9 @@ const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// === [설정] 카카오 등 ===
-const KAKAO_REST_API_KEY = 'b93a072ab458557243baf45e12f2a011'; 
-const KAKAO_REDIRECT_URI = 'https://chogajipreservation-production.up.railway.app/oauth/kakao';
+// === [설정] 카카오 등 (환경변수에서 읽음) ===
+const KAKAO_REST_API_KEY = process.env.KAKAO_REST_API_KEY || '';
+const KAKAO_REDIRECT_URI = process.env.KAKAO_REDIRECT_URI || 'http://localhost:3000/oauth/kakao';
 
 // === [데이터 경로 설정] ===
 const isRailway = process.env.RAILWAY_VOLUME_MOUNT_PATH !== undefined;
@@ -119,9 +119,13 @@ app.use(express.static(path.join(__dirname, 'public'))); // index.html, staff.js
 // =======================
 app.post('/api/login', (req, res) => {
     const { password } = req.body;
-    if (password === 'admin1234!') res.json({ success: true, role: 'admin', name: '사장님' });
-    else if (password === 'manager1234') res.json({ success: true, role: 'manager', name: '관리자' });
-    else if (password === 'staff1234') res.json({ success: true, role: 'viewer', name: '직원' });
+    const ADMIN_PW = process.env.ADMIN_PASSWORD || 'admin1234!';
+    const MANAGER_PW = process.env.MANAGER_PASSWORD || 'manager1234';
+    const STAFF_PW = process.env.STAFF_PASSWORD || 'staff1234';
+
+    if (password === ADMIN_PW) res.json({ success: true, role: 'admin', name: '사장님' });
+    else if (password === MANAGER_PW) res.json({ success: true, role: 'manager', name: '관리자' });
+    else if (password === STAFF_PW) res.json({ success: true, role: 'viewer', name: '직원' });
     else res.status(401).json({ success: false });
 });
 
