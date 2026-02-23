@@ -498,7 +498,8 @@ function renderUnifiedInventoryForm() {
         if (item.locations && item.locations.length > 0) {
             if (!item.locations.includes(currentLocation)) return '';
         }
-        if (item.관리주기 === 'weekly' && !isTuesday && !showWeeklyForced) return '';
+        // 인터넷발주 품목은 weekly 필터 무시 (항상 표시)
+        if (item.관리주기 === 'weekly' && !isTuesday && !showWeeklyForced && item.vendor !== '인터넷발주') return '';
 
         const rawItemKey = `${item.vendor}_${item.품목명}`;
         const locItemKey = `${currentLocation}_${rawItemKey}`;
@@ -820,8 +821,8 @@ function checkOrderConfirmation() {
         const daysNeeded = getDaysUntilNextDelivery(vendor);
 
         vendorItems.forEach(item => {
-            // 화요일이 아니면 weekly 품목은 발주 계산에서 제외
-            if (item.관리주기 === 'weekly' && !isTuesday) return;
+            // 화요일이 아니면 weekly 품목은 발주 계산에서 제외 (인터넷발주는 예외)
+            if (item.관리주기 === 'weekly' && !isTuesday && vendor !== '인터넷발주') return;
             const rawItemKey = `${vendor}_${item.품목명}`;
             
             // 통합 재고 계산
