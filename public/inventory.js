@@ -177,8 +177,31 @@ function renderInventoryCheck() {
 
     // 3. 데이터 준비 (현재 메모리 or 과거 기록)
     let displayInventory = {};
+    let lastSaveDate1 = null;
+    let lastSaveDate3 = null;
+
     if (checkDateOffset === 0) {
-        displayInventory = { ...inventory };
+        // 오늘: inventory에 값이 있으면 사용, 없으면 lastSavedInventory 폴백
+        const hasInput1 = Object.keys(inventory).some(k => k.startsWith('1루_') && !k.startsWith('meta_'));
+        const hasInput3 = Object.keys(inventory).some(k => k.startsWith('3루_') && !k.startsWith('meta_'));
+
+        // 1루 데이터
+        if (hasInput1) {
+            Object.keys(inventory).filter(k => k.startsWith('1루_')).forEach(k => displayInventory[k] = inventory[k]);
+            lastSaveDate1 = '오늘 입력중';
+        } else {
+            Object.keys(lastSavedInventory).filter(k => k.startsWith('1루_') && !k.startsWith('meta_')).forEach(k => displayInventory[k] = lastSavedInventory[k]);
+            lastSaveDate1 = lastSavedInventory['meta_last_save_1루'] || '기록없음';
+        }
+
+        // 3루 데이터
+        if (hasInput3) {
+            Object.keys(inventory).filter(k => k.startsWith('3루_')).forEach(k => displayInventory[k] = inventory[k]);
+            lastSaveDate3 = '오늘 입력중';
+        } else {
+            Object.keys(lastSavedInventory).filter(k => k.startsWith('3루_') && !k.startsWith('meta_')).forEach(k => displayInventory[k] = lastSavedInventory[k]);
+            lastSaveDate3 = lastSavedInventory['meta_last_save_3루'] || '기록없음';
+        }
     } else if (checkDateOffset > 0) {
         container.innerHTML = `<div style="padding:50px; text-align:center; color:#999;">미래의 데이터는 볼 수 없습니다.</div>`;
         return;
@@ -186,6 +209,8 @@ function renderInventoryCheck() {
         const record = recentHistory.find(r => r.date === dateStr);
         if (record) {
             Object.values(record.inventory).forEach(vendorObj => Object.assign(displayInventory, vendorObj));
+            lastSaveDate1 = dateStr;
+            lastSaveDate3 = dateStr;
         } else {
             container.innerHTML = `<div style="padding:50px; text-align:center; color:#999;">${dateStr} 기록이 없습니다.</div>`;
             return;
@@ -246,7 +271,36 @@ function renderInventoryCheck() {
     }
 
     // 7. [NEW] 컨트롤 바 HTML 생성 (필터/정렬 UI)
-    let controlHtml = `
+    // 날짜 불일치 경고 확인
+    const formatDateLabel = (dateStr) => {
+        if (!dateStr || dateStr === '기록없음') return '기록없음';
+        if (dateStr === '오늘 입력중') return '오늘 입력중';
+        const d = new Date(dateStr);
+        return `${d.getMonth()+1}/${d.getDate()}`;
+    };
+
+    const date1Label = formatDateLabel(lastSaveDate1);
+    const date3Label = formatDateLabel(lastSaveDate3);
+    const isMismatch = checkDateOffset === 0 && lastSaveDate1 !== lastSaveDate3 &&
+                       lastSaveDate1 !== '오늘 입력중' && lastSaveDate3 !== '오늘 입력중';
+
+    let dateInfoHtml = '';
+    if (checkDateOffset === 0) {
+        dateInfoHtml = `
+            <div style="margin-bottom:8px; padding:8px 10px; background:#fff; border-radius:5px; border:1px solid #ddd; font-size:12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span><strong>1루</strong> 기준: <span style="color:#1976d2;">${date1Label}</span></span>
+                    <span><strong>3루</strong> 기준: <span style="color:#1976d2;">${date3Label}</span></span>
+                </div>
+                ${isMismatch ? `
+                <div style="margin-top:6px; padding:6px 8px; background:#fff3e0; border:1px solid #ffb74d; border-radius:4px; color:#e65100;">
+                    <strong>⚠️ 주의:</strong> 1루와 3루 재고 기준일이 다릅니다! 발주 전 최신 재고를 입력해주세요.
+                </div>` : ''}
+            </div>
+        `;
+    }
+
+    let controlHtml = dateInfoHtml + `
         <div class="check-controls" style="margin-bottom:10px; display:flex; gap:5px; flex-wrap:wrap; background:#f1f3f5; padding:8px; border-radius:5px;">
             <select onchange="updateCheckVendor(this.value)" style="width:auto; padding:5px; font-size:12px; height:32px;">
                 <option value="all" ${checkVendorFilter==='all'?'selected':''}>전체 업체</option>
@@ -254,11 +308,11 @@ function renderInventoryCheck() {
                 <option value="한강유통(고기)" ${checkVendorFilter==='한강유통(고기)'?'selected':''}>고기</option>
                 <option value="인터넷발주" ${checkVendorFilter==='인터넷발주'?'selected':''}>인터넷</option>
             </select>
-            
-            <input type="text" placeholder="품목명 검색" value="${checkSearchText}" 
-                oninput="updateCheckSearch(this.value)" 
+
+            <input type="text" placeholder="품목명 검색" value="${checkSearchText}"
+                oninput="updateCheckSearch(this.value)"
                 style="flex:1; min-width:100px; padding:5px; height:32px; font-size:13px;">
-                
+
             <div class="sort-btn-group" style="display:flex; gap:2px;">
                 <button onclick="updateCheckSort('vendor')" class="sort-btn ${checkSortKey==='vendor'?'active':''}" title="업체별 보기">📂</button>
                 <button onclick="updateCheckSort('name')" class="sort-btn ${checkSortKey==='name'?'active':''}" title="이름순">가나다</button>
@@ -356,15 +410,30 @@ function updateCheckSort(key) {
 function triggerOrderProcess() {
     console.log('[DEBUG] 발주진행 버튼 클릭됨');
     console.log('[DEBUG] checkDateOffset:', checkDateOffset);
-    
+
     if (checkDateOffset !== 0) {
         showAlert('오늘 날짜에서만 발주가 가능합니다.', 'error');
         return;
     }
-    
+
+    // 1루/3루 재고 기준일 불일치 경고
+    const lastSaveDate1 = lastSavedInventory['meta_last_save_1루'];
+    const lastSaveDate3 = lastSavedInventory['meta_last_save_3루'];
+    const hasInput1 = Object.keys(inventory).some(k => k.startsWith('1루_') && !k.startsWith('meta_'));
+    const hasInput3 = Object.keys(inventory).some(k => k.startsWith('3루_') && !k.startsWith('meta_'));
+
+    // 오늘 입력 중이 아니고, 날짜가 다르면 경고
+    if (!hasInput1 && !hasInput3 && lastSaveDate1 !== lastSaveDate3) {
+        const msg = `⚠️ 1루와 3루 재고 기준일이 다릅니다!\n\n` +
+                    `• 1루: ${lastSaveDate1 || '기록없음'}\n` +
+                    `• 3루: ${lastSaveDate3 || '기록없음'}\n\n` +
+                    `정확한 발주를 위해 최신 재고를 입력해주세요.\n그래도 발주를 진행하시겠습니까?`;
+        if (!confirm(msg)) return;
+    }
+
     console.log('[DEBUG] items:', items);
     console.log('[DEBUG] inventory:', inventory);
-    
+
     // 기존의 검증 로직 호출
     checkOrderConfirmation();
 }
@@ -419,22 +488,34 @@ function renderUnifiedInventoryForm() {
         ? 'background:#e8f5e9; color:#2e7d32; border:1px solid #c8e6c9;' 
         : 'background:#fff3e0; color:#e65100; border:1px solid #ffe0b2;';
 
-    // 2. 상단 HTML 구성
+    // 2. 매장별 테마 색상 설정
+    const theme = currentLocation === '1루'
+        ? { bg: '#e3f2fd', border: '#1976d2', accent: '#1565c0', light: '#bbdefb', icon: '🔵' }
+        : { bg: '#fff3e0', border: '#f57c00', accent: '#e65100', light: '#ffe0b2', icon: '🟠' };
+
+    // 3. 상단 HTML 구성
     let html = `
-        <div class="sticky-header-bar">
+        <!-- 현재 매장 강조 배너 -->
+        <div style="background:${theme.accent}; color:white; padding:12px 16px; margin:-10px -10px 15px -10px; text-align:center; font-size:18px; font-weight:bold; letter-spacing:1px;">
+            ${theme.icon} 지금 ${currentLocation} 재고 입력 중 ${theme.icon}
+        </div>
+
+        <div class="sticky-header-bar" style="border:2px solid ${theme.border}; background:${theme.bg};">
             <div style="display:flex; gap:5px; flex:1;">
-                <button class="btn-loc-select ${currentLocation==='1루'?'active':''}" onclick="setLocation('1루')">
-                    ⚾ 1루
+                <button class="btn-loc-select ${currentLocation==='1루'?'active':''}" onclick="setLocation('1루')"
+                    style="${currentLocation==='1루' ? 'background:#1976d2; color:white; border-color:#1565c0;' : ''}">
+                    🔵 1루
                     <span style="display:block; font-size:10px; font-weight:normal; margin-top:2px;">${isToday1 ? '✅' : '⚠️'}</span>
                 </button>
-                <button class="btn-loc-select ${currentLocation==='3루'?'active':''}" onclick="setLocation('3루')">
-                    ⚾ 3루
+                <button class="btn-loc-select ${currentLocation==='3루'?'active':''}" onclick="setLocation('3루')"
+                    style="${currentLocation==='3루' ? 'background:#f57c00; color:white; border-color:#e65100;' : ''}">
+                    🟠 3루
                     <span style="display:block; font-size:10px; font-weight:normal; margin-top:2px;">${isToday3 ? '✅' : '⚠️'}</span>
                 </button>
             </div>
-            <button onclick="saveInventory()" class="btn-sticky-action">💾 저장</button>
+            <button onclick="saveInventory()" class="btn-sticky-action" style="background:${theme.accent};">💾 ${currentLocation} 저장</button>
         </div>
-        
+
         <div style="margin-bottom:10px; display:flex; gap:5px; font-size:12px; justify-content:center;">
             <div style="padding:4px 8px; border-radius:12px; ${badgeStyle1}">
                 1루 저장: <strong>${displayDate1}</strong>
@@ -444,12 +525,12 @@ function renderUnifiedInventoryForm() {
             </div>
         </div>
 
-        <div style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; background:#f1f3f5; padding:8px; border-radius:8px;">
+        <div style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; background:${theme.light}; padding:8px; border-radius:8px; border:1px solid ${theme.border};">
             <div style="display:flex; gap:5px;">
                 <button onclick="recallLastInput()" class="btn-recall">🔄 불러오기</button>
                 <button onclick="resetCurrentInput()" class="btn-reset">🗑️ 초기화</button>
             </div>
-            
+
             <div style="display:flex; gap:5px;">
                  <button id="toggleWeeklyBtn" onclick="toggleWeeklyItems()" class="btn-option">
                     ${showWeeklyForced ? '✅ 주간포함' : '주간숨김'}
@@ -591,6 +672,20 @@ function renderUnifiedInventoryForm() {
 
 // 1루/3루 탭 변경
 function setLocation(loc) {
+    // 같은 매장이면 무시
+    if (currentLocation === loc) return;
+
+    // 현재 입력값이 있는지 확인
+    const prefix = `${currentLocation}_`;
+    const hasInput = Object.keys(inventory).some(k => k.startsWith(prefix) && !k.startsWith('meta_'));
+
+    if (hasInput) {
+        const msg = `현재 ${currentLocation} 재고를 입력 중입니다.\n\n` +
+                    `${loc}(으)로 전환하시겠습니까?\n` +
+                    `(입력값은 저장됩니다)`;
+        if (!confirm(msg)) return;
+    }
+
     saveCurrentInputToMemory();
     currentLocation = loc;
     renderUnifiedInventoryForm();
