@@ -1168,7 +1168,7 @@ function renderDashboardCharts(sales, totalCost, mData, staffCost, variableCostT
 
 async function loadStaffData() {
     try {
-        const res = await fetch(`/api/staff`);
+        const res = await fetch(`/api/staff?role=${currentUser?.role || 'viewer'}`);
         const json = await res.json();
         staffList = json.data;
         
@@ -1288,7 +1288,7 @@ async function loadDeletedStaff() {
     }
     
     try {
-        const res = await fetch('/api/staff?includeDeleted=true');
+        const res = await fetch(`/api/staff?includeDeleted=true&role=${currentUser?.role || 'viewer'}`);
         const json = await res.json();
         const deletedStaff = json.data.filter(s => s.deleted);
         renderDeletedStaffList(deletedStaff);

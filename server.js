@@ -131,13 +131,22 @@ app.post('/api/login', (req, res) => {
 
 app.get('/api/staff', (req, res) => {
     const includeDeleted = req.query.includeDeleted === 'true';
+    const role = req.query.role || 'viewer';
     let staff = readJson(STAFF_FILE, []);
-    
+
     // ✅ 삭제된 직원 필터링 (includeDeleted=true가 아닌 경우)
     if (!includeDeleted) {
         staff = staff.filter(s => !s.deleted);
     }
-    
+
+    // ✅ admin이 아니면 급여 정보 제거
+    if (role !== 'admin') {
+        staff = staff.map(s => {
+            const { salary, salaryType, ...rest } = s;
+            return rest;
+        });
+    }
+
     res.json({ success: true, data: staff });
 });
 
