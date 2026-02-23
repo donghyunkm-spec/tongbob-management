@@ -811,6 +811,7 @@ function checkOrderConfirmation() {
     // 1. 발주할 것(confirmItems)과 안할 것(checkItems) 분리
     const confirmItems = { '고센유통': [], '한강유통(고기)': [], '인터넷발주': [] };
     const checkItems = { '고센유통': [], '한강유통(고기)': [], '인터넷발주': [] };
+    const dangerItems = []; // 🚨 재고 0인데 발주 안되는 품목
 
     let missingInputCount = 0; // 재고 0개인 품목 수
     const today = new Date();
@@ -872,22 +873,41 @@ function checkOrderConfirmation() {
                 confirmItems[vendor].push(itemData);
             } else {
                 checkItems[vendor].push(itemData);
-                // 발주도 안 하는데 재고도 0이면 실수일 확률 높음 -> 카운트
-                if(totalStock === 0) missingInputCount++;
+                // 발주도 안 하는데 재고도 0이면 위험 → dangerItems에 추가
+                if(totalStock === 0) {
+                    missingInputCount++;
+                    dangerItems.push({ ...itemData, vendor });
+                }
             }
         });
     }
 
-    currentConfirmItems = confirmItems; 
-    showConfirmModal(confirmItems, checkItems, missingInputCount);
+    currentConfirmItems = confirmItems;
+    showConfirmModal(confirmItems, checkItems, missingInputCount, dangerItems);
 }
 
-function showConfirmModal(confirmItems, checkItems, missingInputCount) {
+function showConfirmModal(confirmItems, checkItems, missingInputCount, dangerItems) {
     const modal = document.getElementById('confirmModal');
     const content = document.getElementById('confirmContent');
-    
+
     let html = '';
     let hasOrder = false;
+
+    // --- [0부] 🚨 재고 0 경고 (맨 위에 표시) ---
+    if (dangerItems && dangerItems.length > 0) {
+        html += `<div style="background:#ffebee; border:3px solid #f44336; border-radius:8px; padding:12px; margin-bottom:20px;">
+            <h3 style="color:#c62828; margin:0 0 10px 0; font-size:16px;">🚨 재고 0 경고 (${dangerItems.length}개)</h3>
+            <p style="font-size:12px; color:#c62828; margin-bottom:10px;">아래 품목들은 재고가 0인데 발주 목록에 없습니다. 확인해주세요!</p>
+            <div style="display:flex; flex-wrap:wrap; gap:8px;">`;
+
+        dangerItems.forEach(item => {
+            html += `<span style="background:#f44336; color:white; padding:6px 12px; border-radius:20px; font-size:13px; font-weight:bold;">
+                ${item.품목명} <span style="font-size:11px; opacity:0.9;">(${item.vendor.substr(0,2)})</span>
+            </span>`;
+        });
+
+        html += `</div></div>`;
+    }
 
     // --- [1부] 발주 예정 리스트 (오렌지색 테두리 강조) ---
     html += `<div style="background:#fff3e0; border:2px solid #ff9800; border-radius:8px; padding:10px; margin-bottom:20px;">
@@ -921,18 +941,13 @@ function showConfirmModal(confirmItems, checkItems, missingInputCount) {
     html += `</div>`;
 
     // --- [2부] 미발주 품목 검토 (회색 박스) ---
-    const warningMsg = missingInputCount > 0 
-        ? `<span style="color:red; font-weight:bold;">⚠️ 재고 0개 품목이 ${missingInputCount}개 있습니다. 누락인지 확인하세요!</span>`
-        : `<span>✅ 모든 재고가 확인되었습니다.</span>`;
-
     html += `<div style="background:#f1f3f5; border:1px solid #ddd; border-radius:8px; padding:10px;">
         <h3 style="color:#333; margin-top:0; display:flex; justify-content:space-between; align-items:center;">
-            <span>📋 현황 검토 (발주X)</span>
+            <span>📋 기타 품목 (발주X)</span>
             <button onclick="toggleCheckList()" style="font-size:12px; padding:4px 8px; background:white; border:1px solid #999; border-radius:4px; cursor:pointer;">펼치기/접기</button>
         </h3>
-        <p style="font-size:12px; margin-bottom:10px;">${warningMsg}</p>
-        
-        <div id="checkListContainer" style="display:block; max-height:300px; overflow-y:auto;">`;
+
+        <div id="checkListContainer" style="display:none; max-height:300px; overflow-y:auto;">`;
 
     for (const vendor in checkItems) {
         const list = checkItems[vendor];
