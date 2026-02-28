@@ -1,6 +1,67 @@
 // staff-employee.js - 직원 관리 (CRUD)
 
 // ==========================================
+// 요일별 시간 입력 토글 및 자동 복사
+// ==========================================
+function toggleDayTime(day) {
+    const checkbox = document.getElementById(`day-${day}`);
+    const timeInput = document.getElementById(`dayTime-${day}`);
+
+    if (checkbox && timeInput) {
+        timeInput.disabled = !checkbox.checked;
+        if (checkbox.checked) {
+            timeInput.style.background = 'white';
+            // 첫 번째 입력된 시간을 빈 필드에 복사
+            autoFillDayTimes();
+        } else {
+            timeInput.style.background = '#f0f0f0';
+            timeInput.value = '';
+        }
+    }
+}
+
+function autoFillDayTimes() {
+    // 첫 번째 입력된 시간 찾기
+    let firstTime = '';
+    DAY_KEYS.forEach(day => {
+        const checkbox = document.getElementById(`day-${day}`);
+        const timeInput = document.getElementById(`dayTime-${day}`);
+        if (checkbox && checkbox.checked && timeInput && timeInput.value.trim() && !firstTime) {
+            firstTime = timeInput.value.trim();
+        }
+    });
+
+    // 체크되어 있지만 빈 필드에 자동 복사
+    if (firstTime) {
+        DAY_KEYS.forEach(day => {
+            const checkbox = document.getElementById(`day-${day}`);
+            const timeInput = document.getElementById(`dayTime-${day}`);
+            if (checkbox && checkbox.checked && timeInput && !timeInput.value.trim()) {
+                timeInput.value = firstTime;
+            }
+        });
+    }
+}
+
+// 시간 입력 필드에서 blur 시 자동 복사 트리거
+function setupDayTimeAutoFill() {
+    DAY_KEYS.forEach(day => {
+        const timeInput = document.getElementById(`dayTime-${day}`);
+        if (timeInput) {
+            timeInput.addEventListener('blur', autoFillDayTimes);
+        }
+    });
+}
+
+// 해당 요일의 근무 시간 반환 (dayTimes 우선, 없으면 time 사용)
+function getTimeForDay(staff, dayKey) {
+    if (staff.dayTimes && staff.dayTimes[dayKey]) {
+        return staff.dayTimes[dayKey];
+    }
+    return staff.time || '';
+}
+
+// ==========================================
 // 직원 데이터 로드
 // ==========================================
 async function loadStaffData() {
@@ -85,7 +146,31 @@ function renderManageList() {
     });
 
     sortedStaff.forEach(s => {
-        const daysStr = s.workDays.map(d => DAY_MAP[d]).join(',');
+        // 요일별 시간 표시 (다르면 각각, 같으면 통합)
+        const workDays = s.workDays || [];
+        const dayTimes = s.dayTimes || {};
+        let scheduleStr = '';
+
+        // 시간이 모두 동일한지 확인
+        const uniqueTimes = new Set();
+        workDays.forEach(d => {
+            const t = dayTimes[d] || s.time || '';
+            if (t) uniqueTimes.add(t);
+        });
+
+        if (uniqueTimes.size <= 1) {
+            // 모든 요일이 같은 시간
+            const daysStr = workDays.map(d => DAY_MAP[d]).join(',');
+            scheduleStr = `📅 ${daysStr} (${s.time || '시간미정'})`;
+        } else {
+            // 요일별 다른 시간
+            scheduleStr = workDays.map(d => {
+                const t = dayTimes[d] || s.time || '';
+                return `${DAY_MAP[d]}:${t}`;
+            }).join(' / ');
+            scheduleStr = `📅 ${scheduleStr}`;
+        }
+
         const salaryInfo = isAdmin ?
             `<div style="font-size:12px; color:#28a745; margin-top:3px;">
                 💰 ${s.salaryType === 'monthly' ? '월급' : '시급'}: ${s.salary ? s.salary.toLocaleString() : '0'}원
@@ -108,9 +193,8 @@ function renderManageList() {
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <div>
                         <strong style="font-size:16px;">${s.name}</strong>
-                        <span style="font-size:12px; color:#666;">(${s.time})</span>
                         <div style="font-size:13px; margin-top:5px;">${rolesBadge}</div>
-                        <div style="font-size:13px; margin-top:5px;">📅 ${daysStr}</div>
+                        <div style="font-size:12px; margin-top:5px; color:#555;">${scheduleStr}</div>
                         ${salaryInfo}
                     </div>
                     <div>
@@ -249,7 +333,13 @@ function openAddModal() {
 
     DAY_KEYS.forEach(day => {
         const checkbox = document.getElementById(`day-${day}`);
+        const timeInput = document.getElementById(`dayTime-${day}`);
         if (checkbox) checkbox.checked = false;
+        if (timeInput) {
+            timeInput.value = '';
+            timeInput.disabled = true;
+            timeInput.style.background = '#f0f0f0';
+        }
     });
 
     // 역할 체크박스 초기화
@@ -257,6 +347,9 @@ function openAddModal() {
     document.getElementById('role-포스').checked = false;
     document.getElementById('role-삼겹살').checked = false;
     document.getElementById('role-국수').checked = false;
+
+    // 자동 복사 이벤트 설정
+    setupDayTimeAutoFill();
 
     document.getElementById('staffModal').style.display = 'flex';
 }
@@ -274,7 +367,6 @@ async function saveStaff() {
     const position = document.getElementById('staffPosition').value.trim();
     const salaryType = document.getElementById('staffSalaryType').value;
     const salary = parseInt(document.getElementById('staffSalary').value) || 0;
-    const time = document.getElementById('staffTime').value.trim();
     const startDate = document.getElementById('staffStartDate').value;
     const endDate = document.getElementById('staffEndDate').value;
 
@@ -284,12 +376,24 @@ async function saveStaff() {
     }
 
     const workDays = [];
+    const dayTimes = {};
+    let firstTime = '';
+
     DAY_KEYS.forEach(day => {
         const checkbox = document.getElementById(`day-${day}`);
+        const timeInput = document.getElementById(`dayTime-${day}`);
         if (checkbox && checkbox.checked) {
             workDays.push(day);
+            const timeVal = timeInput ? timeInput.value.trim() : '';
+            if (timeVal) {
+                dayTimes[day] = timeVal;
+                if (!firstTime) firstTime = timeVal;
+            }
         }
     });
+
+    // 하위호환용 기본 time 값 (첫 번째 요일의 시간)
+    const time = firstTime || '';
 
     // 역할 수집
     const roles = [];
@@ -304,7 +408,7 @@ async function saveStaff() {
     }
 
     const staffData = {
-        name, position, salaryType, salary, workDays, time, startDate, endDate, roles
+        name, position, salaryType, salary, workDays, time, dayTimes, startDate, endDate, roles
     };
 
     try {
@@ -356,7 +460,32 @@ function openEditModal(id) {
 
     document.getElementById('editId').value = target.id;
     document.getElementById('editName').value = target.name;
-    document.getElementById('editTime').value = target.time;
+    document.getElementById('editTime').value = target.time || '';
+
+    // 요일별 시간 입력 UI 생성
+    const container = document.getElementById('editDayTimesContainer');
+    if (container) {
+        container.innerHTML = '';
+        const workDays = target.workDays || [];
+        const dayTimes = target.dayTimes || {};
+
+        workDays.forEach(day => {
+            const dayLabel = DAY_MAP[day] || day;
+            const timeValue = dayTimes[day] || target.time || '';
+            container.innerHTML += `
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="width:30px; font-weight:bold; color:#1976D2;">${dayLabel}</span>
+                    <input type="text" id="editDayTime-${day}" value="${timeValue}"
+                           style="flex:1; padding:6px; border:1px solid #ddd; border-radius:4px;"
+                           placeholder="13:00~22:00">
+                </div>
+            `;
+        });
+
+        if (workDays.length === 0) {
+            container.innerHTML = '<p style="color:#999; text-align:center;">근무 요일이 설정되지 않았습니다.</p>';
+        }
+    }
 
     document.getElementById('editStartDate').value = target.startDate || '';
     document.getElementById('editEndDate').value = target.endDate || '';
@@ -387,13 +516,30 @@ function closeEditModal() {
 
 async function saveStaffEdit() {
     const id = parseInt(document.getElementById('editId').value);
-    const time = document.getElementById('editTime').value;
+    const target = staffList.find(s => s.id === id);
+    if (!target) return;
 
     const startDate = document.getElementById('editStartDate').value || null;
     const endDate = document.getElementById('editEndDate').value || null;
 
     const salaryType = document.getElementById('editSalaryType').value;
     const salary = parseInt(document.getElementById('editSalary').value) || 0;
+
+    // 요일별 시간 수집
+    const workDays = target.workDays || [];
+    const dayTimes = {};
+    let firstTime = '';
+
+    workDays.forEach(day => {
+        const input = document.getElementById(`editDayTime-${day}`);
+        if (input && input.value.trim()) {
+            dayTimes[day] = input.value.trim();
+            if (!firstTime) firstTime = input.value.trim();
+        }
+    });
+
+    // 하위호환용 기본 time 값
+    const time = firstTime || target.time || '';
 
     // 역할 수집
     const roles = [];
@@ -407,7 +553,7 @@ async function saveStaffEdit() {
         return;
     }
 
-    const updates = { time, startDate, endDate, roles };
+    const updates = { time, dayTimes, startDate, endDate, roles };
 
     if (currentUser && currentUser.role === 'admin') {
         updates.salaryType = salaryType;

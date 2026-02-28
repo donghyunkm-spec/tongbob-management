@@ -3,6 +3,15 @@
 // ==========================================
 // 유틸리티 함수
 // ==========================================
+
+// 해당 요일의 근무 시간 반환 (dayTimes 우선, 없으면 time 사용)
+function getTimeForDaySchedule(staff, dayKey) {
+    if (staff.dayTimes && staff.dayTimes[dayKey]) {
+        return staff.dayTimes[dayKey];
+    }
+    return staff.time || '';
+}
+
 function getStartTimeValue(timeStr) {
     if (!timeStr) return 99999;
     let start = timeStr.split('~')[0].trim().replace('시', '').replace(' ', '');
@@ -112,10 +121,12 @@ function renderDailyView() {
 
     // 근무자 목록 수집
     let workers = [];
+    const dayKey = DAY_KEYS[currentDate.getDay()];
 
     staffList.forEach(s => {
         let isWorking = false;
-        let timeStr = s.time;
+        // 요일별 시간 우선 사용
+        let timeStr = getTimeForDaySchedule(s, dayKey);
         let isTempOff = false;
 
         if (s.exceptions && s.exceptions[dateStr]) {
@@ -128,7 +139,6 @@ function renderDailyView() {
                 isTempOff = true;
             }
         } else {
-            const dayKey = DAY_KEYS[currentDate.getDay()];
             if (s.workDays && s.workDays.includes(dayKey)) {
                 isWorking = true;
             }
@@ -420,7 +430,8 @@ function renderWeeklyView() {
             }
 
             let isWorking = false;
-            let workTime = s.time;
+            // 요일별 시간 우선 사용
+            let workTime = getTimeForDaySchedule(s, dayKey);
             let isException = false;
             let isOff = false;
 

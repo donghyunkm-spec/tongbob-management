@@ -536,7 +536,8 @@ function calculateServerStaffCost(staffList, monthStr) {
                 const dateObj = new Date(year, month - 1, d);
                 const dayName = dayMap[dateObj.getDay()];
                 let isWorking = false;
-                let timeStr = s.time;
+                // 요일별 시간 우선 사용
+                let timeStr = (s.dayTimes && s.dayTimes[dayName]) ? s.dayTimes[dayName] : s.time;
                 if (s.exceptions && s.exceptions[dateKey]) {
                     if (s.exceptions[dateKey].type === 'work') { isWorking = true; timeStr = s.exceptions[dateKey].time; }
                 } else { if (s.workDays.includes(dayName)) isWorking = true; }
@@ -689,7 +690,8 @@ function getDailyScheduleMessage(dateObj) {
     let workers = [];
     staffList.forEach(s => {
         let isWorking = false;
-        let timeStr = s.time;
+        // 요일별 시간 우선 사용
+        let timeStr = (s.dayTimes && s.dayTimes[dayKey]) ? s.dayTimes[dayKey] : s.time;
         if (s.exceptions && s.exceptions[dateStr]) {
             const ex = s.exceptions[dateStr];
             if (ex.type === 'work') { isWorking = true; timeStr = ex.time; }

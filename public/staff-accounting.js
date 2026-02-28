@@ -945,7 +945,8 @@ function getEstimatedStaffCost(monthStr, targetStaffList = null) {
                 if (!isEmployedAt(dateObj)) continue;
 
                 let isWorking = false;
-                let timeStr = s.time;
+                // 요일별 시간 우선 사용
+                let timeStr = (s.dayTimes && s.dayTimes[dayName]) ? s.dayTimes[dayName] : s.time;
 
                 if (s.exceptions && s.exceptions[dateKey]) {
                     if (s.exceptions[dateKey].type === 'work') { isWorking = true; timeStr = s.exceptions[dateKey].time; }
@@ -1015,7 +1016,8 @@ function calculateMonthlySalary() {
             if (!isEmployedAt(currentDate)) continue;
 
             let isWorking = false;
-            let timeStr = s.time;
+            // 요일별 시간 우선 사용
+            let timeStr = (s.dayTimes && s.dayTimes[dayKey]) ? s.dayTimes[dayKey] : s.time;
 
             if (s.exceptions && s.exceptions[dateStr]) {
                 const ex = s.exceptions[dateStr];
