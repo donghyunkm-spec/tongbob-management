@@ -271,9 +271,9 @@ function renderDailyView() {
     let summaryHtml = `
         <div style="background:#f5f5f5; padding:10px; margin-bottom:15px; border-radius:5px; display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:10px; text-align:center;">
             <div><strong>총 인원</strong><br/><span style="font-size:20px; color:${totalCount >= 10 && totalCount <= 12 ? '#4CAF50' : '#f44336'}">${totalCount}명</span></div>
-            <div><strong>🎯 포스</strong><br/><span style="font-size:20px; color:${posCount === 2 ? '#4CAF50' : '#f44336'}">${posCount}명</span></div>
-            <div><strong>🥩 삼겹살</strong><br/><span style="font-size:20px; color:${samCount === 2 ? '#4CAF50' : '#f44336'}">${samCount}명</span></div>
-            <div><strong>🍜 국수</strong><br/><span style="font-size:20px; color:${noodleCount === 2 ? '#4CAF50' : '#f44336'}">${noodleCount}명</span></div>
+            <div><strong>🎯 포스</strong><br/><span style="font-size:20px; color:${posCount >= 2 ? '#4CAF50' : '#f44336'}">${posCount}명</span></div>
+            <div><strong>🥩 삼겹살</strong><br/><span style="font-size:20px; color:${samCount >= 2 ? '#4CAF50' : '#f44336'}">${samCount}명</span></div>
+            <div><strong>🍜 국수</strong><br/><span style="font-size:20px; color:${noodleCount >= 2 ? '#4CAF50' : '#f44336'}">${noodleCount}명</span></div>
         </div>
     `;
 
