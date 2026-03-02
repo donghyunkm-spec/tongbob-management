@@ -83,6 +83,9 @@ function renderManageItems() {
                             📊 임계:${item.thresholdQty || '-'} / 최소:${item.minOrderQty || '-'}
                            </span>`
                         : ''}
+                    ${item.발주제외
+                        ? `<span style="background:#ffebee; color:#c62828; font-size:10px; padding:2px 5px; border-radius:3px; margin-left:5px;">🚫 발주제외</span>`
+                        : ''}
                 </div>
 
                 <div class="mrg-actions">
@@ -330,6 +333,10 @@ function openEditItemModal(vendor, index) {
     document.getElementById('editThreshold').value = item.thresholdQty || '';
     document.getElementById('editMinOrder').value = item.minOrderQty || '';
 
+    // 발주제외 설정
+    const editSkipOrder = document.getElementById('editSkipOrder');
+    if (editSkipOrder) editSkipOrder.checked = item.발주제외 || false;
+
     // 위치 정보 설정
     const editLoc1 = document.getElementById('editLoc1');
     const editLoc3 = document.getElementById('editLoc3');
@@ -361,6 +368,10 @@ function saveEditItem() {
     const newThreshold = thresholdVal ? parseFloat(thresholdVal) : null;
     const newMinOrder = minOrderVal ? parseFloat(minOrderVal) : null;
 
+    // 발주제외 수집
+    const editSkipOrder = document.getElementById('editSkipOrder');
+    const newSkipOrder = editSkipOrder ? editSkipOrder.checked : false;
+
     // 위치 정보 수집
     const editLoc1 = document.getElementById('editLoc1');
     const editLoc3 = document.getElementById('editLoc3');
@@ -387,7 +398,8 @@ function saveEditItem() {
         "관리주기": newCycle,
         "locations": newLocations,
         "thresholdQty": newThreshold,
-        "minOrderQty": newMinOrder
+        "minOrderQty": newMinOrder,
+        "발주제외": newSkipOrder
     };
 
     closeEditItemModal();
