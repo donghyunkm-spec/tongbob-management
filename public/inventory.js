@@ -86,6 +86,46 @@ async function loadInventoryDataAll() {
 
         if(invData.success) {
             lastSavedInventory = invData.inventory || {};
+
+            // 오늘 날짜 확인
+            const todayStr = new Date().toISOString().split('T')[0];
+
+            // 품목별 관리주기 맵 생성
+            const itemCycleMap = {};
+            Object.keys(items).forEach(vendor => {
+                items[vendor].forEach(item => {
+                    const key = `${vendor}_${item.품목명}`;
+                    itemCycleMap[key] = item.관리주기 || 'daily';
+                });
+            });
+
+            // 각 위치별로 inventory에 로드
+            ['1루', '3루'].forEach(loc => {
+                const lastSaveDate = lastSavedInventory[`meta_last_save_${loc}`];
+                const prefix = `${loc}_`;
+
+                if (lastSaveDate === todayStr) {
+                    // 오늘 저장된 데이터면 모든 품목 로드
+                    Object.keys(lastSavedInventory).forEach(key => {
+                        if (key.startsWith(prefix)) {
+                            inventory[key] = lastSavedInventory[key];
+                        }
+                    });
+                    inventory[`meta_last_save_${loc}`] = lastSaveDate;
+                } else {
+                    // 다른 날짜면 weekly 품목만 로드 (daily는 0으로 초기화)
+                    Object.keys(lastSavedInventory).forEach(key => {
+                        if (key.startsWith(prefix) && !key.startsWith('meta_')) {
+                            // key에서 vendor_품목명 추출
+                            const itemKey = key.replace(prefix, '');
+                            const cycle = itemCycleMap[itemKey] || 'daily';
+                            if (cycle === 'weekly') {
+                                inventory[key] = lastSavedInventory[key];
+                            }
+                        }
+                    });
+                }
+            });
         }
 
         if(usageData.success) dailyUsage = usageData.usage;

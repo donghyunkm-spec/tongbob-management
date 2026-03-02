@@ -93,17 +93,8 @@ function toggleSortOrder() {
 function setLocation(loc) {
     if (currentLocation === loc) return;
 
-    const prefix = `${currentLocation}_`;
-    const hasInput = Object.keys(inventory).some(k => k.startsWith(prefix) && !k.startsWith('meta_'));
+    if (!confirm(`${loc}(으)로 전환하시겠습니까?`)) return;
 
-    if (hasInput) {
-        const msg = `현재 ${currentLocation} 재고를 입력 중입니다.\n\n` +
-                    `${loc}(으)로 전환하시겠습니까?\n` +
-                    `(입력값은 저장됩니다)`;
-        if (!confirm(msg)) return;
-    }
-
-    saveCurrentInputToMemory();
     currentLocation = loc;
     renderUnifiedInventoryForm();
 }
@@ -227,10 +218,14 @@ function renderUnifiedInventoryForm() {
         const currentStock = inventory[locItemKey];
         const displayValue = (currentStock === undefined || currentStock === 0) ? '' : currentStock;
 
-        let yesterdayStock = '-';
+        let prevStock = '-';
         if (lastSavedInventory[locItemKey] !== undefined) {
-            yesterdayStock = lastSavedInventory[locItemKey];
+            prevStock = lastSavedInventory[locItemKey];
         }
+
+        // 마지막 저장 날짜 (03/01 형식)
+        const lastSaveDate = lastSavedInventory[`meta_last_save_${currentLocation}`];
+        const prevDateLabel = lastSaveDate ? lastSaveDate.substring(5).replace('-', '/') : '-';
 
         let displayUnit = item.발주단위;
         if (item.vendor === '한강유통(고기)') displayUnit = getMeatVendorInfo(item.품목명).inputUnit;
@@ -252,8 +247,8 @@ function renderUnifiedInventoryForm() {
 
                 <div class="irc-controls">
                     <div class="irc-stat-box prev-stat">
-                        <span class="irc-stat-val" style="color:#888;">${yesterdayStock}</span>
-                        <span>최근</span>
+                        <span class="irc-stat-val" style="color:#888;">${prevStock}</span>
+                        <span>${prevDateLabel}</span>
                     </div>
 
                     <div class="irc-input-wrapper">

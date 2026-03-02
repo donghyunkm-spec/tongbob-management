@@ -90,12 +90,14 @@ async function onLoginSuccess(user) {
         try { await loadLogs(); } catch(e) {}
     }
 
-    // 매니저는 예상순익, 월간분석 탭 숨김
+    // 매니저는 예상순익, 월간분석, 변경이력 탭 숨김
     if (user.role === 'manager') {
         const predTab = document.getElementById('tab-prediction');
         const dashTab = document.getElementById('tab-dashboard');
+        const logsTab = document.getElementById('tab-logs');
         if(predTab) predTab.style.display = 'none';
         if(dashTab) dashTab.style.display = 'none';
+        if(logsTab) logsTab.style.display = 'none';
     }
 
     const activeTab = document.querySelector('.tab-content.active');
