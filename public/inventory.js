@@ -191,3 +191,12 @@ function getMeatVendorInfo(itemName) {
     if (unitMatch) info.unit = unitMatch[1].toLowerCase();
     return info;
 }
+
+// ==========================================
+// 7. 스크롤로 숫자 입력 값 변경 방지
+// ==========================================
+document.addEventListener('wheel', function(e) {
+    if (e.target.type === 'number') {
+        e.target.blur();
+    }
+}, { passive: true });

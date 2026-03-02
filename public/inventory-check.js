@@ -386,6 +386,7 @@ function checkOrderConfirmation() {
 
         vendorItems.forEach(item => {
             if (item.관리주기 === 'weekly' && !isTuesday && vendor !== '인터넷발주') return;
+            if (item.발주제외) return;  // 발주제외 품목 스킵
             const rawItemKey = `${vendor}_${item.품목명}`;
 
             const stock1 = inventory[`1루_${rawItemKey}`] || 0;

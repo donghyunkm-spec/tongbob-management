@@ -10,6 +10,11 @@
         body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; margin: 0; padding: 10px; }
         h1, h2, h3, h4 { color: #333; }
         button { cursor: pointer; }
+
+        /* input number 스크롤로 값 변경 방지 */
+        input[type="number"] { -moz-appearance: textfield; }
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .container { max-width: 800px; margin: 0 auto; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
 
         /* [일별] 카드 스타일 (누락되었던 부분 추가) */
