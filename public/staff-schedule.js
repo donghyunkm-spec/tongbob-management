@@ -878,18 +878,20 @@ function autoFillSalary(inputName) {
     if (!inputName) return;
 
     const todayStr = new Date().toISOString().split('T')[0];
+    const matches = staffList.filter(s => s.name === inputName && !s.deleted);
+    const activeMatches = matches.filter(s => !s.endDate || s.endDate >= todayStr);
+    const candidates = activeMatches.length > 0 ? activeMatches : matches;
 
-    const target = staffList.find(s => {
-        if (s.name !== inputName) return false;
-        if (s.endDate && s.endDate < todayStr) return false;
-        return true;
-    });
+    if (candidates.length === 0) return;
 
-    const finalTarget = target || staffList.find(s => s.name === inputName);
-
-    if (finalTarget && finalTarget.salary) {
-        document.getElementById('tempSalary').value = finalTarget.salary;
+    if (candidates.length === 1) {
+        if (candidates[0].salary) document.getElementById('tempSalary').value = candidates[0].salary;
+        return;
     }
+
+    // 동명이인: 첫 번째 활성 직원 기준으로 시급 자동입력 (입력창에서 선택은 saveTempWorker에서 처리)
+    const chosen = candidates[0];
+    if (chosen.salary) document.getElementById('tempSalary').value = chosen.salary;
 }
 
 async function saveTempWorker() {
@@ -910,13 +912,30 @@ async function saveTempWorker() {
     const day = String(currentDate.getDate()).padStart(2, '0');
     const dateStr = `${year}-${month}-${day}`;
 
-    const existingStaff = staffList.find(s => s.name === name);
+    const todayStr2 = new Date().toISOString().split('T')[0];
+    const allMatches = staffList.filter(s => s.name === name && !s.deleted);
+    const activeMatches2 = allMatches.filter(s => !s.endDate || s.endDate >= todayStr2);
+    const existingCandidates = activeMatches2.length > 0 ? activeMatches2 : allMatches;
+    const existingStaff = existingCandidates.length > 0 ? existingCandidates[0] : null;
 
     if (existingStaff) {
-        if(!confirm(`${name}님은 이미 등록된 직원입니다.\n기존 정보에 오늘 근무를 추가하시겠습니까?`)) return;
+        let targetStaff = existingStaff;
+
+        if (existingCandidates.length > 1) {
+            // 동명이인 disambiguation
+            const choiceList = existingCandidates.map((s, i) =>
+                `${i + 1}. ${s.name} (${s.position || '직책없음'} / 근무요일: ${(s.workDays || []).join(',') || '미설정'})`
+            ).join('\n');
+            const choice = prompt(`"${name}"님이 여러 명입니다. 누구에게 추가할까요?\n\n${choiceList}\n\n번호를 입력하세요 (취소하려면 0):`);
+            const idx = parseInt(choice);
+            if (!idx || idx < 1 || idx > existingCandidates.length) return;
+            targetStaff = existingCandidates[idx - 1];
+        } else {
+            if (!confirm(`${name}님은 이미 등록된 직원입니다.\n기존 정보에 오늘 근무를 추가하시겠습니까?`)) return;
+        }
 
         await callExceptionApi({
-            id: existingStaff.id,
+            id: targetStaff.id,
             date: dateStr,
             type: 'work',
             time: timeStr

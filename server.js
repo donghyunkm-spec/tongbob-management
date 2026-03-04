@@ -85,6 +85,19 @@ function writeJson(file, data) {
     }
 }
 
+// 특정 날짜에 해당하는 직원 스케줄 반환 (이력 기반)
+function getScheduleForDate(staff, dateStr) {
+    if (!staff.scheduleHistory || staff.scheduleHistory.length === 0) {
+        return { workDays: staff.workDays || [], time: staff.time || '', dayTimes: staff.dayTimes || {} };
+    }
+    const sorted = [...staff.scheduleHistory].sort((a, b) => a.from.localeCompare(b.from));
+    let result = sorted[0];
+    for (const entry of sorted) {
+        if (entry.from <= dateStr) result = entry;
+    }
+    return result;
+}
+
 function addLog(actor, action, target, details) {
     let logs = readJson(LOG_FILE, []);
     logs.unshift({
@@ -168,13 +181,47 @@ app.post('/api/staff', (req, res) => {
 });
 
 app.put('/api/staff/:id', (req, res) => {
-    const { updates, actor } = req.body;
+    const { updates, actor, scheduleChangeDate } = req.body;
     let staff = readJson(STAFF_FILE, []);
     const idx = staff.findIndex(s => s.id == req.params.id);
 
     if (idx !== -1) {
         const old = staff[idx];
         const changed = [];
+
+        // 스케줄 변경 감지 → 이력 기록
+        const scheduleChanged =
+            (updates.workDays !== undefined && JSON.stringify(updates.workDays || []) !== JSON.stringify(old.workDays || [])) ||
+            (updates.time !== undefined && (updates.time || '') !== (old.time || '')) ||
+            (updates.dayTimes !== undefined && JSON.stringify(updates.dayTimes || {}) !== JSON.stringify(old.dayTimes || {}));
+
+        if (scheduleChanged) {
+            const kstToday = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
+            const effectiveDate = scheduleChangeDate || kstToday;
+            const history = old.scheduleHistory ? [...old.scheduleHistory] : [];
+
+            if (history.length === 0) {
+                // 최초 이력: 입사일 또는 알 수 없는 과거부터 현재 스케줄 적용
+                history.push({
+                    from: old.startDate || '2000-01-01',
+                    workDays: old.workDays || [],
+                    time: old.time || '',
+                    dayTimes: old.dayTimes || {}
+                });
+            }
+            // 같은 날짜 이력이 이미 있으면 덮어쓰기, 없으면 추가
+            const existingIdx = history.findIndex(h => h.from === effectiveDate);
+            const newEntry = {
+                from: effectiveDate,
+                workDays: updates.workDays !== undefined ? updates.workDays : (old.workDays || []),
+                time: updates.time !== undefined ? updates.time : (old.time || ''),
+                dayTimes: updates.dayTimes !== undefined ? updates.dayTimes : (old.dayTimes || {})
+            };
+            if (existingIdx >= 0) history[existingIdx] = newEntry;
+            else history.push(newEntry);
+
+            updates.scheduleHistory = history;
+        }
 
         if (updates.name !== undefined && updates.name !== old.name)
             changed.push(`이름: ${old.name}→${updates.name}`);
@@ -221,6 +268,7 @@ app.delete('/api/staff/:id', (req, res) => {
         // ✅ endDate가 없으면 오늘 날짜로 자동 설정 (급여 계산용)
         if (!target.endDate) {
             target.endDate = today;
+            target.autoEndDate = true; // 복구 시 자동 제거 대상
         }
         
         if (writeJson(STAFF_FILE, staff)) {
@@ -245,7 +293,11 @@ app.post('/api/staff/:id/restore', (req, res) => {
         target.deleted = false;
         delete target.deletedAt;
         delete target.deletedBy;
-        // endDate는 유지 (실제 퇴사일이 있을 수 있음)
+        // 삭제 시 자동으로 세팅된 endDate는 복구 시 제거 (직접 입력한 퇴사일은 유지)
+        if (target.autoEndDate) {
+            delete target.endDate;
+            delete target.autoEndDate;
+        }
         
         if (writeJson(STAFF_FILE, staff)) {
             addLog(actor || 'Unknown', '직원복구', target.name, '복직 처리');
@@ -578,11 +630,14 @@ function calculateServerStaffCost(staffList, monthStr) {
                 const dateObj = new Date(year, month - 1, d);
                 const dayName = dayMap[dateObj.getDay()];
                 let isWorking = false;
-                // 요일별 시간 우선 사용
-                let timeStr = (s.dayTimes && s.dayTimes[dayName]) ? s.dayTimes[dayName] : s.time;
+                // 스케줄 이력 기반으로 해당 날짜의 스케줄 조회
+                const schedule = getScheduleForDate(s, dateKey);
+                let timeStr = (schedule.dayTimes && schedule.dayTimes[dayName]) ? schedule.dayTimes[dayName] : schedule.time;
                 if (s.exceptions && s.exceptions[dateKey]) {
-                    if (s.exceptions[dateKey].type === 'work') { isWorking = true; timeStr = s.exceptions[dateKey].time; }
-                } else { if (s.workDays.includes(dayName)) isWorking = true; }
+                    const ex = s.exceptions[dateKey];
+                    if (ex.type === 'work') { isWorking = true; timeStr = ex.time; }
+                    else if (ex.type === 'off') { isWorking = false; }
+                } else { if (schedule.workDays.includes(dayName)) isWorking = true; }
                 if (isWorking && timeStr && timeStr.includes('~')) {
                     const [start, end] = timeStr.split('~');
                     const [sh, sm] = start.trim().split(':').map(Number);

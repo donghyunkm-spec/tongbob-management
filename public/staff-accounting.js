@@ -1,5 +1,18 @@
 // staff-accounting.js - 가계부 및 대시보드
 
+// 특정 날짜에 해당하는 직원 스케줄 반환 (이력 기반)
+function getScheduleForDate(staff, dateStr) {
+    if (!staff.scheduleHistory || staff.scheduleHistory.length === 0) {
+        return { workDays: staff.workDays || [], time: staff.time || '', dayTimes: staff.dayTimes || {} };
+    }
+    const sorted = [...staff.scheduleHistory].sort((a, b) => a.from.localeCompare(b.from));
+    let result = sorted[0];
+    for (const entry of sorted) {
+        if (entry.from <= dateStr) result = entry;
+    }
+    return result;
+}
+
 // ==========================================
 // 월 문자열 유틸
 // ==========================================
@@ -945,13 +958,16 @@ function getEstimatedStaffCost(monthStr, targetStaffList = null) {
                 if (!isEmployedAt(dateObj)) continue;
 
                 let isWorking = false;
-                // 요일별 시간 우선 사용
-                let timeStr = (s.dayTimes && s.dayTimes[dayName]) ? s.dayTimes[dayName] : s.time;
+                // 스케줄 이력 기반으로 해당 날짜의 스케줄 조회
+                const schedule = getScheduleForDate(s, dateKey);
+                let timeStr = (schedule.dayTimes && schedule.dayTimes[dayName]) ? schedule.dayTimes[dayName] : schedule.time;
 
                 if (s.exceptions && s.exceptions[dateKey]) {
-                    if (s.exceptions[dateKey].type === 'work') { isWorking = true; timeStr = s.exceptions[dateKey].time; }
+                    const ex = s.exceptions[dateKey];
+                    if (ex.type === 'work') { isWorking = true; timeStr = ex.time; }
+                    else if (ex.type === 'off') { isWorking = false; }
                 } else {
-                    if (s.workDays.includes(dayName)) isWorking = true;
+                    if (schedule.workDays.includes(dayName)) isWorking = true;
                 }
                 if (isWorking) hours += calculateDuration(timeStr);
             }
@@ -1018,15 +1034,16 @@ function calculateMonthlySalary() {
             if (!isEmployedAt(currentDate)) continue;
 
             let isWorking = false;
-            // 요일별 시간 우선 사용
-            let timeStr = (s.dayTimes && s.dayTimes[dayKey]) ? s.dayTimes[dayKey] : s.time;
+            // 스케줄 이력 기반으로 해당 날짜의 스케줄 조회
+            const schedule = getScheduleForDate(s, dateStr);
+            let timeStr = (schedule.dayTimes && schedule.dayTimes[dayKey]) ? schedule.dayTimes[dayKey] : schedule.time;
 
             if (s.exceptions && s.exceptions[dateStr]) {
                 const ex = s.exceptions[dateStr];
                 if (ex.type === 'work') { isWorking = true; timeStr = ex.time; }
                 else if (ex.type === 'off') { isWorking = false; }
             } else {
-                if (s.workDays.includes(dayKey)) isWorking = true;
+                if (schedule.workDays.includes(dayKey)) isWorking = true;
             }
 
             if (isWorking) { workCount++; totalHours += calculateDuration(timeStr); }

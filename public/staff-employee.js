@@ -489,6 +489,9 @@ function openEditModal(id) {
 
     document.getElementById('editStartDate').value = target.startDate || '';
     document.getElementById('editEndDate').value = target.endDate || '';
+    // 변경 적용일 기본값: 오늘(KST)
+    const kstToday = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
+    document.getElementById('editScheduleChangeDate').value = kstToday;
 
     const isAdmin = currentUser.role === 'admin';
     const salarySection = document.getElementById('modalSalarySection');
@@ -553,6 +556,7 @@ async function saveStaffEdit() {
         return;
     }
 
+    const scheduleChangeDate = document.getElementById('editScheduleChangeDate').value || null;
     const updates = { time, dayTimes, startDate, endDate, roles };
 
     if (currentUser && currentUser.role === 'admin') {
@@ -564,7 +568,7 @@ async function saveStaffEdit() {
         await fetch(`/api/staff/${id}`, {
             method: 'PUT',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ updates: updates, actor: currentUser.name })
+            body: JSON.stringify({ updates: updates, actor: currentUser.name, scheduleChangeDate })
         });
         closeEditModal();
         loadStaffData();
