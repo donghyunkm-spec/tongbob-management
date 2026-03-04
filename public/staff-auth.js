@@ -104,7 +104,7 @@ async function onLoginSuccess(user) {
     if(activeTab && activeTab.id === 'accounting-content') {
         try { await loadAccountingData(); } catch(e) {}
     }
-    try { renderManageList(); } catch(e) {}
+    try { await loadStaffData(); } catch(e) {}
 }
 
 // ==========================================
