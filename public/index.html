@@ -190,11 +190,8 @@
         .log-table td { padding: 8px; border-bottom: 1px solid #eee; }
 
         @media (max-width: 768px) {
-            .weekly-container { display: block; overflow-x: auto; white-space: nowrap; }
-            .weekly-header, .weekly-col { display: inline-block; width: 140px; vertical-align: top; white-space: normal; }
-            .weekly-header { display: inline-block; width: 140px; }
             .tabs { grid-template-columns: repeat(2, 1fr); }
-            .weekly-container { min-width: 100%; display: grid; grid-template-columns: repeat(7, minmax(100px, 1fr)); overflow-x: auto; }
+            .weekly-header, .weekly-col { width: auto; white-space: normal; }
         }
     </style>
 </head>
