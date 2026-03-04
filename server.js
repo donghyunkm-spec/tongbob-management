@@ -161,7 +161,8 @@ app.post('/api/staff', (req, res) => {
     staff.push(...newStaff);
     
     if (writeJson(STAFF_FILE, staff)) {
-        addLog(actor, '직원등록', `${newStaff.length}명`, '일괄등록');
+        const nameList = newStaff.map(s => s.name).join(', ');
+        addLog(actor, '직원등록', nameList, `${newStaff.length}명 등록`);
         res.json({ success: true });
     } else res.status(500).json({ success: false });
 });
@@ -170,11 +171,37 @@ app.put('/api/staff/:id', (req, res) => {
     const { updates, actor } = req.body;
     let staff = readJson(STAFF_FILE, []);
     const idx = staff.findIndex(s => s.id == req.params.id);
-    
+
     if (idx !== -1) {
-        staff[idx] = { ...staff[idx], ...updates };
+        const old = staff[idx];
+        const changed = [];
+
+        if (updates.name !== undefined && updates.name !== old.name)
+            changed.push(`이름: ${old.name}→${updates.name}`);
+        if (updates.position !== undefined && updates.position !== old.position)
+            changed.push(`직책: ${old.position||'없음'}→${updates.position}`);
+        if (updates.time !== undefined && updates.time !== old.time)
+            changed.push(`출퇴근시간: ${old.time||'미설정'}→${updates.time||'미설정'}`);
+        if (updates.workDays !== undefined && JSON.stringify((updates.workDays||[]).slice().sort()) !== JSON.stringify((old.workDays||[]).slice().sort()))
+            changed.push(`근무요일: ${(old.workDays||[]).join(',')||'없음'}→${(updates.workDays||[]).join(',')||'없음'}`);
+        if (updates.salary !== undefined && String(updates.salary) !== String(old.salary))
+            changed.push(`급여 변경`);
+        if (updates.salaryType !== undefined && updates.salaryType !== old.salaryType)
+            changed.push(`급여유형: ${old.salaryType||'없음'}→${updates.salaryType}`);
+        if (updates.startDate !== undefined && updates.startDate !== old.startDate)
+            changed.push(`입사일: ${old.startDate||'없음'}→${updates.startDate||'없음'}`);
+        if (updates.endDate !== undefined && updates.endDate !== old.endDate)
+            changed.push(`퇴사일: ${old.endDate||'없음'}→${updates.endDate||'없음'}`);
+        if (updates.roles !== undefined && JSON.stringify((updates.roles||[]).slice().sort()) !== JSON.stringify((old.roles||[]).slice().sort()))
+            changed.push(`역할: ${(old.roles||[]).join(',')||'없음'}→${(updates.roles||[]).join(',')||'없음'}`);
+        if (updates.dayTimes !== undefined && JSON.stringify(updates.dayTimes) !== JSON.stringify(old.dayTimes||{}))
+            changed.push(`요일별시간 변경`);
+
+        const detail = changed.length > 0 ? changed.join(' / ') : '정보수정 (변경사항 없음)';
+
+        staff[idx] = { ...old, ...updates };
         writeJson(STAFF_FILE, staff);
-        addLog(actor, '직원수정', staff[idx].name, '정보수정');
+        addLog(actor, '직원수정', staff[idx].name, detail);
         res.json({ success: true });
     } else res.status(404).json({ success: false });
 });
@@ -242,7 +269,12 @@ app.post('/api/staff/exception', async (req, res) => {
         else target.exceptions[date] = { type, time };
         
         writeJson(STAFF_FILE, staff);
-        addLog(actor, '근무변경', target.name, `${date} ${type}`);
+        const exceptionLabel = type === 'off'
+            ? `임시 휴무 (${date})`
+            : type === 'work'
+                ? `임시 출근 (${date}${time ? ' ' + time : ''})`
+                : `예외 삭제 - 원래 스케줄 복귀 (${date})`;
+        addLog(actor, '근무변경', target.name, exceptionLabel);
         
         const todayStr = new Date().toISOString().split('T')[0];
         if (date === todayStr) {
@@ -274,7 +306,7 @@ app.post('/api/staff/temp', async (req, res) => {
     staff.push(newWorker);
     
     if (writeJson(STAFF_FILE, staff)) {
-        addLog(actor, '대타등록', name, `${date} ${time}`);
+        addLog(actor, '대타등록', name, `일일알바 등록 (${date} ${time})`);
         const todayStr = new Date().toISOString().split('T')[0];
         if (date === todayStr) {
             const msg = getDailyScheduleMessage(new Date());
@@ -819,28 +851,100 @@ app.get('/api/debug/files', (req, res) => {
 });
 
 // === [백업] 전체 데이터 백업 API ===
+const BACKUP_DIR = path.join(actualDataPath, 'backups');
+const MAX_BACKUPS = 14; // 최대 14일치 보관
+
+function collectBackupData() {
+    return {
+        timestamp: new Date().toISOString(),
+        staff: readJson(STAFF_FILE, []),
+        logs: readJson(LOG_FILE, []),
+        accounting: readJson(ACCOUNTING_FILE, { monthly: {}, daily: {} }),
+        inventory_items: readJson(INVENTORY_ITEMS_FILE, {}),
+        inventory_current: readJson(INVENTORY_CURRENT_FILE, {}),
+        inventory_usage: readJson(INVENTORY_USAGE_FILE, {}),
+        inventory_orders: readJson(INVENTORY_ORDERS_FILE, []),
+        inventory_holidays: readJson(INVENTORY_HOLIDAYS_FILE, {}),
+        inventory_last_orders: readJson(INVENTORY_LAST_ORDERS_FILE, {}),
+        inventory_history: readJson(INVENTORY_HISTORY_FILE, [])
+    };
+}
+
+function runAutoBackup() {
+    try {
+        if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+
+        const kstDate = new Date(Date.now() + 9 * 60 * 60 * 1000);
+        const dateStr = kstDate.toISOString().split('T')[0];
+        const backupFile = path.join(BACKUP_DIR, `backup_${dateStr}.json`);
+
+        const backupData = collectBackupData();
+        fs.writeFileSync(backupFile, JSON.stringify(backupData, null, 2));
+        console.log(`✅ 자동 백업 완료: ${backupFile}`);
+
+        // 오래된 백업 삭제 (MAX_BACKUPS 초과분)
+        const files = fs.readdirSync(BACKUP_DIR)
+            .filter(f => f.startsWith('backup_') && f.endsWith('.json'))
+            .sort();
+        if (files.length > MAX_BACKUPS) {
+            const toDelete = files.slice(0, files.length - MAX_BACKUPS);
+            toDelete.forEach(f => {
+                fs.unlinkSync(path.join(BACKUP_DIR, f));
+                console.log(`🗑️ 오래된 백업 삭제: ${f}`);
+            });
+        }
+    } catch (e) {
+        console.error('❌ 자동 백업 실패:', e.message);
+    }
+}
+
+// 매일 새벽 3시(KST) 자동 백업
+cron.schedule('0 3 * * *', () => {
+    console.log('⏰ 자동 백업 시작...');
+    runAutoBackup();
+}, { timezone: "Asia/Seoul" });
+
 app.get('/api/backup/all', (req, res) => {
     try {
-        const backupData = {
-            timestamp: new Date().toISOString(),
-            staff: readJson(STAFF_FILE, []),
-            logs: readJson(LOG_FILE, []),
-            accounting: readJson(ACCOUNTING_FILE, { monthly: {}, daily: {} }),
-            inventory_items: readJson(INVENTORY_ITEMS_FILE, {}),
-            inventory_current: readJson(INVENTORY_CURRENT_FILE, {}),
-            inventory_usage: readJson(INVENTORY_USAGE_FILE, {}),
-            inventory_orders: readJson(INVENTORY_ORDERS_FILE, []),
-            inventory_holidays: readJson(INVENTORY_HOLIDAYS_FILE, {}),
-            inventory_last_orders: readJson(INVENTORY_LAST_ORDERS_FILE, {}),
-            inventory_history: readJson(INVENTORY_HISTORY_FILE, [])
-        };
-        
+        const backupData = collectBackupData();
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Content-Disposition', `attachment; filename="backup_${new Date().toISOString().split('T')[0]}.json"`);
         res.json(backupData);
     } catch(e) {
         console.error('백업 실패:', e);
         res.status(500).json({ error: '백업 생성 실패' });
+    }
+});
+
+// 저장된 자동 백업 목록 조회
+app.get('/api/backup/list', (req, res) => {
+    try {
+        if (!fs.existsSync(BACKUP_DIR)) return res.json({ success: true, backups: [] });
+        const files = fs.readdirSync(BACKUP_DIR)
+            .filter(f => f.startsWith('backup_') && f.endsWith('.json'))
+            .sort()
+            .reverse()
+            .map(f => {
+                const stats = fs.statSync(path.join(BACKUP_DIR, f));
+                return { filename: f, size: stats.size, date: f.replace('backup_', '').replace('.json', '') };
+            });
+        res.json({ success: true, backups: files });
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// 저장된 자동 백업 다운로드
+app.get('/api/backup/download/:date', (req, res) => {
+    try {
+        const filename = `backup_${req.params.date}.json`;
+        const filePath = path.join(BACKUP_DIR, filename);
+        if (!fs.existsSync(filePath)) return res.status(404).json({ error: '백업 파일 없음' });
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.sendFile(filePath);
+    } catch(e) {
+        res.status(500).json({ error: e.message });
     }
 });
 
