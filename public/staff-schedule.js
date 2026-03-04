@@ -496,7 +496,7 @@ function resetToThisWeek() {
     const today = new Date();
     const day = today.getDay();
     currentWeekStartDate = new Date(today);
-    currentWeekStartDate.setDate(today.getDate() - day);
+    currentWeekStartDate.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
     renderWeeklyView();
 }
 

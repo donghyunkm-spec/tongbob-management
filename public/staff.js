@@ -21,7 +21,7 @@ const storeNameKr = '통빱';
 
 // 요일 맵핑
 const DAY_MAP = { 'Sun':'일', 'Mon':'월', 'Tue':'화', 'Wed':'수', 'Thu':'목', 'Fri':'금', 'Sat':'토' };
-const DAY_KEYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DAY_KEYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 // ==========================================
 // 2. DOMContentLoaded 초기화
@@ -41,10 +41,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // 초기 UI 설정
     initStoreSettings();
 
-    // 주간 기준일 초기화
+    // 주간 기준일 초기화 (월요일 시작)
     const today = new Date();
     const day = today.getDay();
-    currentWeekStartDate.setDate(today.getDate() - day);
+    currentWeekStartDate.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
 
     // 초기 데이터 로드
     loadStaffData();
