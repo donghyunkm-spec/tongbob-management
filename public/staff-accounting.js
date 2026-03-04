@@ -995,6 +995,8 @@ function calculateMonthlySalary() {
                 if (isEmployedAt(currentDay)) employedDays++;
             }
 
+            if (employedDays === 0) return;
+
             let finalPay = s.salary || 0;
             if (employedDays < totalDaysInMonth) {
                 finalPay = Math.floor((s.salary / totalDaysInMonth) * employedDays);
@@ -1029,6 +1031,8 @@ function calculateMonthlySalary() {
 
             if (isWorking) { workCount++; totalHours += calculateDuration(timeStr); }
         }
+
+        if (workCount === 0) return;
 
         salaryReport.push({
             name: s.name, type: '시급',

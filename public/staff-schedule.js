@@ -124,6 +124,20 @@ function renderDailyView() {
     const dayKey = DAY_KEYS[currentDate.getDay()];
 
     staffList.forEach(s => {
+        const currentDateObj = new Date(dateStr);
+        currentDateObj.setHours(0, 0, 0, 0);
+
+        if (s.startDate) {
+            const startDateObj = new Date(s.startDate);
+            startDateObj.setHours(0, 0, 0, 0);
+            if (currentDateObj < startDateObj) return;
+        }
+        if (s.endDate) {
+            const endDateObj = new Date(s.endDate);
+            endDateObj.setHours(0, 0, 0, 0);
+            if (currentDateObj > endDateObj) return;
+        }
+
         let isWorking = false;
         // 요일별 시간 우선 사용
         let timeStr = getTimeForDaySchedule(s, dayKey);
