@@ -278,7 +278,9 @@ app.post('/api/staff/temp', async (req, res) => {
             const msg = getDailyScheduleMessage(new Date());
             await sendToKakao(`📢 [긴급] 대타 등록 알림\n(${actor}님 등록)\n\n${msg}`);
         }
-        await sendToTelegram(`👤 [일일 알바 등록]\n이름: ${name}\n날짜: ${date}\n시간: ${time}\n등록자: ${actor}`);
+        const regDateObj = new Date(date + 'T00:00:00');
+        const scheduleMsg = getDailyScheduleMessage(regDateObj);
+        await sendToTelegram(`👤 [일일 알바 등록]\n이름: ${name}\n날짜: ${date}\n시간: ${time}\n등록자: ${actor}\n\n📋 해당일 전체 근무현황\n${scheduleMsg}`);
         res.json({ success: true });
     } else res.status(500).json({ success: false });
 });
