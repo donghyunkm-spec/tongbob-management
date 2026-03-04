@@ -248,7 +248,9 @@ app.post('/api/staff/exception', async (req, res) => {
         if (date === todayStr) {
             const msg = getDailyScheduleMessage(new Date());
             await sendToKakao(`📢 [긴급] 당일 근무 변경 알림\n(${actor}님 수정)\n\n${msg}`);
-            await sendToTelegram(`📢 [긴급] 당일 근무 변경 알림\n(${actor}님 수정)\n\n${msg}`);
+            const changeLabel = type === 'off' ? '임시 휴무 처리' : type === 'work' ? '임시 출근 등록' : '원래 스케줄로 복귀';
+            const detailedMsg = getDailyScheduleMessageDetailed(new Date());
+            await sendToTelegram(`📢 [당일 근무 변경]\n✏️ ${target.name} → ${changeLabel}\n(${actor}님 수정)\n\n📋 전체 근무현황\n${detailedMsg}`);
         }
         res.json({ success: true });
     } else res.status(404).json({ success: false });
@@ -722,6 +724,37 @@ function getDailyScheduleMessage(dateObj) {
     if (workers.length === 0) return `근무자 없음`;
     let msg = `근무인원 ${workers.length}명\n`;
     workers.forEach(w => { msg += `- ${w.name}: ${w.time}\n`; });
+    return msg;
+}
+
+function getDailyScheduleMessageDetailed(dateObj) {
+    const staffList = readJson(STAFF_FILE, []);
+    const year = dateObj.getFullYear();
+    const month = dateObj.getMonth() + 1;
+    const day = dateObj.getDate();
+    const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const dayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayKey = dayMap[dateObj.getDay()];
+
+    let workers = [];
+    let offWorkers = [];
+    staffList.forEach(s => {
+        let timeStr = (s.dayTimes && s.dayTimes[dayKey]) ? s.dayTimes[dayKey] : s.time;
+        if (s.exceptions && s.exceptions[dateStr]) {
+            const ex = s.exceptions[dateStr];
+            if (ex.type === 'work') workers.push({ name: s.name, time: ex.time });
+            else if (ex.type === 'off') offWorkers.push(s.name);
+        } else {
+            if (s.workDays.includes(dayKey)) workers.push({ name: s.name, time: timeStr });
+        }
+    });
+
+    let msg = workers.length === 0 ? `근무자 없음\n` : `근무인원 ${workers.length}명\n`;
+    workers.forEach(w => { msg += `- ${w.name}: ${w.time}\n`; });
+    if (offWorkers.length > 0) {
+        msg += `\n🚫 임시 휴무 ${offWorkers.length}명\n`;
+        offWorkers.forEach(n => { msg += `- ${n}\n`; });
+    }
     return msg;
 }
 
