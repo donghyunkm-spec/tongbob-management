@@ -13,6 +13,10 @@ const PORT = process.env.PORT || 3000;
 const KAKAO_REST_API_KEY = process.env.KAKAO_REST_API_KEY || '';
 const KAKAO_REDIRECT_URI = process.env.KAKAO_REDIRECT_URI || 'http://localhost:3000/oauth/kakao';
 
+// === [설정] 텔레그램 ===
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '';
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
+
 // === [데이터 경로 설정] ===
 const isRailway = process.env.RAILWAY_VOLUME_MOUNT_PATH !== undefined;
 const actualDataPath = isRailway 
@@ -244,6 +248,7 @@ app.post('/api/staff/exception', async (req, res) => {
         if (date === todayStr) {
             const msg = getDailyScheduleMessage(new Date());
             await sendToKakao(`📢 [긴급] 당일 근무 변경 알림\n(${actor}님 수정)\n\n${msg}`);
+            await sendToTelegram(`📢 [긴급] 당일 근무 변경 알림\n(${actor}님 수정)\n\n${msg}`);
         }
         res.json({ success: true });
     } else res.status(404).json({ success: false });
@@ -273,6 +278,7 @@ app.post('/api/staff/temp', async (req, res) => {
             const msg = getDailyScheduleMessage(new Date());
             await sendToKakao(`📢 [긴급] 대타 등록 알림\n(${actor}님 등록)\n\n${msg}`);
         }
+        await sendToTelegram(`👤 [일일 알바 등록]\n이름: ${name}\n날짜: ${date}\n시간: ${time}\n등록자: ${actor}`);
         res.json({ success: true });
     } else res.status(500).json({ success: false });
 });
@@ -573,6 +579,18 @@ async function sendToKakao(text) {
     }
 }
 
+async function sendToTelegram(text) {
+    if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT_ID) return;
+    try {
+        await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+            chat_id: TELEGRAM_CHAT_ID,
+            text: text
+        });
+    } catch (e) {
+        console.error('텔레그램 전송 실패:', e.message);
+    }
+}
+
 app.post('/api/kakao/send-briefing', async (req, res) => {
     const { actor } = req.body;
     try {
@@ -704,6 +722,15 @@ function getDailyScheduleMessage(dateObj) {
     workers.forEach(w => { msg += `- ${w.name}: ${w.time}\n`; });
     return msg;
 }
+
+cron.schedule('0 9 * * *', async () => {
+    try {
+        const today = new Date();
+        const msg = getDailyScheduleMessage(today);
+        const dateStr = `${today.getMonth()+1}월 ${today.getDate()}일`;
+        await sendToTelegram(`📅 [${dateStr} 근무현황]\n\n${msg}`);
+    } catch (e) { console.error('텔레그램 근무현황 전송 실패:', e); }
+}, { timezone: "Asia/Seoul" });
 
 cron.schedule('30 11 * * *', async () => {
     try {
