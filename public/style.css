@@ -1142,8 +1142,8 @@ input:focus, select:focus {
 
 /* 오늘 날짜 강조 */
 .today-highlight {
-    background-color: var(--primary-light) !important;
-    box-shadow: inset 0 0 0 2px var(--primary-color) !important;
+    background-color: #ffebee !important;
+    box-shadow: inset 0 0 0 3px #e53935 !important;
     position: relative;
 }
 
