@@ -120,7 +120,26 @@ function switchTab(tabName) {
         if(typeof initInventoryTab === 'function') {
             initInventoryTab();
         }
+    } else if(tabName === 'manual') {
+        // 첫 진입 시 활성 서브탭 렌더링
+        const activeManualSub = document.querySelector('.manual-sub-content[style*="display:block"]');
+        if (!activeManualSub || activeManualSub.id === 'manual-inventory') {
+            if(typeof renderManual === 'function') renderManual();
+        }
     }
+}
+
+function switchManualTab(subName) {
+    document.querySelectorAll('.manual-sub-content').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('[id^="manual-tab-btn-"]').forEach(el => el.classList.remove('active'));
+
+    const content = document.getElementById(`manual-${subName}`);
+    if(content) content.style.display = 'block';
+
+    const btn = document.getElementById(`manual-tab-btn-${subName}`);
+    if(btn) btn.classList.add('active');
+
+    if(subName === 'inventory' && typeof renderManual === 'function') renderManual();
 }
 
 function switchAttSubTab(subId, btn) {

@@ -162,7 +162,6 @@ function showInvTab(tabName) {
     } else if (tabName === 'manageItems') {
         renderManageItems();
     } else if (tabName === 'holidays') loadHolidays();
-    else if (tabName === 'manual') renderManual();
     else if (tabName === 'orderHistory') loadOrderHistory();
 }
 
