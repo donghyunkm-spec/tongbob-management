@@ -462,29 +462,28 @@ function openEditModal(id) {
     document.getElementById('editName').value = target.name;
     document.getElementById('editTime').value = target.time || '';
 
-    // 요일별 시간 입력 UI 생성
+    // 요일별 체크박스 + 시간 입력 UI 생성
     const container = document.getElementById('editDayTimesContainer');
     if (container) {
         container.innerHTML = '';
         const workDays = target.workDays || [];
         const dayTimes = target.dayTimes || {};
 
-        workDays.forEach(day => {
+        DAY_KEYS.forEach(day => {
             const dayLabel = DAY_MAP[day] || day;
-            const timeValue = dayTimes[day] || target.time || '';
+            const isChecked = workDays.includes(day);
+            const timeValue = isChecked ? (dayTimes[day] || target.time || '') : '';
             container.innerHTML += `
                 <div style="display:flex; align-items:center; gap:8px;">
-                    <span style="width:30px; font-weight:bold; color:#1976D2;">${dayLabel}</span>
+                    <input type="checkbox" id="editDay-${day}" ${isChecked ? 'checked' : ''} onchange="toggleEditDay('${day}')">
+                    <span style="width:24px; font-weight:bold; color:#1976D2; font-size:13px;">${dayLabel}</span>
                     <input type="text" id="editDayTime-${day}" value="${timeValue}"
-                           style="flex:1; padding:6px; border:1px solid #ddd; border-radius:4px;"
+                           ${!isChecked ? 'disabled' : ''}
+                           style="flex:1; padding:6px; border:1px solid #ddd; border-radius:4px; background:${isChecked ? 'white' : '#f0f0f0'};"
                            placeholder="13:00~22:00">
                 </div>
             `;
         });
-
-        if (workDays.length === 0) {
-            container.innerHTML = '<p style="color:#999; text-align:center;">근무 요일이 설정되지 않았습니다.</p>';
-        }
     }
 
     document.getElementById('editStartDate').value = target.startDate || '';
@@ -517,6 +516,16 @@ function closeEditModal() {
     document.getElementById('editModalOverlay').style.display = 'none';
 }
 
+function toggleEditDay(day) {
+    const checkbox = document.getElementById(`editDay-${day}`);
+    const timeInput = document.getElementById(`editDayTime-${day}`);
+    if (checkbox && timeInput) {
+        timeInput.disabled = !checkbox.checked;
+        timeInput.style.background = checkbox.checked ? 'white' : '#f0f0f0';
+        if (!checkbox.checked) timeInput.value = '';
+    }
+}
+
 async function saveStaffEdit() {
     const id = parseInt(document.getElementById('editId').value);
     const target = staffList.find(s => s.id === id);
@@ -528,16 +537,20 @@ async function saveStaffEdit() {
     const salaryType = document.getElementById('editSalaryType').value;
     const salary = parseInt(document.getElementById('editSalary').value) || 0;
 
-    // 요일별 시간 수집
-    const workDays = target.workDays || [];
+    // 요일별 체크박스에서 workDays + dayTimes 수집
+    const workDays = [];
     const dayTimes = {};
     let firstTime = '';
 
-    workDays.forEach(day => {
+    DAY_KEYS.forEach(day => {
+        const checkbox = document.getElementById(`editDay-${day}`);
         const input = document.getElementById(`editDayTime-${day}`);
-        if (input && input.value.trim()) {
-            dayTimes[day] = input.value.trim();
-            if (!firstTime) firstTime = input.value.trim();
+        if (checkbox && checkbox.checked) {
+            workDays.push(day);
+            if (input && input.value.trim()) {
+                dayTimes[day] = input.value.trim();
+                if (!firstTime) firstTime = input.value.trim();
+            }
         }
     });
 
@@ -557,7 +570,7 @@ async function saveStaffEdit() {
     }
 
     const scheduleChangeDate = document.getElementById('editScheduleChangeDate').value || null;
-    const updates = { time, dayTimes, startDate, endDate, roles };
+    const updates = { workDays, time, dayTimes, startDate, endDate, roles };
 
     if (currentUser && currentUser.role === 'admin') {
         updates.salaryType = salaryType;

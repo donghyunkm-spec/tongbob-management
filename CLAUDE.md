@@ -31,18 +31,22 @@ Single Express.js file handling all API routes. Uses file-based JSON storage (no
 - `KAKAO_REST_API_KEY` - Kakao OAuth API key
 - `KAKAO_REDIRECT_URI` - OAuth callback URL
 - `ADMIN_PASSWORD`, `MANAGER_PASSWORD`, `STAFF_PASSWORD` - Login credentials (defaults provided)
+- `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID` - Telegram bot notifications (optional; silently skipped if absent)
 
 **API Groups:**
 1. **Auth** (`/api/login`) - Password-based login returning role: `admin`, `manager`, or `viewer`
 2. **Staff Management** (`/api/staff/*`) - Employee CRUD, schedule exceptions, temp workers; soft delete with 30-day retention before permanent removal
 3. **Accounting** (`/api/accounting/*`) - Daily sales entry, monthly fixed costs
 4. **Inventory** (`/api/inventory/*`) - Items by vendor, current stock, daily usage, orders, holidays, history
-5. **Logs & Backup** (`/api/logs`, `/api/backup`) - Activity log (max 1000 entries), full data backup endpoint
+5. **Logs & Backup** (`/api/logs`, `/api/backup/*`) - Activity log (max 1000 entries); backup endpoints: `/api/backup/all` (download snapshot), `/api/backup/list` (list dated backups), `/api/backup/download/:date` (restore specific date)
 6. **Kakao Integration** (`/oauth/kakao`, `/api/kakao/*`) - OAuth login and KakaoTalk notification sending
+7. **Staff Restore** (`POST /api/staff/:id/restore`) - Restore soft-deleted staff before 30-day permanent deletion window
 
-**Scheduled Tasks (node-cron):**
-- 11:00 KST: Daily business briefing
-- 11:30 KST: Staff schedule notification
+**Scheduled Tasks (node-cron, all KST):**
+- 03:00: Auto-backup to `data/backups/` (30-day retention, max 30 files)
+- 09:00: Telegram daily schedule notification
+- 11:00: Kakao daily business briefing (`generateAndSendBriefing`)
+- 11:30: Kakao staff schedule notification
 
 ### Frontend (public/)
 Single-page application with vanilla JavaScript. No build process. Scripts are loaded in order in `index.html` and share global state through module-level variables.
@@ -96,6 +100,10 @@ if (s.endDate)   { const d = new Date(s.endDate);   d.setHours(0,0,0,0); if (dat
 `renderDailyView()` in `staff-schedule.js` previously lacked this check — if adding new schedule views, always include it.
 
 **Salary Report (`calculateMonthlySalary`):** Staff with 0 employed days this month (fully outside date range) are excluded from the report entirely.
+
+**Schedule History:** Staff records include a `scheduleHistory` array of `{ from, workDays, time, dayTimes }` entries for tracking schedule changes over time. Always use `getScheduleForDate(staff, dateStr)` (server-side) to resolve the correct schedule for a given date — it picks the latest entry with `from <= dateStr`. When modifying a staff member's schedule, append to `scheduleHistory` rather than overwriting top-level fields.
+
+**Accounting Daily Fields:** Daily entries under `accounting.json` include: `sales`, `meat`, `food`, `etc`, `card`, `delivery`. Card and delivery amounts are used to auto-calculate fees in the monthly briefing.
 
 ## Language
 

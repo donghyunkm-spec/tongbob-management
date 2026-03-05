@@ -99,8 +99,9 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
         /* [모달 & 기타 UI] */
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 2000; }
-        .modal-box { background: white; padding: 25px; border-radius: 10px; width: 90%; max-width: 400px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 2000; overflow-y: auto; }
+        .modal-box { background: white; padding: 25px; border-radius: 10px; width: 90%; max-width: 400px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); max-height: 90vh; overflow-y: auto; }
+        @media (max-width: 600px) { .modal-overlay { align-items: flex-start; padding: 20px 0; } .modal-box { max-height: none; } }
         .modal-field { margin-bottom: 15px; }
         .modal-field label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 13px; }
         .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
@@ -458,10 +459,9 @@
                 <input type="text" id="editName" disabled style="background:#eee; width:100%; padding:8px;">
             </div>
             <div class="modal-field">
-                <label>요일별 근무 시간</label>
-                <div id="editDayTimesContainer" style="display:flex; flex-direction:column; gap:6px; background:#f9f9f9; padding:10px; border-radius:5px; max-height:200px; overflow-y:auto;">
+                <label>근무 요일 및 시간</label>
+                <div id="editDayTimesContainer" style="display:flex; flex-direction:column; gap:6px; background:#f9f9f9; padding:10px; border-radius:5px;">
                 </div>
-                <p style="font-size:11px; color:#666; margin-top:5px;">* 근무 요일 변경은 직원 관리 탭에서 가능합니다</p>
                 <div style="background:#e8f5e9; padding:8px; border-radius:5px; margin-top:8px;">
                     <label style="font-size:12px; color:#2e7d32;">⏰ 시간 변경 적용 시작일</label>
                     <input type="date" id="editScheduleChangeDate" style="width:100%; padding:5px; margin-top:4px;">
