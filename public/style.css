@@ -146,8 +146,83 @@ body {
 }
 
 .tab.active {
-    background: var(--primary-color);
-    color: white;
+    background: var(--primary-color) !important;
+    color: white !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    position: relative;
+}
+
+/* 메인 탭 스타일 */
+.main-tabs {
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.12);
+}
+
+.main-tabs .tab {
+    padding: 16px 10px;
+    font-size: clamp(14px, 3.5vw, 16px);
+    font-weight: bold;
+    border-bottom: 3px solid transparent;
+}
+
+.main-tabs .tab.active {
+    border-bottom: 3px solid rgba(255,255,255,0.5);
+}
+
+/* 메인 탭 개별 색상 (비활성 상태) */
+.main-tabs .tab-attendance {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+.main-tabs .tab-accounting {
+    background: #e3f2fd;
+    color: #0d47a1;
+}
+.main-tabs .tab-inventory {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+.main-tabs .tab-manual {
+    background: #f3e5f5;
+    color: #6a1b9a;
+}
+
+/* 서브 탭 스타일 */
+.sub-tabs {
+    display: grid;
+    gap: 5px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.sub-tabs .tab {
+    padding: 10px 5px;
+    font-size: clamp(11px, 2.5vw, 13px);
+    font-weight: 600;
+    border-bottom: 2px solid transparent;
+}
+
+.sub-tabs .tab.active {
+    border-bottom: 2px solid rgba(255,255,255,0.5);
+}
+
+/* 서브 탭 특수 색상 (비활성 상태) */
+.sub-tabs .tab-manage {
+    background: #fff3cd;
+    color: #856404;
+}
+.sub-tabs .tab-logs {
+    background: #e8f5e9;
+    color: #2e7d32;
+    font-size: 11px;
+}
+.sub-tabs .tab-prediction {
+    background: #f3e5f5;
+    color: #4a148c;
+}
+.sub-tabs .tab-check {
+    background: #fff3e0;
+    color: #e65100;
 }
 
 .tab-content {

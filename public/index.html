@@ -78,21 +78,7 @@
         .calendar-day.sunday .calendar-date-num { color: red; }
         .calendar-day.saturday .calendar-date-num { color: blue; }
 
-        /* [탭] 스타일 */
-        .tabs {
-            display: grid;
-            /* 기존: grid-template-columns: repeat(4, 1fr); */
-            /* 수정: 버튼이 3개이므로 3으로 변경하거나, flex로 변경 */
-            grid-template-columns: repeat(3, 1fr); 
-            gap: 5px;
-            margin-bottom: 15px;
-        }
-        .tab { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 10px 5px; font-size: 13px; color: #555; transition: 0.2s; }
-        .tab.active { background: #4CAF50; color: white; border-color: #4CAF50; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-        
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        
+        /* [탭] - 기본 스타일은 style.css에 정의 */
         .att-sub-content, .acc-sub-content { display: none; animation: fadeIn 0.3s ease-in-out; }
         .att-sub-content.active, .acc-sub-content.active { display: block; }
 
@@ -578,21 +564,21 @@
             </div>
         </div>
 
-        <div class="tabs">
-            <button class="tab active" onclick="switchTab('attendance')">👥 직원/근무</button>
-            <button class="tab" onclick="switchTab('accounting')" style="background:#e3f2fd; color:#0d47a1;">💰 매입/매출</button>
-            <button id="tab-inventory" class="tab" onclick="switchTab('inventory')" style="display:none; background:#e8f5e9; color:#2e7d32;">📦 재고관리</button>
-            <button class="tab" onclick="switchTab('manual')" style="background:#f3e5f5; color:#6a1b9a;">📖 설명서</button>
+        <div class="tabs main-tabs">
+            <button class="tab tab-attendance active" onclick="switchTab('attendance')">👥 직원/근무</button>
+            <button class="tab tab-accounting" onclick="switchTab('accounting')">💰 매입/매출</button>
+            <button id="tab-inventory" class="tab tab-inventory" onclick="switchTab('inventory')" style="display:none;">📦 재고관리</button>
+            <button class="tab tab-manual" onclick="switchTab('manual')">📖 설명서</button>
         </div>
 
         <div id="attendance-content" class="tab-content active">    
             <div class="accounting-card" style="padding: 10px; margin-bottom:15px;">
-                <div class="tabs" style="grid-template-columns: repeat(5, 1fr); margin-bottom: 0;">
+                <div class="tabs sub-tabs" style="grid-template-columns: repeat(5, 1fr); margin-bottom: 0;">
                     <button class="tab active" onclick="switchAttSubTab('att-daily', this)">📅 일별</button>
                     <button class="tab" onclick="switchAttSubTab('att-weekly', this)">🗓 주간</button>
                     <button class="tab" onclick="switchAttSubTab('att-monthly', this)">📆 월별</button>
-                    <button class="tab" onclick="switchAttSubTab('att-manage', this)" style="background:#fff3cd; color:#856404;">⚙️ 관리</button>
-                    <button class="tab" onclick="switchAttSubTab('att-logs', this)" style="font-size:11px;">📜 이력</button>
+                    <button class="tab tab-manage" onclick="switchAttSubTab('att-manage', this)">⚙️ 관리</button>
+                    <button class="tab tab-logs" onclick="switchAttSubTab('att-logs', this)">📜 이력</button>
                 </div>
             </div>
 
@@ -750,13 +736,13 @@
                 <button onclick="changeAccMonth(1)" class="nav-btn" style="border:1px solid #ddd; padding:5px 10px; background:white; border-radius:5px;">익월 ▶</button>
             </div>
     
-            <div class="tabs" style="grid-template-columns: repeat(6, 1fr); margin-bottom: 15px;">
+            <div class="tabs sub-tabs" style="grid-template-columns: repeat(6, 1fr); margin-bottom: 15px;">
                 <button class="tab active" onclick="switchAccSubTab('acc-daily', this)">일일입력</button>
                 <button class="tab" onclick="switchAccSubTab('acc-history', this)">입력내역</button>
-                <button class="tab" id="tab-prediction" onclick="switchAccSubTab('acc-prediction', this)" style="background:#f3e5f5; color:#4a148c;">예상순익</button>
+                <button class="tab tab-prediction" id="tab-prediction" onclick="switchAccSubTab('acc-prediction', this)">예상순익</button>
                 <button class="tab" id="tab-dashboard" onclick="switchAccSubTab('acc-dashboard', this)">월간분석</button>
                 <button class="tab" onclick="switchAccSubTab('acc-monthly', this)">고정비</button>
-                <button class="tab" id="tab-logs" onclick="switchAccSubTab('acc-logs', this)" style="font-size:11px; background:#e8f5e9; color:#2e7d32;">변경이력</button>
+                <button class="tab tab-logs" id="tab-logs" onclick="switchAccSubTab('acc-logs', this)">변경이력</button>
             </div>
 
             <div id="acc-logs" class="acc-sub-content">
@@ -914,9 +900,9 @@
         </div>
         <div id="inventory-content" class="tab-content">
             <div class="accounting-card" style="padding: 10px; margin-bottom: 15px;">
-                <div class="tabs" style="grid-template-columns: repeat(6, 1fr); margin-bottom: 0; font-size: 12px;">
+                <div class="tabs sub-tabs" style="grid-template-columns: repeat(6, 1fr); margin-bottom: 0; font-size: 12px;">
                     <button class="tab active" onclick="showInvTab('inventory')">재고입력</button>
-                    <button class="tab" onclick="showInvTab('check')" style="background:#fff3e0; color:#e65100; font-weight:bold;">🔎 재고확인</button>
+                    <button class="tab tab-check" onclick="showInvTab('check')">🔎 재고확인</button>
                     <button class="tab" onclick="showInvTab('standard')">사용량</button>
                     <button class="tab" onclick="showInvTab('manageItems')">품목관리</button>
                     <button class="tab" onclick="showInvTab('holidays')">휴일</button>
@@ -1092,7 +1078,7 @@
         <!-- 설명서 메인 탭 -->
         <div id="manual-content" class="tab-content">
         <div class="accounting-card" style="padding: 10px; margin-bottom: 15px;">
-            <div class="tabs" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 0;">
+            <div class="tabs sub-tabs" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 0;">
                 <button id="manual-tab-btn-staff" class="tab active" onclick="switchManualTab('staff')">👥 직원관리</button>
                 <button id="manual-tab-btn-accounting" class="tab" onclick="switchManualTab('accounting')">💰 매입/매출</button>
                 <button id="manual-tab-btn-inventory" class="tab" onclick="switchManualTab('inventory')">📦 재고관리</button>

@@ -95,10 +95,10 @@ function initStoreSettings() {
 // 4. 탭 전환 함수
 // ==========================================
 function switchTab(tabName) {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.main-tabs > .tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
 
-    const targetBtn = document.querySelector(`.tabs > button[onclick="switchTab('${tabName}')"]`);
+    const targetBtn = document.querySelector(`.main-tabs > button[onclick="switchTab('${tabName}')"]`);
     if(targetBtn) targetBtn.classList.add('active');
 
     const contentId = (tabName === 'attendance') ? 'attendance-content' : `${tabName}-content`;
