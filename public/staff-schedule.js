@@ -306,7 +306,7 @@ function renderDailyView() {
     const badge = document.getElementById('dailyCountBadge');
     if(badge) {
         badge.textContent = `총 ${totalCount}명`;
-        badge.style.background = (totalCount >= 10 && totalCount <= 12 && posCount === 2 && samCount === 2 && noodleCount === 2) ? '#4CAF50' : '#f44336';
+        badge.style.background = (totalCount >= 10 && totalCount <= 12 && posCount >= 2 && samCount >= 2 && noodleCount >= 2) ? '#4CAF50' : '#f44336';
     }
 
     // 근무자 카드
@@ -585,7 +585,7 @@ function renderMonthlyView() {
         }
 
         let hasAlert = false;
-        if (count <= 9 || count >= 13 || posCount !== 2 || samCount !== 2 || noodleCount !== 2) {
+        if (count < 10 || count > 12 || posCount < 2 || samCount < 2 || noodleCount < 2) {
             hasAlert = true;
         }
 
