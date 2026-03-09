@@ -43,10 +43,12 @@ Single Express.js file handling all API routes. Uses file-based JSON storage (no
 7. **Staff Restore** (`POST /api/staff/:id/restore`) - Restore soft-deleted staff before 30-day permanent deletion window
 
 **Scheduled Tasks (node-cron, all KST):**
-- 03:00: Auto-backup to `data/backups/` (30-day retention, max 30 files)
+- 03:00: Auto-backup to `data/backups/` (14-day retention, max 14 files)
 - 09:00: Telegram daily schedule notification
 - 11:00: Kakao daily business briefing (`generateAndSendBriefing`)
 - 11:30: Kakao staff schedule notification
+
+**Debug:** `GET /api/debug/files` lists files in the data directory — useful for troubleshooting Railway volume mount issues.
 
 ### Frontend (public/)
 Single-page application with vanilla JavaScript. No build process. Scripts are loaded in order in `index.html` and share global state through module-level variables.
@@ -104,6 +106,14 @@ if (s.endDate)   { const d = new Date(s.endDate);   d.setHours(0,0,0,0); if (dat
 **Schedule History:** Staff records include a `scheduleHistory` array of `{ from, workDays, time, dayTimes }` entries for tracking schedule changes over time. Always use `getScheduleForDate(staff, dateStr)` (server-side) to resolve the correct schedule for a given date — it picks the latest entry with `from <= dateStr`. When modifying a staff member's schedule, append to `scheduleHistory` rather than overwriting top-level fields.
 
 **Accounting Daily Fields:** Daily entries under `accounting.json` include: `sales`, `meat`, `food`, `etc`, `card`, `delivery`. Card and delivery amounts are used to auto-calculate fees in the monthly briefing.
+
+**Schedule Exceptions:** Staff records include `exceptions[dateStr]` for per-day overrides with `type` (`work`/`off`) and optional `time` fields. Temp workers are stored via `POST /api/staff/temp` and use `isTemp: true`.
+
+**Day-specific Times:** Staff can have a `dayTimes` object (e.g., `{ "월": "09:00-18:00", "화": "10:00-19:00" }`) for per-weekday time variations alongside the default `time` field.
+
+**Graceful Defaults:** `readJson()` returns a default value (empty array/object) when files are missing or unreadable, so the server never crashes on missing data files.
+
+**Dependencies:** Express, CORS, node-cron, axios (used for Kakao/Telegram API calls).
 
 ## Language
 

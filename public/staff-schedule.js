@@ -121,7 +121,8 @@ function renderDailyView() {
 
     // 근무자 목록 수집
     let workers = [];
-    const dayKey = DAY_KEYS[currentDate.getDay()];
+    const GETDAY_TO_DAYKEY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayKey = GETDAY_TO_DAYKEY[currentDate.getDay()];
 
     staffList.forEach(s => {
         const currentDateObj = new Date(dateStr);
