@@ -48,6 +48,7 @@ async function loadAccountingData() {
 
     try {
         const res = await fetch(`/api/accounting`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         accountingData = json.data || { daily: {}, monthly: {} };
         if(!accountingData.daily) accountingData.daily = {};

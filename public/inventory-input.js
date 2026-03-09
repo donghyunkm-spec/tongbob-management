@@ -419,6 +419,8 @@ async function saveStandard() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ usage: dailyUsage })
         });
-        if (await response.json().then(r => r.success)) showAlert('사용량이 저장되었습니다.', 'success');
+        const result = await response.json();
+        if (result.success) showAlert('사용량이 저장되었습니다.', 'success');
+        else showAlert('사용량 저장 실패', 'error');
     } catch (e) { console.error(e); }
 }

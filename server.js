@@ -330,11 +330,15 @@ app.post('/api/staff/exception', async (req, res) => {
         
         const todayStr = new Date().toISOString().split('T')[0];
         if (date === todayStr) {
-            const msg = getDailyScheduleMessage(new Date());
-            await sendToKakao(`📢 [긴급] 당일 근무 변경 알림\n(${actor}님 수정)\n\n${msg}`);
-            const changeLabel = type === 'off' ? '임시 휴무 처리' : type === 'work' ? '임시 출근 등록' : '원래 스케줄로 복귀';
-            const detailedMsg = getDailyScheduleMessageDetailed(new Date());
-            await sendToTelegram(`📢 [당일 근무 변경]\n✏️ ${target.name} → ${changeLabel}\n(${actor}님 수정)\n\n📋 전체 근무현황\n${detailedMsg}`);
+            try {
+                const msg = getDailyScheduleMessage(new Date());
+                await sendToKakao(`📢 [긴급] 당일 근무 변경 알림\n(${actor}님 수정)\n\n${msg}`);
+                const changeLabel = type === 'off' ? '임시 휴무 처리' : type === 'work' ? '임시 출근 등록' : '원래 스케줄로 복귀';
+                const detailedMsg = getDailyScheduleMessageDetailed(new Date());
+                await sendToTelegram(`📢 [당일 근무 변경]\n✏️ ${target.name} → ${changeLabel}\n(${actor}님 수정)\n\n📋 전체 근무현황\n${detailedMsg}`);
+            } catch (e) {
+                console.error('알림 전송 실패:', e.message);
+            }
         }
         res.json({ success: true });
     } else res.status(404).json({ success: false });
@@ -359,14 +363,18 @@ app.post('/api/staff/temp', async (req, res) => {
     
     if (writeJson(STAFF_FILE, staff)) {
         addLog(actor, '대타등록', name, `일일알바 등록 (${date} ${time})`);
-        const todayStr = new Date().toISOString().split('T')[0];
-        if (date === todayStr) {
-            const msg = getDailyScheduleMessage(new Date());
-            await sendToKakao(`📢 [긴급] 대타 등록 알림\n(${actor}님 등록)\n\n${msg}`);
+        try {
+            const todayStr = new Date().toISOString().split('T')[0];
+            if (date === todayStr) {
+                const msg = getDailyScheduleMessage(new Date());
+                await sendToKakao(`📢 [긴급] 대타 등록 알림\n(${actor}님 등록)\n\n${msg}`);
+            }
+            const regDateObj = new Date(date + 'T00:00:00');
+            const scheduleMsg = getDailyScheduleMessage(regDateObj);
+            await sendToTelegram(`👤 [일일 알바 등록]\n이름: ${name}\n날짜: ${date}\n시간: ${time}\n등록자: ${actor}\n\n📋 해당일 전체 근무현황\n${scheduleMsg}`);
+        } catch (e) {
+            console.error('알림 전송 실패:', e.message);
         }
-        const regDateObj = new Date(date + 'T00:00:00');
-        const scheduleMsg = getDailyScheduleMessage(regDateObj);
-        await sendToTelegram(`👤 [일일 알바 등록]\n이름: ${name}\n날짜: ${date}\n시간: ${time}\n등록자: ${actor}\n\n📋 해당일 전체 근무현황\n${scheduleMsg}`);
         res.json({ success: true });
     } else res.status(500).json({ success: false });
 });
@@ -862,8 +870,10 @@ cron.schedule('30 11 * * *', async () => {
     } catch (e) { console.error(e); }
 }, { timezone: "Asia/Seoul" });
 
-cron.schedule('0 11 * * *', () => {
-    generateAndSendBriefing();
+cron.schedule('0 11 * * *', async () => {
+    try {
+        await generateAndSendBriefing();
+    } catch (e) { console.error('브리핑 크론 실패:', e); }
 }, { timezone: "Asia/Seoul" });
 
 // === [디버그용] 파일 저장 확인 API ===
@@ -944,8 +954,12 @@ function runAutoBackup() {
         if (files.length > MAX_BACKUPS) {
             const toDelete = files.slice(0, files.length - MAX_BACKUPS);
             toDelete.forEach(f => {
-                fs.unlinkSync(path.join(BACKUP_DIR, f));
-                console.log(`🗑️ 오래된 백업 삭제: ${f}`);
+                try {
+                    fs.unlinkSync(path.join(BACKUP_DIR, f));
+                    console.log(`🗑️ 오래된 백업 삭제: ${f}`);
+                } catch (unlinkErr) {
+                    console.error(`백업 삭제 실패 (${f}):`, unlinkErr.message);
+                }
             });
         }
     } catch (e) {
@@ -992,8 +1006,11 @@ app.get('/api/backup/list', (req, res) => {
 // 저장된 자동 백업 다운로드
 app.get('/api/backup/download/:date', (req, res) => {
     try {
-        const filename = `backup_${req.params.date}.json`;
+        const dateParam = req.params.date.replace(/[^0-9\-]/g, '');
+        const filename = `backup_${dateParam}.json`;
         const filePath = path.join(BACKUP_DIR, filename);
+        // Path traversal 방지
+        if (!filePath.startsWith(BACKUP_DIR)) return res.status(400).json({ error: '잘못된 요청' });
         if (!fs.existsSync(filePath)) return res.status(404).json({ error: '백업 파일 없음' });
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

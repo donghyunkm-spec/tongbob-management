@@ -974,6 +974,7 @@ async function saveTempWorker() {
 async function loadLogs() {
     try {
         const res = await fetch(`/api/logs`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         const tbody = document.getElementById('logTableBody');
 
@@ -1012,6 +1013,7 @@ async function loadLogs() {
 async function loadAccountingLogs() {
     try {
         const res = await fetch(`/api/logs`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         const tbody = document.getElementById('accLogTableBody');
 

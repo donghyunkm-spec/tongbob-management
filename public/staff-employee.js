@@ -67,6 +67,7 @@ function getTimeForDay(staff, dayKey) {
 async function loadStaffData() {
     try {
         const res = await fetch(`/api/staff?role=${currentUser?.role || 'viewer'}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         staffList = json.data;
 
@@ -217,6 +218,7 @@ async function loadDeletedStaff() {
 
     try {
         const res = await fetch(`/api/staff?includeDeleted=true&role=${currentUser?.role || 'viewer'}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         const deletedStaff = json.data.filter(s => s.deleted);
         renderDeletedStaffList(deletedStaff);
@@ -366,7 +368,7 @@ async function saveStaff() {
     const name = document.getElementById('staffName').value.trim();
     const position = document.getElementById('staffPosition').value.trim();
     const salaryType = document.getElementById('staffSalaryType').value;
-    const salary = parseInt(document.getElementById('staffSalary').value) || 0;
+    const salary = parseInt(document.getElementById('staffSalary').value, 10) || 0;
     const startDate = document.getElementById('staffStartDate').value;
     const endDate = document.getElementById('staffEndDate').value;
 
@@ -527,7 +529,7 @@ function toggleEditDay(day) {
 }
 
 async function saveStaffEdit() {
-    const id = parseInt(document.getElementById('editId').value);
+    const id = parseInt(document.getElementById('editId').value, 10);
     const target = staffList.find(s => s.id === id);
     if (!target) return;
 
@@ -535,7 +537,7 @@ async function saveStaffEdit() {
     const endDate = document.getElementById('editEndDate').value || null;
 
     const salaryType = document.getElementById('editSalaryType').value;
-    const salary = parseInt(document.getElementById('editSalary').value) || 0;
+    const salary = parseInt(document.getElementById('editSalary').value, 10) || 0;
 
     // 요일별 체크박스에서 workDays + dayTimes 수집
     const workDays = [];
