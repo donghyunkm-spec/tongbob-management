@@ -1027,7 +1027,10 @@ cron.schedule('0 10 * * *', async () => {
         msg += `${today.getMonth()+1}/${today.getDate()} 기준, 5일 이상 미발주\n\n`;
         alertItems.forEach((item, idx) => {
             const dateStr = item.lastDate || '기록없음';
-            msg += `${idx+1}. ${item.name} (${item.vendor.substr(0,2)}) - ${item.daysSince === 999 ? '발주기록없음' : item.daysSince + '일 전'}\n`;
+            const dateDisplay = item.daysSince === 999
+                ? '발주기록없음'
+                : `${item.daysSince}일 전(${item.lastDate})`;
+            msg += `${idx+1}. ${item.name} (${item.vendor.substr(0,2)}) - ${dateDisplay}\n`;
         });
 
         await sendToTelegram(msg);

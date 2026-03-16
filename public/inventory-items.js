@@ -68,6 +68,10 @@ function renderManageItems() {
     vendorsToShow.forEach(vendor => {
         if (!items[vendor]) return; // 업체가 없으면 스킵
         items[vendor].forEach((item, idx) => {
+            // 해당 매장에 속하지 않는 품목은 스킵
+            const locations = item.locations || ['1루', '3루'];
+            if (!locations.includes(manageSortMode)) return;
+
             flatList.push({
                 ...item,
                 vendor: vendor,
@@ -136,6 +140,10 @@ function moveGlobalSort(visualIdx, direction) {
     let flatList = [];
     Object.keys(items).forEach(vendor => {
         items[vendor].forEach((item, idx) => {
+            // 해당 매장에 속하지 않는 품목은 스킵
+            const locations = item.locations || ['1루', '3루'];
+            if (!locations.includes(manageSortMode)) return;
+
             flatList.push({
                 itemRef: item, // 참조 전달 (원본 수정용)
                 sortKey: (manageSortMode === '1루') ? (item.sort1 ?? 9999) : (item.sort3 ?? 9999)
