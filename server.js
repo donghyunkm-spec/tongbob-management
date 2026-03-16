@@ -996,6 +996,44 @@ cron.schedule('0 11 * * *', async () => {
     } catch (e) { console.error('브리핑 크론 실패:', e); }
 }, { timezone: "Asia/Seoul" });
 
+cron.schedule('0 10 * * *', async () => {
+    try {
+        const itemsData = readJson(INVENTORY_ITEMS_FILE, {});
+        const lastOrders = readJson(INVENTORY_LAST_ORDERS_FILE, {});
+        const today = new Date();
+
+        // 모든 품목의 마지막 발주일 계산
+        let itemList = [];
+        for (const vendor in itemsData) {
+            itemsData[vendor].forEach(item => {
+                if (item.발주제외) return;
+                const key = `${vendor}_${item.품목명}`;
+                const lastDate = lastOrders[key];
+                const daysSince = lastDate
+                    ? Math.ceil((today - new Date(lastDate)) / (1000 * 60 * 60 * 24))
+                    : 999;
+                itemList.push({ name: item.품목명, vendor, lastDate, daysSince });
+            });
+        }
+
+        // 오래된 순 정렬
+        itemList.sort((a, b) => b.daysSince - a.daysSince);
+
+        // 5일 이상 미발주 품목만
+        const alertItems = itemList.filter(i => i.daysSince >= 5);
+        if (alertItems.length === 0) return;
+
+        let msg = `⚠️ [장기 미발주 품목 알림]\n`;
+        msg += `${today.getMonth()+1}/${today.getDate()} 기준, 5일 이상 미발주\n\n`;
+        alertItems.forEach((item, idx) => {
+            const dateStr = item.lastDate || '기록없음';
+            msg += `${idx+1}. ${item.name} (${item.vendor.substr(0,2)}) - ${item.daysSince === 999 ? '발주기록없음' : item.daysSince + '일 전'}\n`;
+        });
+
+        await sendToTelegram(msg);
+    } catch (e) { console.error('미발주 알림 실패:', e); }
+}, { timezone: "Asia/Seoul" });
+
 // === [디버그용] 파일 저장 확인 API ===
 app.get('/api/debug/files', (req, res) => {
     try {
