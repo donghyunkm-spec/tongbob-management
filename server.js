@@ -510,8 +510,17 @@ app.post('/api/inventory/orders', (req, res) => {
         });
     }
     writeJson(INVENTORY_LAST_ORDERS_FILE, lastOrders);
-    
+
     res.json({ success: true });
+
+    // 텔레그램 발주 요약 발송 (비동기, 실패해도 응답에 영향 없음)
+    try {
+        const itemsData = readJson(INVENTORY_ITEMS_FILE, {});
+        const currentInventory = readJson(INVENTORY_CURRENT_FILE, {});
+        sendOrderTelegramSummary(orderRecord, itemsData, currentInventory);
+    } catch (e) {
+        console.error('텔레그램 발주 요약 발송 실패:', e.message);
+    }
 });
 
 // 6. 발주 내역 조회
@@ -688,6 +697,117 @@ async function sendToTelegram(text) {
     } catch (e) {
         console.error('텔레그램 전송 실패:', e.message);
     }
+}
+
+async function sendOrderTelegramSummary(orderRecord, itemsData, currentInventory) {
+    if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT_ID) return;
+
+    const date = orderRecord.date || '';
+    const time = orderRecord.time || '';
+
+    // 1. 발주 품목 요약
+    let orderLines = [];
+    let orderTotalCount = 0;
+    for (const vendor in orderRecord.orders) {
+        const vendorItems = orderRecord.orders[vendor];
+        if (!vendorItems || vendorItems.length === 0) continue;
+        orderLines.push(`\n📦 ${vendor}`);
+        vendorItems.forEach(item => {
+            const unit = item.displayUnit || item.발주단위 || '';
+            orderLines.push(`  ${item.품목명} ${item.orderAmount}${unit}`);
+            orderTotalCount++;
+        });
+    }
+
+    if (orderTotalCount === 0) return; // 발주 품목 없으면 발송 안 함
+
+    // 2. 인분 현황 계산 (판매메뉴별)
+    // 현재 재고 수집
+    let stockMap = {}; // "vendor_품목명" → totalStock
+    for (const key in currentInventory) {
+        if (key.startsWith('meta_')) continue;
+        // key: "1루_vendor_itemName" or "3루_vendor_itemName"
+        const parts = key.match(/^(1루|3루)_(.+)$/);
+        if (!parts) continue;
+        const rawKey = parts[2];
+        stockMap[rawKey] = (stockMap[rawKey] || 0) + (currentInventory[key] || 0);
+    }
+
+    // 발주량 수집
+    let orderMap = {};
+    for (const vendor in orderRecord.orders) {
+        (orderRecord.orders[vendor] || []).forEach(oi => {
+            const key = `${vendor}_${oi.품목명}`;
+            orderMap[key] = (orderMap[key] || 0) + (oi.orderAmount || 0);
+        });
+    }
+
+    // 판매메뉴별 그룹핑
+    let menuMap = {};    // 메뉴명 → [{품목명, currentServings, afterServings}]
+    let noNameItems = [];
+
+    for (const vendor in itemsData) {
+        (itemsData[vendor] || []).forEach(item => {
+            if (!item.servings || item.servings.length === 0) return;
+            const rawKey = `${vendor}_${item.품목명}`;
+            const currentTotal = stockMap[rawKey] || 0;
+            const orderQty = orderMap[rawKey] || 0;
+            const afterTotal = currentTotal + orderQty;
+
+            item.servings.forEach(s => {
+                const menuName = (s.name || '').trim();
+                const entry = {
+                    품목명: item.품목명,
+                    currentServings: Math.floor(currentTotal * s.perUnit),
+                    afterServings: Math.floor(afterTotal * s.perUnit),
+                    orderQty: orderQty,
+                    unit: item.발주단위 || ''
+                };
+                if (!menuName) {
+                    noNameItems.push(entry);
+                } else {
+                    if (!menuMap[menuName]) menuMap[menuName] = [];
+                    menuMap[menuName].push(entry);
+                }
+            });
+        });
+    }
+
+    // 3. 메시지 조합
+    let msg = `📋 발주 완료 (${date} ${time})\n`;
+    msg += `총 ${orderTotalCount}개 품목 발주`;
+    msg += orderLines.join('\n');
+
+    // 인분 현황
+    const menuNames = Object.keys(menuMap).sort();
+    if (menuNames.length > 0 || noNameItems.length > 0) {
+        msg += `\n\n━━━━━━━━━━━━━━━━━━`;
+        msg += `\n📏 인분 현황 (현재→발주후)`;
+
+        menuNames.forEach(menuName => {
+            const ingredients = menuMap[menuName];
+            const currentMin = Math.min(...ingredients.map(i => i.currentServings));
+            const afterMin = Math.min(...ingredients.map(i => i.afterServings));
+            msg += `\n\n🍽 ${menuName}: ${currentMin}→${afterMin}인분`;
+
+            ingredients.sort((a, b) => a.afterServings - b.afterServings);
+            ingredients.forEach(ing => {
+                const arrow = ing.orderQty > 0 ? `${ing.currentServings}→${ing.afterServings}` : `${ing.currentServings}`;
+                const bottleneckMark = ing.afterServings === afterMin ? '⚠' : '';
+                msg += `\n  ${bottleneckMark}${ing.품목명}: ${arrow}인분`;
+            });
+        });
+
+        if (noNameItems.length > 0) {
+            msg += `\n\n📦 기타`;
+            noNameItems.forEach(ing => {
+                const arrow = ing.orderQty > 0 ? `${ing.currentServings}→${ing.afterServings}` : `${ing.currentServings}`;
+                msg += `\n  ${ing.품목명}: ${arrow}인분`;
+            });
+        }
+    }
+
+    await sendToTelegram(msg);
 }
 
 app.post('/api/kakao/send-briefing', async (req, res) => {
