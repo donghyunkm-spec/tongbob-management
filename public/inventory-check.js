@@ -709,10 +709,9 @@ function showServingOverview(mode) {
         if (displayInventory[k] === undefined) displayInventory[k] = lastSavedInventory[k];
     });
 
-    // 발주 데이터 수집 (발주 후 예상 모드용)
-    let orderMap = {}; // { "vendor_품목명": orderAmount }
+    // 발주 데이터 수집
+    let orderMap = {};
     const hasOrderData = currentConfirmItems && Object.keys(currentConfirmItems).some(v => currentConfirmItems[v] && currentConfirmItems[v].length > 0);
-
     if (hasOrderData) {
         for (const vendor in currentConfirmItems) {
             (currentConfirmItems[vendor] || []).forEach(oi => {
@@ -722,11 +721,15 @@ function showServingOverview(mode) {
         }
     }
 
-    // 인분 정보가 있는 품목만 수집
-    let servingItems = [];
+    // 판매메뉴별로 재그룹핑: { "도시락": [{품목명, servings, ...}, ...], "국수": [...] }
+    let menuMap = {};    // 용도명 → [{재료정보}]
+    let noNameItems = []; // 용도명 없는 품목 (단독 표시)
+    let hasAnyServing = false;
+
     Object.keys(items).forEach(vendor => {
         items[vendor].forEach(item => {
             if (!item.servings || item.servings.length === 0) return;
+            hasAnyServing = true;
 
             const rawKey = `${vendor}_${item.품목명}`;
             const stock1 = displayInventory[`1루_${rawKey}`] || 0;
@@ -734,27 +737,33 @@ function showServingOverview(mode) {
             const currentTotal = stock1 + stock3;
             const orderQty = orderMap[rawKey] || 0;
             const afterOrderTotal = currentTotal + orderQty;
-            const displayTotal = (servingViewMode === 'afterOrder') ? afterOrderTotal : currentTotal;
+            const useTotal = (servingViewMode === 'afterOrder') ? afterOrderTotal : currentTotal;
 
-            const calculated = item.servings.map(s => ({
-                name: s.name || '',
-                servings: Math.floor(displayTotal * s.perUnit)
-            }));
+            item.servings.forEach(s => {
+                const menuName = (s.name || '').trim();
+                const servingCount = Math.floor(useTotal * s.perUnit);
+                const entry = {
+                    품목명: item.품목명,
+                    vendor: vendor,
+                    발주단위: item.발주단위,
+                    currentTotal: currentTotal,
+                    orderQty: orderQty,
+                    afterOrderTotal: afterOrderTotal,
+                    perUnit: s.perUnit,
+                    servings: servingCount
+                };
 
-            servingItems.push({
-                품목명: item.품목명,
-                vendor: vendor,
-                발주단위: item.발주단위,
-                currentTotal: currentTotal,
-                orderQty: orderQty,
-                afterOrderTotal: afterOrderTotal,
-                displayTotal: displayTotal,
-                servingCalcs: calculated
+                if (!menuName) {
+                    noNameItems.push(entry);
+                } else {
+                    if (!menuMap[menuName]) menuMap[menuName] = [];
+                    menuMap[menuName].push(entry);
+                }
             });
         });
     });
 
-    if (servingItems.length === 0) {
+    if (!hasAnyServing) {
         content.innerHTML = `
             <div style="text-align:center; padding:30px; color:#999;">
                 <p style="font-size:16px; margin-bottom:10px;">인분 정보가 설정된 품목이 없습니다.</p>
@@ -764,9 +773,11 @@ function showServingOverview(mode) {
         return;
     }
 
+    const isAfter = servingViewMode === 'afterOrder';
+
     // 토글 버튼
-    const currentActive = servingViewMode === 'current' ? 'background:#1565c0; color:white;' : 'background:#e0e0e0; color:#333;';
-    const afterActive = servingViewMode === 'afterOrder' ? 'background:#ff5722; color:white;' : 'background:#e0e0e0; color:#333;';
+    const currentActive = !isAfter ? 'background:#1565c0; color:white;' : 'background:#e0e0e0; color:#333;';
+    const afterActive = isAfter ? 'background:#ff5722; color:white;' : 'background:#e0e0e0; color:#333;';
     const afterDisabled = !hasOrderData ? 'opacity:0.4; pointer-events:none;' : '';
 
     let html = `
@@ -780,52 +791,92 @@ function showServingOverview(mode) {
         </div>
     `;
 
-    if (servingViewMode === 'afterOrder' && hasOrderData) {
+    if (isAfter && hasOrderData) {
         html += `<div style="background:#fff3e0; border:1px solid #ffb74d; border-radius:6px; padding:10px; margin-bottom:12px; font-size:12px; color:#e65100;">
-            현재 재고 + 발주 수량을 합산한 예상 인분입니다.
-        </div>`;
-    } else if (servingViewMode === 'current') {
-        html += `<div style="background:#e8f5e9; border:1px solid #a5d6a7; border-radius:6px; padding:10px; margin-bottom:12px; font-size:12px; color:#2e7d32;">
-            현재 재고 기준으로 각 품목이 몇 인분 분량인지 보여줍니다.${!hasOrderData ? '' : ' <strong>발주 후 예상</strong> 탭에서 발주 반영 수치도 확인할 수 있습니다.'}
+            현재 재고 + 발주 수량 합산 기준입니다.
         </div>`;
     }
 
-    // 품목별 카드
-    servingItems.forEach(item => {
-        const vendorShort = item.vendor.substr(0, 2);
-        const isAfter = servingViewMode === 'afterOrder';
-        const stockLabel = isAfter
-            ? `${item.currentTotal} + <span style="color:#ff5722;">${item.orderQty}</span> = <strong>${item.afterOrderTotal}</strong>`
-            : `<strong>${item.currentTotal}</strong>`;
+    // 판매메뉴별 카드 렌더링
+    const menuNames = Object.keys(menuMap).sort();
+
+    menuNames.forEach(menuName => {
+        const ingredients = menuMap[menuName];
+        // 병목 = 가장 적은 인분수
+        const bottleneck = Math.min(...ingredients.map(i => i.servings));
+        const bnColor = bottleneck <= 0 ? '#f44336' : bottleneck <= 50 ? '#ff9800' : '#4caf50';
+        const bnBg = bottleneck <= 0 ? '#ffebee' : bottleneck <= 50 ? '#fff3e0' : '#e8f5e9';
 
         html += `
-            <div style="background:white; border:1px solid #e0e0e0; border-radius:8px; padding:12px; margin-bottom:10px; ${isAfter && item.orderQty > 0 ? 'border-left:4px solid #ff5722;' : ''}">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                    <div>
-                        <span style="font-size:10px; background:#e3f2fd; color:#1565c0; padding:2px 5px; border-radius:3px;">${vendorShort}</span>
-                        <strong style="margin-left:5px; font-size:15px;">${item.품목명}</strong>
-                    </div>
-                    <div style="font-size:13px; color:#666;">
-                        ${stockLabel} ${item.발주단위}
+            <div style="background:white; border:1px solid #e0e0e0; border-radius:10px; margin-bottom:14px; overflow:hidden;">
+                <div style="background:${bnBg}; border-bottom:2px solid ${bnColor}; padding:12px 14px; display:flex; justify-content:space-between; align-items:center;">
+                    <div style="font-size:17px; font-weight:bold; color:#333;">🍽 ${menuName}</div>
+                    <div style="text-align:right;">
+                        <div style="font-size:24px; font-weight:bold; color:${bnColor};">${bottleneck}</div>
+                        <div style="font-size:11px; color:#888;">인분 가능</div>
                     </div>
                 </div>
-                <div style="display:flex; flex-wrap:wrap; gap:6px;">`;
+                <div style="padding:10px 14px;">`;
 
-        item.servingCalcs.forEach(calc => {
-            const label = calc.name ? calc.name : '';
-            const color = calc.servings <= 0 ? '#f44336' : calc.servings <= 50 ? '#ff9800' : '#4caf50';
-            const bgColor = calc.servings <= 0 ? '#ffebee' : calc.servings <= 50 ? '#fff3e0' : '#e8f5e9';
+        // 재료별 바 차트 형태로 표시
+        const maxServings = Math.max(...ingredients.map(i => i.servings), 1);
+
+        ingredients.sort((a, b) => a.servings - b.servings); // 적은 순 (병목이 위로)
+
+        ingredients.forEach(ing => {
+            const ratio = Math.min(100, (ing.servings / maxServings) * 100);
+            const isBottleneck = ing.servings === bottleneck;
+            const barColor = ing.servings <= 0 ? '#f44336' : ing.servings <= 50 ? '#ff9800' : '#4caf50';
+            const stockInfo = isAfter && ing.orderQty > 0
+                ? `${ing.currentTotal}+${ing.orderQty}=${ing.afterOrderTotal}${ing.발주단위}`
+                : `${isAfter ? ing.afterOrderTotal : ing.currentTotal}${ing.발주단위}`;
 
             html += `
-                <div style="background:${bgColor}; border:1px solid ${color}; border-radius:6px; padding:8px 12px; flex:1; min-width:120px; text-align:center;">
-                    ${label ? `<div style="font-size:11px; color:#666; margin-bottom:3px;">${label}</div>` : ''}
-                    <div style="font-size:22px; font-weight:bold; color:${color};">${calc.servings}</div>
-                    <div style="font-size:11px; color:#888;">인분</div>
+                <div style="margin-bottom:8px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+                        <div style="font-size:13px;">
+                            ${isBottleneck ? '<span style="color:#f44336; font-weight:bold;">▸ </span>' : ''}
+                            <strong>${ing.품목명}</strong>
+                            <span style="font-size:11px; color:#999; margin-left:4px;">(${stockInfo})</span>
+                        </div>
+                        <div style="font-size:14px; font-weight:bold; color:${barColor};">${ing.servings}인분</div>
+                    </div>
+                    <div style="background:#f0f0f0; border-radius:4px; height:8px; overflow:hidden;">
+                        <div style="background:${barColor}; height:100%; width:${ratio}%; border-radius:4px; transition:width 0.3s;"></div>
+                    </div>
                 </div>`;
         });
 
         html += `</div></div>`;
     });
+
+    // 용도명 없는 단독 품목들
+    if (noNameItems.length > 0) {
+        html += `
+            <div style="background:white; border:1px solid #e0e0e0; border-radius:10px; margin-bottom:14px; overflow:hidden;">
+                <div style="background:#f5f5f5; border-bottom:1px solid #e0e0e0; padding:10px 14px;">
+                    <div style="font-size:15px; font-weight:bold; color:#666;">📦 기타 품목</div>
+                </div>
+                <div style="padding:10px 14px;">`;
+
+        noNameItems.forEach(ing => {
+            const color = ing.servings <= 0 ? '#f44336' : ing.servings <= 50 ? '#ff9800' : '#4caf50';
+            const stockInfo = isAfter && ing.orderQty > 0
+                ? `${ing.currentTotal}+${ing.orderQty}=${ing.afterOrderTotal}${ing.발주단위}`
+                : `${isAfter ? ing.afterOrderTotal : ing.currentTotal}${ing.발주단위}`;
+
+            html += `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #f0f0f0;">
+                    <div style="font-size:13px;">
+                        <strong>${ing.품목명}</strong>
+                        <span style="font-size:11px; color:#999; margin-left:4px;">(${stockInfo})</span>
+                    </div>
+                    <div style="font-size:15px; font-weight:bold; color:${color};">${ing.servings}인분</div>
+                </div>`;
+        });
+
+        html += `</div></div>`;
+    }
 
     content.innerHTML = html;
     modal.classList.add('active');
