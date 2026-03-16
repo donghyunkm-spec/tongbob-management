@@ -38,7 +38,26 @@ function renderManageItems() {
         </div>
     `;
 
-    // 2. 통합 리스트 생성 (전역 정렬을 위해) - [NEW] 필터 적용
+    // 2. sort 값 없는 품목에 자동 번호 부여 (초기화)
+    const sortProp = (manageSortMode === '1루') ? 'sort1' : 'sort3';
+    let maxSort = -1;
+    Object.keys(items).forEach(vendor => {
+        if (!items[vendor]) return;
+        items[vendor].forEach(item => {
+            if (typeof item[sortProp] === 'number') maxSort = Math.max(maxSort, item[sortProp]);
+        });
+    });
+    Object.keys(items).forEach(vendor => {
+        if (!items[vendor]) return;
+        items[vendor].forEach(item => {
+            if (typeof item[sortProp] !== 'number') {
+                maxSort++;
+                item[sortProp] = maxSort;
+            }
+        });
+    });
+
+    // 3. 통합 리스트 생성 (전역 정렬을 위해) - [NEW] 필터 적용
     let flatList = [];
 
     // [NEW] 선택된 업체에 따라 필터링
@@ -53,7 +72,7 @@ function renderManageItems() {
                 ...item,
                 vendor: vendor,
                 originalIdx: idx, // 원본 배열에서의 인덱스
-                sortKey: (manageSortMode === '1루') ? (item.sort1 ?? 9999) : (item.sort3 ?? 9999)
+                sortKey: item[sortProp] ?? 9999
             });
         });
     });
@@ -277,12 +296,24 @@ async function addNewItem() {
     const servingName = document.getElementById('newServingName')?.value.trim() || '';
     const servingPerUnit = parseFloat(document.getElementById('newServingPerUnit')?.value) || 0;
 
+    // 새 품목의 sort 값: 전체 품목 중 최대값 + 1
+    let maxSort1 = -1, maxSort3 = -1;
+    Object.keys(items).forEach(v => {
+        if (!items[v]) return;
+        items[v].forEach(it => {
+            if (typeof it.sort1 === 'number') maxSort1 = Math.max(maxSort1, it.sort1);
+            if (typeof it.sort3 === 'number') maxSort3 = Math.max(maxSort3, it.sort3);
+        });
+    });
+
     const newItem = {
         "품목명": name,
         "발주단위": unit || '개',
         "중요도": importance,
         "관리주기": cycle,
-        "locations": locations
+        "locations": locations,
+        "sort1": maxSort1 + 1,
+        "sort3": maxSort3 + 1
     };
     if (servingPerUnit > 0) {
         newItem.servings = [{ name: servingName, perUnit: servingPerUnit }];
