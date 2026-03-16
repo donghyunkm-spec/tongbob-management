@@ -695,17 +695,32 @@ function copyToKakao() {
 // ==========================================
 // 인분 현황 모달
 // ==========================================
-function showServingOverview() {
+let servingViewMode = 'current'; // 'current' or 'afterOrder'
+
+function showServingOverview(mode) {
+    if (mode) servingViewMode = mode;
     const modal = document.getElementById('servingOverviewModal');
     const content = document.getElementById('servingOverviewContent');
 
     // 현재 재고 데이터 수집
     let displayInventory = {};
     Object.keys(inventory).filter(k => !k.startsWith('meta_')).forEach(k => displayInventory[k] = inventory[k]);
-    // lastSaved도 합치기 (입력 안 된 매장 보완)
     Object.keys(lastSavedInventory).filter(k => !k.startsWith('meta_')).forEach(k => {
         if (displayInventory[k] === undefined) displayInventory[k] = lastSavedInventory[k];
     });
+
+    // 발주 데이터 수집 (발주 후 예상 모드용)
+    let orderMap = {}; // { "vendor_품목명": orderAmount }
+    const hasOrderData = currentConfirmItems && Object.keys(currentConfirmItems).some(v => currentConfirmItems[v] && currentConfirmItems[v].length > 0);
+
+    if (hasOrderData) {
+        for (const vendor in currentConfirmItems) {
+            (currentConfirmItems[vendor] || []).forEach(oi => {
+                const key = `${vendor}_${oi.품목명}`;
+                orderMap[key] = (orderMap[key] || 0) + (oi.orderAmount || 0);
+            });
+        }
+    }
 
     // 인분 정보가 있는 품목만 수집
     let servingItems = [];
@@ -716,18 +731,24 @@ function showServingOverview() {
             const rawKey = `${vendor}_${item.품목명}`;
             const stock1 = displayInventory[`1루_${rawKey}`] || 0;
             const stock3 = displayInventory[`3루_${rawKey}`] || 0;
-            const totalStock = stock1 + stock3;
+            const currentTotal = stock1 + stock3;
+            const orderQty = orderMap[rawKey] || 0;
+            const afterOrderTotal = currentTotal + orderQty;
+            const displayTotal = (servingViewMode === 'afterOrder') ? afterOrderTotal : currentTotal;
 
             const calculated = item.servings.map(s => ({
                 name: s.name || '',
-                servings: Math.floor(totalStock * s.perUnit)
+                servings: Math.floor(displayTotal * s.perUnit)
             }));
 
             servingItems.push({
                 품목명: item.품목명,
                 vendor: vendor,
                 발주단위: item.발주단위,
-                totalStock: totalStock,
+                currentTotal: currentTotal,
+                orderQty: orderQty,
+                afterOrderTotal: afterOrderTotal,
+                displayTotal: displayTotal,
                 servingCalcs: calculated
             });
         });
@@ -743,25 +764,49 @@ function showServingOverview() {
         return;
     }
 
+    // 토글 버튼
+    const currentActive = servingViewMode === 'current' ? 'background:#1565c0; color:white;' : 'background:#e0e0e0; color:#333;';
+    const afterActive = servingViewMode === 'afterOrder' ? 'background:#ff5722; color:white;' : 'background:#e0e0e0; color:#333;';
+    const afterDisabled = !hasOrderData ? 'opacity:0.4; pointer-events:none;' : '';
+
     let html = `
-        <div style="background:#e8f5e9; border:1px solid #a5d6a7; border-radius:6px; padding:10px; margin-bottom:12px; font-size:12px; color:#2e7d32;">
-            현재 재고 기준으로 각 품목이 몇 인분 분량인지 보여줍니다.
+        <div style="display:flex; gap:0; margin-bottom:12px; border-radius:8px; overflow:hidden; border:1px solid #ddd;">
+            <button onclick="showServingOverview('current')" style="flex:1; padding:10px; border:none; font-size:14px; font-weight:bold; cursor:pointer; ${currentActive}">
+                📦 현재 재고
+            </button>
+            <button onclick="showServingOverview('afterOrder')" style="flex:1; padding:10px; border:none; font-size:14px; font-weight:bold; cursor:pointer; ${afterActive} ${afterDisabled}">
+                🚚 발주 후 예상
+            </button>
         </div>
     `;
 
-    // 품목별 카드 형태로 표시
+    if (servingViewMode === 'afterOrder' && hasOrderData) {
+        html += `<div style="background:#fff3e0; border:1px solid #ffb74d; border-radius:6px; padding:10px; margin-bottom:12px; font-size:12px; color:#e65100;">
+            현재 재고 + 발주 수량을 합산한 예상 인분입니다.
+        </div>`;
+    } else if (servingViewMode === 'current') {
+        html += `<div style="background:#e8f5e9; border:1px solid #a5d6a7; border-radius:6px; padding:10px; margin-bottom:12px; font-size:12px; color:#2e7d32;">
+            현재 재고 기준으로 각 품목이 몇 인분 분량인지 보여줍니다.${!hasOrderData ? '' : ' <strong>발주 후 예상</strong> 탭에서 발주 반영 수치도 확인할 수 있습니다.'}
+        </div>`;
+    }
+
+    // 품목별 카드
     servingItems.forEach(item => {
         const vendorShort = item.vendor.substr(0, 2);
+        const isAfter = servingViewMode === 'afterOrder';
+        const stockLabel = isAfter
+            ? `${item.currentTotal} + <span style="color:#ff5722;">${item.orderQty}</span> = <strong>${item.afterOrderTotal}</strong>`
+            : `<strong>${item.currentTotal}</strong>`;
 
         html += `
-            <div style="background:white; border:1px solid #e0e0e0; border-radius:8px; padding:12px; margin-bottom:10px;">
+            <div style="background:white; border:1px solid #e0e0e0; border-radius:8px; padding:12px; margin-bottom:10px; ${isAfter && item.orderQty > 0 ? 'border-left:4px solid #ff5722;' : ''}">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                     <div>
                         <span style="font-size:10px; background:#e3f2fd; color:#1565c0; padding:2px 5px; border-radius:3px;">${vendorShort}</span>
                         <strong style="margin-left:5px; font-size:15px;">${item.품목명}</strong>
                     </div>
                     <div style="font-size:13px; color:#666;">
-                        현재 <strong style="color:#333;">${item.totalStock}</strong> ${item.발주단위}
+                        ${stockLabel} ${item.발주단위}
                     </div>
                 </div>
                 <div style="display:flex; flex-wrap:wrap; gap:6px;">`;
@@ -787,5 +832,6 @@ function showServingOverview() {
 }
 
 function closeServingOverview() {
+    servingViewMode = 'current';
     document.getElementById('servingOverviewModal').classList.remove('active');
 }
