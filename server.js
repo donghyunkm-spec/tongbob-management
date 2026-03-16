@@ -1021,19 +1021,45 @@ cron.schedule('0 10 * * *', async () => {
 
         // 5일 이상 미발주 품목만
         const alertItems = itemList.filter(i => i.daysSince >= 5);
-        if (alertItems.length === 0) return;
 
-        let msg = `⚠️ [장기 미발주 품목 알림]\n`;
-        msg += `${today.getMonth()+1}/${today.getDate()} 기준, 5일 이상 미발주\n\n`;
-        alertItems.forEach((item, idx) => {
-            const dateStr = item.lastDate || '기록없음';
-            const dateDisplay = item.daysSince === 999
-                ? '발주기록없음'
-                : `${item.daysSince}일 전(${item.lastDate})`;
-            msg += `${idx+1}. ${item.name} (${item.vendor.substr(0,2)}) - ${dateDisplay}\n`;
+        if (alertItems.length > 0) {
+            let msg = `⚠️ [장기 미발주 품목 알림]\n`;
+            msg += `${today.getMonth()+1}/${today.getDate()} 기준, 5일 이상 미발주\n\n`;
+            alertItems.forEach((item, idx) => {
+                const dateDisplay = item.daysSince === 999
+                    ? '발주기록없음'
+                    : `${item.daysSince}일 전(${item.lastDate})`;
+                msg += `${idx+1}. ${item.name} (${item.vendor.substr(0,2)}) - ${dateDisplay}\n`;
+            });
+            await sendToTelegram(msg);
+        }
+
+        // 전체 재고 현황 메시지
+        const currentInventory = readJson(INVENTORY_CURRENT_FILE, {});
+        let stockMsg = `📊 [전체 재고 현황]\n${today.getMonth()+1}/${today.getDate()} 기준\n`;
+
+        const vendorOrder = ['고센유통', '한강유통(고기)', '인터넷발주'];
+        vendorOrder.forEach(vendor => {
+            if (!itemsData[vendor] || itemsData[vendor].length === 0) return;
+            stockMsg += `\n📦 ${vendor}\n`;
+            itemsData[vendor].forEach(item => {
+                const key = `${vendor}_${item.품목명}`;
+                const stock1 = currentInventory[`1루_${key}`] || 0;
+                const stock3 = currentInventory[`3루_${key}`] || 0;
+                const locations = item.locations || ['1루', '3루'];
+                let stockText;
+                if (locations.length === 1) {
+                    stockText = `${locations[0]}: ${locations[0] === '1루' ? stock1 : stock3}`;
+                } else {
+                    stockText = `1루:${stock1} / 3루:${stock3}`;
+                }
+                const total = stock1 + stock3;
+                const warn = total === 0 ? ' ⚠️' : '';
+                stockMsg += `  ${item.품목명} → ${stockText} (합계:${total})${warn}\n`;
+            });
         });
 
-        await sendToTelegram(msg);
+        await sendToTelegram(stockMsg);
     } catch (e) { console.error('미발주 알림 실패:', e); }
 }, { timezone: "Asia/Seoul" });
 
