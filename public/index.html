@@ -417,12 +417,24 @@
                             <span style="font-size:12px; color:#666;">체크하면 발주 계산에서 제외 (직접 만드는 품목 등)</span>
                         </div>
                     </div>
+                    <div class="form-row">
+                        <label>인분 정보 <span style="font-size:11px; color:#888; font-weight:normal;">(1단위당 몇 인분인지)</span></label>
+                        <div id="editServingsContainer"></div>
+                        <button type="button" onclick="addEditServingRow()" style="margin-top:5px; padding:5px 10px; font-size:12px; background:#e3f2fd; border:1px solid #90caf9; border-radius:4px; cursor:pointer; color:#1565c0;">+ 용도 추가</button>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer"><button onclick="saveEditItem()" class="btn-primary">수정 완료</button></div>
         </div>
     </div>
     
+    <div id="servingOverviewModal" class="modal">
+        <div class="modal-content" style="max-width:500px;">
+            <div class="modal-header"><h2>📏 인분 현황</h2><button class="close-btn" onclick="closeServingOverview()">×</button></div>
+            <div class="modal-body" id="servingOverviewContent" style="max-height:70vh; overflow-y:auto;"></div>
+        </div>
+    </div>
+
     <div id="noOrderModal" class="modal">
         <div class="modal-content">
             <div class="modal-header"><h2>⚠️ 장기 미발주</h2><button class="close-btn" onclick="closeNoOrderModal()">×</button></div>
@@ -925,10 +937,16 @@
                             <button onclick="changeCheckDate(1)" class="number-btn">&gt;</button>
                         </div>
                         
-                        <button id="btnStartOrder" onclick="triggerOrderProcess()" 
-                            style="background:#ff5722; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; box-shadow:0 2px 5px rgba(0,0,0,0.2);">
-                            🚀 발주 진행
-                        </button>
+                        <div style="display:flex; gap:8px;">
+                            <button onclick="showServingOverview()"
+                                style="background:#1565c0; color:white; border:none; padding:10px 15px; border-radius:5px; font-weight:bold; box-shadow:0 2px 5px rgba(0,0,0,0.2);">
+                                📏 인분현황
+                            </button>
+                            <button id="btnStartOrder" onclick="triggerOrderProcess()"
+                                style="background:#ff5722; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; box-shadow:0 2px 5px rgba(0,0,0,0.2);">
+                                🚀 발주 진행
+                            </button>
+                        </div>
                     </div>
 
                     <div style="margin-bottom:10px; padding:10px; background:#e3f2fd; border-radius:5px; font-size:12px; color:#1565C0;">
@@ -988,6 +1006,11 @@
                             <label style="display:flex; align-items:center; gap:3px; margin:0;">
                                 <input type="checkbox" id="newItemLoc3" checked> 3루
                             </label>
+                        </div>
+
+                        <div class="form-row" style="display:flex; gap:5px; align-items:center;">
+                            <input type="text" id="newServingName" placeholder="용도 (선택)" style="padding:8px; flex:1;">
+                            <input type="number" id="newServingPerUnit" placeholder="인분/1단위" step="0.1" style="padding:8px; width:90px;">
                         </div>
 
                         <button onclick="addNewItem()" class="btn-primary" style="padding:8px 15px; white-space: nowrap;">추가</button>

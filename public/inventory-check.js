@@ -206,11 +206,16 @@ function renderInventoryCheck() {
                 vendorBadge = `<span style="font-size:10px; color:#888; background:#eee; padding:1px 3px; border-radius:2px; margin-right:4px;">${item.vendor.substr(0,2)}</span>`;
             }
 
+            const servingBadge = item.servings && item.servings.length > 0
+                ? `<div style="font-size:10px; color:#1565c0; margin-top:1px;">📏 ${getServingDisplayText(item)}</div>`
+                : '';
+
             tableHtml += `
                 <tr>
                     <td style="text-align:left; line-height:1.3;">
                         ${vendorBadge}${item.품목명}
                         ${infoBadge}
+                        ${servingBadge}
                     </td>
                     <td>${item.stock1}</td>
                     <td>${item.stock3}</td>
@@ -685,4 +690,102 @@ function copyToKakao() {
         console.error('복사 실패:', err);
         showAlert('복사 실패', 'error');
     });
+}
+
+// ==========================================
+// 인분 현황 모달
+// ==========================================
+function showServingOverview() {
+    const modal = document.getElementById('servingOverviewModal');
+    const content = document.getElementById('servingOverviewContent');
+
+    // 현재 재고 데이터 수집
+    let displayInventory = {};
+    Object.keys(inventory).filter(k => !k.startsWith('meta_')).forEach(k => displayInventory[k] = inventory[k]);
+    // lastSaved도 합치기 (입력 안 된 매장 보완)
+    Object.keys(lastSavedInventory).filter(k => !k.startsWith('meta_')).forEach(k => {
+        if (displayInventory[k] === undefined) displayInventory[k] = lastSavedInventory[k];
+    });
+
+    // 인분 정보가 있는 품목만 수집
+    let servingItems = [];
+    Object.keys(items).forEach(vendor => {
+        items[vendor].forEach(item => {
+            if (!item.servings || item.servings.length === 0) return;
+
+            const rawKey = `${vendor}_${item.품목명}`;
+            const stock1 = displayInventory[`1루_${rawKey}`] || 0;
+            const stock3 = displayInventory[`3루_${rawKey}`] || 0;
+            const totalStock = stock1 + stock3;
+
+            const calculated = item.servings.map(s => ({
+                name: s.name || '',
+                servings: Math.floor(totalStock * s.perUnit)
+            }));
+
+            servingItems.push({
+                품목명: item.품목명,
+                vendor: vendor,
+                발주단위: item.발주단위,
+                totalStock: totalStock,
+                servingCalcs: calculated
+            });
+        });
+    });
+
+    if (servingItems.length === 0) {
+        content.innerHTML = `
+            <div style="text-align:center; padding:30px; color:#999;">
+                <p style="font-size:16px; margin-bottom:10px;">인분 정보가 설정된 품목이 없습니다.</p>
+                <p style="font-size:13px;">품목관리 탭에서 품목을 수정(✏️)하여<br>"인분 정보"를 추가해주세요.</p>
+            </div>`;
+        modal.classList.add('active');
+        return;
+    }
+
+    let html = `
+        <div style="background:#e8f5e9; border:1px solid #a5d6a7; border-radius:6px; padding:10px; margin-bottom:12px; font-size:12px; color:#2e7d32;">
+            현재 재고 기준으로 각 품목이 몇 인분 분량인지 보여줍니다.
+        </div>
+    `;
+
+    // 품목별 카드 형태로 표시
+    servingItems.forEach(item => {
+        const vendorShort = item.vendor.substr(0, 2);
+
+        html += `
+            <div style="background:white; border:1px solid #e0e0e0; border-radius:8px; padding:12px; margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <div>
+                        <span style="font-size:10px; background:#e3f2fd; color:#1565c0; padding:2px 5px; border-radius:3px;">${vendorShort}</span>
+                        <strong style="margin-left:5px; font-size:15px;">${item.품목명}</strong>
+                    </div>
+                    <div style="font-size:13px; color:#666;">
+                        현재 <strong style="color:#333;">${item.totalStock}</strong> ${item.발주단위}
+                    </div>
+                </div>
+                <div style="display:flex; flex-wrap:wrap; gap:6px;">`;
+
+        item.servingCalcs.forEach(calc => {
+            const label = calc.name ? calc.name : '';
+            const color = calc.servings <= 0 ? '#f44336' : calc.servings <= 50 ? '#ff9800' : '#4caf50';
+            const bgColor = calc.servings <= 0 ? '#ffebee' : calc.servings <= 50 ? '#fff3e0' : '#e8f5e9';
+
+            html += `
+                <div style="background:${bgColor}; border:1px solid ${color}; border-radius:6px; padding:8px 12px; flex:1; min-width:120px; text-align:center;">
+                    ${label ? `<div style="font-size:11px; color:#666; margin-bottom:3px;">${label}</div>` : ''}
+                    <div style="font-size:22px; font-weight:bold; color:${color};">${calc.servings}</div>
+                    <div style="font-size:11px; color:#888;">인분</div>
+                </div>`;
+        });
+
+        html += `</div></div>`;
+    });
+
+    content.innerHTML = html;
+    modal.classList.add('active');
+}
+
+function closeServingOverview() {
+    document.getElementById('servingOverviewModal').classList.remove('active');
 }

@@ -243,6 +243,7 @@ function renderUnifiedInventoryForm() {
                         ${isAlert ? '<span style="color:red; font-size:10px;">⚠️</span>' : ''}
                         ${item.관리주기 === 'weekly' ? '<span style="color:blue; font-size:10px;">[주간]</span>' : ''}
                     </span>
+                    ${item.servings && item.servings.length > 0 ? `<div style="font-size:10px; color:#1565c0; font-weight:normal; margin-top:1px;">📏 ${getServingDisplayText(item)}</div>` : ''}
                 </div>
 
                 <div class="irc-controls">

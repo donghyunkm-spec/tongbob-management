@@ -445,7 +445,41 @@ function renderManual() {
             </div>
 
             <div class="manual-box">
-                <h3 class="manual-title">3️⃣ 발주 보내기</h3>
+                <h3 class="manual-title">3️⃣ 인분 정보 & 인분 현황</h3>
+                <div class="manual-content">
+                    <p>각 품목이 <strong>몇 인분 분량</strong>인지 설정해두면, 현재 재고가 몇 인분인지 자동으로 계산해줍니다.</p>
+
+                    <div class="manual-card">
+                        <h4>📝 인분 정보 설정하기</h4>
+                        <ol>
+                            <li><strong>[품목관리]</strong> 탭에서 원하는 품목의 <strong>✏️ 수정</strong> 버튼을 누릅니다.</li>
+                            <li>맨 아래 <strong>"인분 정보"</strong> 영역에서 <strong>[+ 용도 추가]</strong> 버튼을 누릅니다.</li>
+                            <li><strong>용도</strong>(선택)와 <strong>인분수/1단위</strong>를 입력합니다.</li>
+                        </ol>
+                        <div class="manual-formula">
+                            1단위(kg, 박스 등)당 몇 인분인지 숫자를 입력하세요
+                        </div>
+                        <ul>
+                            <li><strong>삼겹살:</strong> 1인분=380g이면 → 1kg당 약 <strong>2.63</strong>인분 (1000÷380)</li>
+                            <li><strong>소면:</strong> 1박스=40개 → 인분수에 <strong>40</strong> 입력</li>
+                            <li><strong>김치:</strong> 도시락용 100인분/박스, 국수용 100인분/박스 → <strong>용도별로 2개</strong> 추가</li>
+                        </ul>
+                    </div>
+
+                    <div class="manual-card">
+                        <h4>📏 인분 현황 보기</h4>
+                        <p><strong>[🔎 재고확인]</strong> 탭에서 <span class="badge-btn" style="background:#1565c0;">📏 인분현황</span> 버튼을 누르면:</p>
+                        <ul>
+                            <li>인분 정보가 설정된 품목들의 <strong>현재 재고 → 인분 환산</strong>을 한눈에 볼 수 있습니다.</li>
+                            <li>색상으로 빠르게 파악: <span style="color:#4caf50; font-weight:bold;">초록</span>(충분) / <span style="color:#ff9800; font-weight:bold;">주황</span>(50인분 이하) / <span style="color:#f44336; font-weight:bold;">빨강</span>(0인분)</li>
+                            <li>바쁜 날/한가한 날 감안해서 재고가 충분한지 빠르게 판단할 수 있습니다.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="manual-box">
+                <h3 class="manual-title">4️⃣ 발주 보내기</h3>
                 <div class="manual-content">
                     <ol>
                         <li><strong>[🔎 재고확인]</strong> 탭으로 이동합니다.</li>

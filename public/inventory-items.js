@@ -86,6 +86,9 @@ function renderManageItems() {
                     ${item.발주제외
                         ? `<span style="background:#ffebee; color:#c62828; font-size:10px; padding:2px 5px; border-radius:3px; margin-left:5px;">🚫 발주제외</span>`
                         : ''}
+                    ${item.servings && item.servings.length > 0
+                        ? `<div style="font-size:11px; color:#1565c0; margin-top:2px;">📏 ${item.servings.map(s => (s.name ? s.name + ' ' : '') + s.perUnit + '인분/' + (item.발주단위||'단위')).join(' · ')}</div>`
+                        : ''}
                 </div>
 
                 <div class="mrg-actions">
@@ -271,13 +274,19 @@ async function addNewItem() {
         return;
     }
 
+    const servingName = document.getElementById('newServingName')?.value.trim() || '';
+    const servingPerUnit = parseFloat(document.getElementById('newServingPerUnit')?.value) || 0;
+
     const newItem = {
         "품목명": name,
         "발주단위": unit || '개',
         "중요도": importance,
         "관리주기": cycle,
-        "locations": locations  // [NEW] 위치 정보
+        "locations": locations
     };
+    if (servingPerUnit > 0) {
+        newItem.servings = [{ name: servingName, perUnit: servingPerUnit }];
+    }
 
     items[vendor].push(newItem);
 
@@ -293,6 +302,10 @@ async function addNewItem() {
         if (result.success) {
             document.getElementById('newItemName').value = '';
             document.getElementById('newItemUnit').value = '';
+            const newServName = document.getElementById('newServingName');
+            const newServPU = document.getElementById('newServingPerUnit');
+            if (newServName) newServName.value = '';
+            if (newServPU) newServPU.value = '';
             if (loc1) loc1.checked = true;
             if (loc3) loc3.checked = true;
 
@@ -337,6 +350,18 @@ function openEditItemModal(vendor, index) {
     const editSkipOrder = document.getElementById('editSkipOrder');
     if (editSkipOrder) editSkipOrder.checked = item.발주제외 || false;
 
+    // 인분 정보 설정 (구조화된 servings)
+    const container = document.getElementById('editServingsContainer');
+    if (container) {
+        container.innerHTML = '';
+        if (item.servings && item.servings.length > 0) {
+            item.servings.forEach(s => addEditServingRow(s.name || '', s.perUnit || ''));
+        } else if (item.servingInfo) {
+            // 이전 텍스트 형식 호환: 빈 행 하나 추가
+            addEditServingRow('', '');
+        }
+    }
+
     // 위치 정보 설정
     const editLoc1 = document.getElementById('editLoc1');
     const editLoc3 = document.getElementById('editLoc3');
@@ -372,6 +397,9 @@ function saveEditItem() {
     const editSkipOrder = document.getElementById('editSkipOrder');
     const newSkipOrder = editSkipOrder ? editSkipOrder.checked : false;
 
+    // 인분 정보 수집 (구조화)
+    const newServings = getEditServings();
+
     // 위치 정보 수집
     const editLoc1 = document.getElementById('editLoc1');
     const editLoc3 = document.getElementById('editLoc3');
@@ -399,8 +427,11 @@ function saveEditItem() {
         "locations": newLocations,
         "thresholdQty": newThreshold,
         "minOrderQty": newMinOrder,
-        "발주제외": newSkipOrder
+        "발주제외": newSkipOrder,
+        "servings": newServings.length > 0 ? newServings : undefined
     };
+    // 이전 텍스트 형식 제거
+    delete items[vendor][index].servingInfo;
 
     closeEditItemModal();
     renderManageItems();
@@ -430,4 +461,44 @@ async function saveItemChanges() {
         showAlert(`에러 발생: ${e.message}`, 'error');
         renderUnifiedInventoryForm();
     }
+}
+
+// ==========================================
+// 인분 정보 편집 헬퍼
+// ==========================================
+function addEditServingRow(name, perUnit) {
+    const container = document.getElementById('editServingsContainer');
+    if (!container) return;
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; gap:5px; margin-bottom:5px; align-items:center;';
+    row.innerHTML = `
+        <input type="text" class="serving-name" value="${name || ''}" placeholder="용도 (예: 도시락)" style="flex:1; padding:6px; font-size:13px; border:1px solid #ddd; border-radius:4px;">
+        <input type="number" class="serving-per-unit" value="${perUnit || ''}" placeholder="인분수" step="0.1" style="width:70px; padding:6px; font-size:13px; border:1px solid #ddd; border-radius:4px;">
+        <span style="font-size:11px; color:#666; white-space:nowrap;">/1단위</span>
+        <button type="button" onclick="this.parentElement.remove()" style="background:#f44336; color:white; border:none; border-radius:3px; padding:4px 8px; cursor:pointer; font-size:14px;">×</button>
+    `;
+    container.appendChild(row);
+}
+
+function getEditServings() {
+    const rows = document.querySelectorAll('#editServingsContainer > div');
+    const servings = [];
+    rows.forEach(row => {
+        const name = row.querySelector('.serving-name').value.trim();
+        const perUnit = parseFloat(row.querySelector('.serving-per-unit').value);
+        if (perUnit > 0) {
+            servings.push({ name: name, perUnit: perUnit });
+        }
+    });
+    return servings;
+}
+
+// 인분 표시 텍스트 생성 헬퍼
+function getServingDisplayText(item) {
+    if (!item.servings || item.servings.length === 0) return '';
+    const unit = item.발주단위 || '단위';
+    return item.servings.map(s => {
+        const label = s.name ? s.name + ' ' : '';
+        return `${label}${s.perUnit}인분/${unit}`;
+    }).join(' · ');
 }
