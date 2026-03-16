@@ -18,44 +18,53 @@ function renderManageItems() {
             </div>
 
             <div class="sort-toggle-group">
+                <label class="sort-toggle-label ${manageSortMode==='all' ? 'checked' : ''}">
+                    <input type="radio" name="sortMode" value="all"
+                        ${manageSortMode==='all' ? 'checked' : ''}
+                        onchange="changeSortMode(this.value)">
+                    📋 전체
+                </label>
                 <label class="sort-toggle-label ${manageSortMode==='1루' ? 'checked' : ''}">
                     <input type="radio" name="sortMode" value="1루"
                         ${manageSortMode==='1루' ? 'checked' : ''}
                         onchange="changeSortMode(this.value)">
-                    ⚾ 1루 매장 순서
+                    ⚾ 1루 순서
                 </label>
                 <label class="sort-toggle-label ${manageSortMode==='3루' ? 'checked' : ''}">
                     <input type="radio" name="sortMode" value="3루"
                         ${manageSortMode==='3루' ? 'checked' : ''}
                         onchange="changeSortMode(this.value)">
-                    ⚾ 3루 매장 순서
+                    ⚾ 3루 순서
                 </label>
             </div>
         </div>
 
-        <div style="margin-bottom:10px; color:#666; font-size:11px; text-align:center; background:#fff3e0; padding:5px; border-radius:4px;">
+        ${manageSortMode !== 'all' ? `<div style="margin-bottom:10px; color:#666; font-size:11px; text-align:center; background:#fff3e0; padding:5px; border-radius:4px;">
             💡 위아래 화살표(▲▼)를 눌러 <strong>선택된 매장의 순서</strong>를 변경하세요.
-        </div>
+        </div>` : ''}
     `;
 
-    // 2. sort 값 없는 품목에 자동 번호 부여 (초기화)
-    const sortProp = (manageSortMode === '1루') ? 'sort1' : 'sort3';
-    let maxSort = -1;
-    Object.keys(items).forEach(vendor => {
-        if (!items[vendor]) return;
-        items[vendor].forEach(item => {
-            if (typeof item[sortProp] === 'number') maxSort = Math.max(maxSort, item[sortProp]);
+    // 2. sort 값 없는 품목에 자동 번호 부여 (초기화) - 전체 모드에서는 불필요
+    const isAllMode = manageSortMode === 'all';
+    const sortProp = (manageSortMode === '3루') ? 'sort3' : 'sort1';
+    if (!isAllMode) {
+        let maxSort = -1;
+        Object.keys(items).forEach(vendor => {
+            if (!items[vendor]) return;
+            items[vendor].forEach(item => {
+                if (typeof item[sortProp] === 'number') maxSort = Math.max(maxSort, item[sortProp]);
+            });
         });
-    });
-    Object.keys(items).forEach(vendor => {
-        if (!items[vendor]) return;
-        items[vendor].forEach(item => {
-            if (typeof item[sortProp] !== 'number') {
-                maxSort++;
-                item[sortProp] = maxSort;
-            }
+        Object.keys(items).forEach(vendor => {
+            if (!items[vendor]) return;
+            items[vendor].forEach(item => {
+                if (typeof item[sortProp] !== 'number') {
+                    maxSort++;
+                    item[sortProp] = maxSort;
+                }
+            });
         });
-    });
+    }
 
     // 3. 통합 리스트 생성 (전역 정렬을 위해) - [NEW] 필터 적용
     let flatList = [];
@@ -68,36 +77,38 @@ function renderManageItems() {
     vendorsToShow.forEach(vendor => {
         if (!items[vendor]) return; // 업체가 없으면 스킵
         items[vendor].forEach((item, idx) => {
-            // 해당 매장에 속하지 않는 품목은 스킵
-            const locations = item.locations || ['1루', '3루'];
-            if (!locations.includes(manageSortMode)) return;
+            // 매장별 모드에서는 해당 매장 품목만 표시
+            if (!isAllMode) {
+                const locations = item.locations || ['1루', '3루'];
+                if (!locations.includes(manageSortMode)) return;
+            }
 
             flatList.push({
                 ...item,
                 vendor: vendor,
-                originalIdx: idx, // 원본 배열에서의 인덱스
-                sortKey: item[sortProp] ?? 9999
+                originalIdx: idx,
+                sortKey: isAllMode ? idx : (item[sortProp] ?? 9999)
             });
         });
     });
 
-    // 현재 모드 기준으로 정렬
-    flatList.sort((a, b) => a.sortKey - b.sortKey);
+    // 현재 모드 기준으로 정렬 (전체 모드에서는 업체별 원본 순서)
+    if (!isAllMode) flatList.sort((a, b) => a.sortKey - b.sortKey);
 
     // 3. 리스트 렌더링
     let listHtml = '<ul style="list-style:none; padding:0;">';
     flatList.forEach((item, visualIdx) => {
         listHtml += `
             <li class="manage-row-global">
-                <div style="display:flex; flex-direction:column; gap:2px; margin-right:10px;">
+                ${!isAllMode ? `<div style="display:flex; flex-direction:column; gap:2px; margin-right:10px;">
                     <button onclick="moveGlobalSort(${visualIdx}, -1)" style="border:1px solid #ddd; background:white; padding:2px 8px; cursor:pointer;">▲</button>
                     <button onclick="moveGlobalSort(${visualIdx}, 1)" style="border:1px solid #ddd; background:white; padding:2px 8px; cursor:pointer;">▼</button>
-                </div>
+                </div>` : ''}
 
                 <div class="mrg-info">
                     <span style="font-size:11px; background:#e3f2fd; color:#1565C0; padding:2px 4px; border-radius:3px;">${item.vendor}</span>
                     <span style="font-weight:bold; margin-left:5px;">${item.품목명}</span>
-                    <span style="color:#999; font-size:12px;">(현재순서: ${item.sortKey===9999 ? '없음' : item.sortKey})</span>
+                    ${!isAllMode ? `<span style="color:#999; font-size:12px;">(현재순서: ${item.sortKey===9999 ? '없음' : item.sortKey})</span>` : ''}
                     ${item.locations && item.locations.length > 0
                         ? `<span style="background:#e8f5e9; color:#2e7d32; font-size:10px; padding:2px 5px; border-radius:3px; margin-left:5px;">📍 ${item.locations.join(', ')}</span>`
                         : '<span style="background:#f5f5f5; color:#888; font-size:10px; padding:2px 5px; border-radius:3px; margin-left:5px;">📍 모든 위치</span>'}

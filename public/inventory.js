@@ -22,7 +22,7 @@ let showWeeklyForced = false;
 let checkDateOffset = 0;
 let currentConfirmItems = {};
 let currentWarnings = {};
-let manageSortMode = '1루';
+let manageSortMode = 'all';
 
 // 재고확인 필터 변수
 let checkSearchText = '';
