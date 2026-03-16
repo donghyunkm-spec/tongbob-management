@@ -97,6 +97,11 @@ function renderManageItems() {
                     ${item.locations && item.locations.length > 0
                         ? `<span style="background:#e8f5e9; color:#2e7d32; font-size:10px; padding:2px 5px; border-radius:3px; margin-left:5px;">📍 ${item.locations.join(', ')}</span>`
                         : '<span style="background:#f5f5f5; color:#888; font-size:10px; padding:2px 5px; border-radius:3px; margin-left:5px;">📍 모든 위치</span>'}
+                    ${item.minStockPerLocation
+                        ? `<span style="background:#e8eaf6; color:#283593; font-size:10px; padding:2px 5px; border-radius:3px; margin-left:5px;">
+                            🏪 매장별 최소:${item.minStockPerLocation}
+                           </span>`
+                        : ''}
                     ${item.thresholdQty || item.minOrderQty
                         ? `<span style="background:#fff3e0; color:#e65100; font-size:10px; padding:2px 5px; border-radius:3px; margin-left:5px;">
                             📊 임계:${item.thresholdQty || '-'} / 최소:${item.minOrderQty || '-'}
@@ -373,6 +378,9 @@ function openEditItemModal(vendor, index) {
     document.getElementById('editImportance').value = item.중요도 || '중';
     document.getElementById('editCycle').value = item.관리주기 || 'daily';
 
+    // 매장별 최소재고 설정
+    document.getElementById('editMinStockPerLocation').value = item.minStockPerLocation || '';
+
     // 임계값/최소발주량 설정
     document.getElementById('editThreshold').value = item.thresholdQty || '';
     document.getElementById('editMinOrder').value = item.minOrderQty || '';
@@ -418,6 +426,10 @@ function saveEditItem() {
     const newImp = document.getElementById('editImportance').value;
     const newCycle = document.getElementById('editCycle').value;
 
+    // 매장별 최소재고 수집
+    const minStockPerLocVal = document.getElementById('editMinStockPerLocation').value.trim();
+    const newMinStockPerLocation = minStockPerLocVal ? parseFloat(minStockPerLocVal) : null;
+
     // 임계값/최소발주량 수집
     const thresholdVal = document.getElementById('editThreshold').value.trim();
     const minOrderVal = document.getElementById('editMinOrder').value.trim();
@@ -456,6 +468,7 @@ function saveEditItem() {
         "중요도": newImp,
         "관리주기": newCycle,
         "locations": newLocations,
+        "minStockPerLocation": newMinStockPerLocation,
         "thresholdQty": newThreshold,
         "minOrderQty": newMinOrder,
         "발주제외": newSkipOrder,

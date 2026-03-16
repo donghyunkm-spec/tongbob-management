@@ -408,6 +408,20 @@ function checkOrderConfirmation() {
                 else orderAmountRaw = 0;
             }
 
+            // 매장별 최소재고 체크: 각 매장 재고가 최소값 미만이면 부족분 추가
+            if (item.minStockPerLocation) {
+                const minStock = item.minStockPerLocation;
+                let locationDeficit = 0;
+                const locations = item.locations || ['1루', '3루'];
+                locations.forEach(loc => {
+                    const locStock = inventory[`${loc}_${rawItemKey}`] || 0;
+                    if (locStock < minStock) {
+                        locationDeficit += Math.ceil(minStock - locStock);
+                    }
+                });
+                orderAmountRaw = Math.max(orderAmountRaw, locationDeficit);
+            }
+
             let displayQty = 0;
             let displayUnit = item.발주단위;
             if (vendor === '한강유통(고기)') {
