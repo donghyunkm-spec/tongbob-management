@@ -45,6 +45,7 @@ Single Express.js file handling all API routes. Uses file-based JSON storage (no
 **Scheduled Tasks (node-cron, all KST):**
 - 03:00: Auto-backup to `data/backups/` (14-day retention, max 14 files)
 - 09:00: Telegram daily schedule notification
+- 10:00: Telegram inventory alerts — long-term no-order items (≥5 days, sorted oldest first with date) + full stock status by vendor (per-location quantities)
 - 11:00: Kakao daily business briefing (`generateAndSendBriefing`)
 - 11:30: Kakao staff schedule notification
 
@@ -88,6 +89,19 @@ All JSON files are auto-initialized if missing:
 **Soft Delete:** Staff deletion sets `deleted: true` with `deletedAt` timestamp. Permanent deletion allowed after 30 days.
 
 **Inventory Keys:** Items use composite keys like `{location}_{vendor}_{itemName}` (e.g., `1루_고센유통_양파`) in `inventory.json`. Last order keys omit location: `{vendor}_{itemName}`.
+
+**Inventory Ordering — Three Mechanisms (inventory-check.js):**
+1. **Consumption-based** (default): `(dailyUsage × daysUntilNextDelivery) - totalStock`. Applies when no threshold is set.
+2. **Threshold-based**: If `totalStock ≤ thresholdQty`, order exactly `minOrderQty`; otherwise 0. Overrides mechanism 1.
+3. **Per-location minimum** (`minStockPerLocation`, optional): For each location, if stock < minimum, `Math.ceil(minimum - stock)` is added. Final order = `max(mechanism 1 or 2 result, total location deficit)`. Useful for sauce/broth items where each store needs at least N spare units.
+
+**Weekly Items:** Items with `관리주기: 'weekly'` are normally shown/calculated on Tuesdays only. Two exceptions:
+- **Input form**: If the current location hasn't been saved since this week's Tuesday (`getThisWeekTuesday()`), weekly items remain visible on subsequent days until entered.
+- **Order calculation**: Weekly items with `dailyUsage > 0` are included in order calculations every day, not just Tuesdays.
+
+**Item Sort Per Location:** Each item has independent `sort1` (1루) and `sort3` (3루) sort indices. The item management tab has three modes: "전체" (all items, no reordering), "1루 순서" (only 1루 items, reorderable), "3루 순서" (only 3루 items, reorderable). Items only appear in location tabs matching their `locations` array.
+
+**Daily Usage in Item Edit:** The item edit modal includes a daily usage field that reads/writes `dailyUsage[vendor_itemName]` and persists to `/api/inventory/daily-usage` on save, so usage can be set from item management without visiting the dedicated usage tab.
 
 **Staff Salary Calculation:** Supports both monthly (`salaryType: 'monthly'`) and hourly (`salaryType: 'hourly'`) with prorated calculations based on `startDate`/`endDate`. Salary fields are stripped from API responses for non-admin roles.
 
