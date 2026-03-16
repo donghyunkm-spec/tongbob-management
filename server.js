@@ -823,28 +823,28 @@ app.post('/api/kakao/send-briefing', async (req, res) => {
 
 // 고정비 및 비용 계산 로직 업데이트 (자동계산 로직 추가)
 function extractStoreCosts(accData, staffData, monthStr, currentDay) {
-    let meat = 0, food = 0, etcDaily = 0, sales = 0;
-    
-    // 자동 계산을 위한 변수
-    let cardSalesTotal = 0;
-    let deliverySalesTotal = 0;
-    
+    let meat = 0, food = 0, etcDaily = 0;
+    let sales1 = 0, sales3 = 0;
+    let delivery1 = 0, delivery3 = 0;
+
     // 일일 데이터 합산
     if (accData.daily) {
         Object.keys(accData.daily).forEach(date => {
             if (date.startsWith(monthStr)) {
                 const d = accData.daily[date];
-                sales += (d.sales || 0);
+                sales1 += (d.sales1 || 0);
+                sales3 += (d.sales3 || 0);
+                delivery1 += (d.delivery1 || 0);
+                delivery3 += (d.delivery3 || 0);
                 meat += (d.meat || 0);
                 food += (d.food || 0);
                 etcDaily += (d.etc || 0);
-                
-                // 수수료 계산용 합산
-                cardSalesTotal += (d.card || 0);
-                deliverySalesTotal += (d.delivery || 0); 
             }
         });
     }
+
+    const sales = sales1 + sales3;
+    const deliverySalesTotal = delivery1 + delivery3;
 
     const m = (accData.monthly && accData.monthly[monthStr]) ? accData.monthly[monthStr] : {};
 
@@ -853,12 +853,11 @@ function extractStoreCosts(accData, staffData, monthStr, currentDay) {
     const deliveryFee = Math.floor(deliverySalesTotal * 0.06);
     const cardFee = 0;
 
-    const internet = m.internet || 0;
-    const water = m.water || 0;
-    const cleaning = m.cleaning || 0;
-    const operMgmt = m.operMgmt || 0;
-    const cctv = m.cctv || 0;
-    const etcFixed = m.etc_fixed || 0;
+    // 고정비 (1루 + 3루)
+    const fixedMisc = (m.internet1||0) + (m.water1||0) + (m.cleaning1||0) +
+                      (m.operMgmt1||0) + (m.cctv1||0) + (m.bizCard1||0) + (m.etc_fixed1||0) +
+                      (m.internet3||0) + (m.water3||0) + (m.cleaning3||0) +
+                      (m.operMgmt3||0) + (m.cctv3||0) + (m.bizCard3||0) + (m.etc_fixed3||0);
 
     const staffTotal = calculateServerStaffCost(staffData, monthStr);
 
@@ -866,33 +865,27 @@ function extractStoreCosts(accData, staffData, monthStr, currentDay) {
     const ratio = currentDay / lastDay;
 
     const itemsPred = {
-        commission: commission, 
+        commission: commission,
         deliveryFee: deliveryFee,
         cardFee: cardFee,
-        
-        internet: Math.floor(internet * ratio),
-        water: Math.floor(water * ratio),
-        cleaning: Math.floor(cleaning * ratio),
-        operMgmt: Math.floor(operMgmt * ratio),
-        cctv: Math.floor(cctv * ratio),
-        etcFixed: Math.floor(etcFixed * ratio),
+
+        fixedMisc: Math.floor(fixedMisc * ratio),
         staff: Math.floor(staffTotal * ratio),
-        
-        meat: meat, 
-        food: food, 
+
+        meat: meat,
+        food: food,
         etc: etcDaily
     };
-    
+
     const costPred = Object.values(itemsPred).reduce((a,b)=>a+b, 0);
     const profitPred = sales - costPred;
-    
-    const costFull = meat + food + etcDaily + staffTotal + 
-                     commission + deliveryFee + cardFee + 
-                     internet + water + cleaning + operMgmt + cctv + etcFixed;
-                     
+
+    const costFull = meat + food + etcDaily + staffTotal +
+                     commission + deliveryFee + cardFee + fixedMisc;
+
     const profitReal = sales - costFull;
 
-    return { sales, profitPred, profitReal, items: itemsPred };
+    return { sales, sales1, sales3, profitPred, profitReal, items: itemsPred, margin: sales > 0 ? ((profitPred / sales) * 100).toFixed(1) : '0.0' };
 }
 
 async function generateAndSendBriefing() {
@@ -980,6 +973,28 @@ cron.schedule('0 9 * * *', async () => {
         const dateStr = `${today.getMonth()+1}월 ${today.getDate()}일`;
         await sendToTelegram(`📅 [${dateStr} 근무현황]\n\n${msg}`);
     } catch (e) { console.error('텔레그램 근무현황 전송 실패:', e); }
+}, { timezone: "Asia/Seoul" });
+
+cron.schedule('30 9 * * *', async () => {
+    try {
+        const today = new Date();
+        const monthStr = today.toISOString().slice(0, 7);
+        const dayNum = today.getDate();
+        const acc = readJson(ACCOUNTING_FILE, { monthly: {}, daily: {} });
+        const staff = readJson(STAFF_FILE, []);
+        const data = extractStoreCosts(acc, staff, monthStr, dayNum);
+        const fmt = (n) => n.toLocaleString();
+        const dateStr = `${today.getMonth()+1}월 ${today.getDate()}일`;
+
+        let msg = `💰 [${dateStr} 수익 현황]\n\n`;
+        msg += `■ 총 매출: ${fmt(data.sales)}원\n`;
+        msg += `  ├ 1루: ${fmt(data.sales1)}원\n`;
+        msg += `  └ 3루: ${fmt(data.sales3)}원\n\n`;
+        msg += `■ 예상순익: ${fmt(data.profitPred)}원 (마진 ${data.margin}%)\n`;
+        msg += `■ 월간순익(고정비 완납): ${fmt(data.profitReal)}원`;
+
+        await sendToTelegram(msg);
+    } catch (e) { console.error('텔레그램 수익현황 전송 실패:', e); }
 }, { timezone: "Asia/Seoul" });
 
 cron.schedule('30 11 * * *', async () => {
