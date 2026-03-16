@@ -848,10 +848,10 @@ function extractStoreCosts(accData, staffData, monthStr, currentDay) {
 
     const m = (accData.monthly && accData.monthly[monthStr]) ? accData.monthly[monthStr] : {};
 
-    // 수수료/배달비/카드비는 실시간 계산값 우선
-    const commission = Math.floor(sales * 0.30);       
-    const deliveryFee = Math.floor(deliverySalesTotal * 0.0495); 
-    const cardFee = Math.floor(cardSalesTotal * 0.016); 
+    // 수수료: 아모제(28.5%) + 통빱(2.5%) + 배달(6%)
+    const commission = Math.floor(sales * 0.285) + Math.floor(sales * 0.025);
+    const deliveryFee = Math.floor(deliverySalesTotal * 0.06);
+    const cardFee = 0;
 
     const internet = m.internet || 0;
     const water = m.water || 0;

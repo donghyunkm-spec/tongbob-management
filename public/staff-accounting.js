@@ -337,6 +337,36 @@ function loadMonthlyForm() {
     setVal('fixCCTV3', mData.cctv3);
     setVal('fixBizCard3', mData.bizCard3);
     setVal('fixEtc3', mData.etc_fixed3);
+
+    // 자동 계산 수수료 (매출 기반)
+    let sales1Total = 0, delivery1Total = 0;
+    let sales3Total = 0, delivery3Total = 0;
+    if (accountingData.daily) {
+        Object.keys(accountingData.daily).forEach(date => {
+            if (date.startsWith(monthStr)) {
+                const d = accountingData.daily[date];
+                sales1Total += (d.sales1 || 0);
+                delivery1Total += (d.delivery1 || 0);
+                sales3Total += (d.sales3 || 0);
+                delivery3Total += (d.delivery3 || 0);
+            }
+        });
+    }
+
+    const setAutoFee = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.value = val > 0 ? Math.floor(val).toLocaleString() : '';
+    };
+
+    // 1루 수수료
+    setAutoFee('fixAmoze1', sales1Total * 0.285);
+    setAutoFee('fixTongbob1', sales1Total * 0.025);
+    setAutoFee('fixDeliveryFee1', delivery1Total * 0.06);
+
+    // 3루 수수료
+    setAutoFee('fixAmoze3', sales3Total * 0.285);
+    setAutoFee('fixTongbob3', sales3Total * 0.025);
+    setAutoFee('fixDeliveryFee3', delivery3Total * 0.06);
 }
 
 async function saveFixedCost() {
@@ -556,10 +586,10 @@ function renderPredictionStats() {
         deliverySalesTotal = deliverySalesTotal1;
         cardSalesTotal = cardSalesTotal1;
 
-        // 1루 수수료
-        commission = Math.floor(salesTotal1 * 0.30);
-        deliveryFee = Math.floor(deliverySalesTotal1 * 0.0495);
-        cardFee = Math.floor(cardSalesTotal1 * 0.016);
+        // 1루 수수료: 아모제(28.5%) + 통빱(2.5%) + 배달(6%)
+        commission = Math.floor(salesTotal1 * 0.285) + Math.floor(salesTotal1 * 0.025);
+        deliveryFee = Math.floor(deliverySalesTotal1 * 0.06);
+        cardFee = 0;
 
         // 1루 고정비
         fixedMisc = (mData.internet1||0) + (mData.water1||0) + (mData.cleaning1||0) +
@@ -577,10 +607,10 @@ function renderPredictionStats() {
         deliverySalesTotal = deliverySalesTotal3;
         cardSalesTotal = cardSalesTotal3;
 
-        // 3루 수수료
-        commission = Math.floor(salesTotal3 * 0.30);
-        deliveryFee = Math.floor(deliverySalesTotal3 * 0.0495);
-        cardFee = Math.floor(cardSalesTotal3 * 0.016);
+        // 3루 수수료: 아모제(28.5%) + 통빱(2.5%) + 배달(6%)
+        commission = Math.floor(salesTotal3 * 0.285) + Math.floor(salesTotal3 * 0.025);
+        deliveryFee = Math.floor(deliverySalesTotal3 * 0.06);
+        cardFee = 0;
 
         // 3루 고정비
         fixedMisc = (mData.internet3||0) + (mData.water3||0) + (mData.cleaning3||0) +
@@ -598,10 +628,11 @@ function renderPredictionStats() {
         deliverySalesTotal = deliverySalesTotal1 + deliverySalesTotal3;
         cardSalesTotal = cardSalesTotal1 + cardSalesTotal3;
 
-        // 전체 수수료
-        commission = Math.floor(salesTotal1 * 0.30) + Math.floor(salesTotal3 * 0.30);
-        deliveryFee = Math.floor(deliverySalesTotal1 * 0.0495) + Math.floor(deliverySalesTotal3 * 0.0495);
-        cardFee = Math.floor(cardSalesTotal1 * 0.016) + Math.floor(cardSalesTotal3 * 0.016);
+        // 전체 수수료: 아모제(28.5%) + 통빱(2.5%) + 배달(6%)
+        commission = Math.floor(salesTotal1 * 0.285) + Math.floor(salesTotal3 * 0.285)
+                   + Math.floor(salesTotal1 * 0.025) + Math.floor(salesTotal3 * 0.025);
+        deliveryFee = Math.floor(deliverySalesTotal1 * 0.06) + Math.floor(deliverySalesTotal3 * 0.06);
+        cardFee = 0;
 
         // 전체 고정비
         fixedMisc = (mData.internet1||0) + (mData.water1||0) + (mData.cleaning1||0) +
@@ -701,10 +732,10 @@ function renderDashboardStats() {
         // === 1루만 ===
         sales = sales1;
 
-        // 1루 수수료
-        commission = Math.floor(sales1.total * 0.30);
-        deliveryFee = Math.floor(sales1.delivery * 0.0495);
-        cardFee = Math.floor(sales1.card * 0.016);
+        // 1루 수수료: 아모제(28.5%) + 통빱(2.5%) + 배달(6%)
+        commission = Math.floor(sales1.total * 0.285) + Math.floor(sales1.total * 0.025);
+        deliveryFee = Math.floor(sales1.delivery * 0.06);
+        cardFee = 0;
 
         // 1루 고정비
         fixedMisc = (mData.internet1||0) + (mData.water1||0) + (mData.cleaning1||0) +
@@ -720,10 +751,10 @@ function renderDashboardStats() {
         // === 3루만 ===
         sales = sales3;
 
-        // 3루 수수료
-        commission = Math.floor(sales3.total * 0.30);
-        deliveryFee = Math.floor(sales3.delivery * 0.0495);
-        cardFee = Math.floor(sales3.card * 0.016);
+        // 3루 수수료: 아모제(28.5%) + 통빱(2.5%) + 배달(6%)
+        commission = Math.floor(sales3.total * 0.285) + Math.floor(sales3.total * 0.025);
+        deliveryFee = Math.floor(sales3.delivery * 0.06);
+        cardFee = 0;
 
         // 3루 고정비
         fixedMisc = (mData.internet3||0) + (mData.water3||0) + (mData.cleaning3||0) +
@@ -744,10 +775,11 @@ function renderDashboardStats() {
             total: sales1.total + sales3.total
         };
 
-        // 전체 수수료
-        commission = Math.floor(sales1.total * 0.30) + Math.floor(sales3.total * 0.30);
-        deliveryFee = Math.floor(sales1.delivery * 0.0495) + Math.floor(sales3.delivery * 0.0495);
-        cardFee = Math.floor(sales1.card * 0.016) + Math.floor(sales3.card * 0.016);
+        // 전체 수수료: 아모제(28.5%) + 통빱(2.5%) + 배달(6%)
+        commission = Math.floor(sales1.total * 0.285) + Math.floor(sales3.total * 0.285)
+                   + Math.floor(sales1.total * 0.025) + Math.floor(sales3.total * 0.025);
+        deliveryFee = Math.floor(sales1.delivery * 0.06) + Math.floor(sales3.delivery * 0.06);
+        cardFee = 0;
 
         // 전체 고정비
         fixedMisc = (mData.internet1||0) + (mData.water1||0) + (mData.cleaning1||0) +
@@ -840,12 +872,11 @@ function renderCostList(containerId, mData, staffCost, ratio, salesTotal, totalC
     }
 
     const items = [
-        { label: '🏠 수수료(30%)', val: fCommission, color: '#ab47bc' },
-        { label: '🛵 배달수수료', val: fDelivery, color: '#00bcd4' },
+        { label: '🏠 수수료(31%)', val: fCommission, color: '#ab47bc' },
+        { label: '🛵 배달수수료(6%)', val: fDelivery, color: '#00bcd4' },
         { label: '🥬 고센유통', val: cFood, color: '#8d6e63' },
         { label: '🥩 고기', val: cMeat, color: '#ef5350' },
         { label: '👥 인건비', val: fStaff, color: '#ba68c8' },
-        { label: '💳 카드수수료', val: fCardFee, color: '#9575cd' },
         { label: '🔧 관리/기타', val: fMisc + cEtc, color: '#90a4ae' }
     ].sort((a,b) => b.val - a.val);
 
