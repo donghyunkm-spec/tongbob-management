@@ -107,6 +107,7 @@ function renderManageItems() {
                             📊 임계:${item.thresholdQty || '-'} / 최소:${item.minOrderQty || '-'}
                            </span>`
                         : ''}
+                    ${(() => { const u = dailyUsage[`${item.vendor}_${item.품목명}`]; return u ? `<span style="background:#f3e5f5; color:#6a1b9a; font-size:10px; padding:2px 5px; border-radius:3px; margin-left:5px;">📦 사용량:${u}/${item.발주단위||'단위'}</span>` : ''; })()}
                     ${item.발주제외
                         ? `<span style="background:#ffebee; color:#c62828; font-size:10px; padding:2px 5px; border-radius:3px; margin-left:5px;">🚫 발주제외</span>`
                         : ''}
@@ -389,6 +390,16 @@ function openEditItemModal(vendor, index) {
     const editSkipOrder = document.getElementById('editSkipOrder');
     if (editSkipOrder) editSkipOrder.checked = item.발주제외 || false;
 
+    // 하루 사용량 설정
+    const usageKey = `${vendor}_${item.품목명}`;
+    const editDailyUsage = document.getElementById('editDailyUsage');
+    if (editDailyUsage) {
+        const usage = dailyUsage[usageKey] || 0;
+        editDailyUsage.value = usage > 0 ? usage : '';
+    }
+    const editDailyUsageUnit = document.getElementById('editDailyUsageUnit');
+    if (editDailyUsageUnit) editDailyUsageUnit.textContent = item.발주단위 || '';
+
     // 인분 정보 설정 (구조화된 servings)
     const container = document.getElementById('editServingsContainer');
     if (container) {
@@ -440,6 +451,10 @@ function saveEditItem() {
     const editSkipOrder = document.getElementById('editSkipOrder');
     const newSkipOrder = editSkipOrder ? editSkipOrder.checked : false;
 
+    // 하루 사용량 수집
+    const editDailyUsage = document.getElementById('editDailyUsage');
+    const newDailyUsage = editDailyUsage ? parseFloat(editDailyUsage.value) || 0 : 0;
+
     // 인분 정보 수집 (구조화)
     const newServings = getEditServings();
 
@@ -476,6 +491,16 @@ function saveEditItem() {
     };
     // 이전 텍스트 형식 제거
     delete items[vendor][index].servingInfo;
+
+    // 하루 사용량 저장
+    const usageKey = `${vendor}_${items[vendor][index].품목명}`;
+    dailyUsage[usageKey] = newDailyUsage;
+    // 비동기로 사용량 서버 저장 (실패해도 UI 블로킹 안함)
+    fetch(`${API_BASE}/api/inventory/daily-usage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usage: dailyUsage })
+    }).catch(e => console.error('사용량 저장 실패:', e));
 
     closeEditItemModal();
     renderManageItems();

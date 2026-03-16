@@ -210,7 +210,11 @@ function renderUnifiedInventoryForm() {
         if (item.locations && item.locations.length > 0) {
             if (!item.locations.includes(currentLocation)) return '';
         }
-        if (item.관리주기 === 'weekly' && !isTuesday && !showWeeklyForced && item.vendor !== '인터넷발주') return '';
+        if (item.관리주기 === 'weekly' && !isTuesday && !showWeeklyForced && item.vendor !== '인터넷발주') {
+            // 이번 주 화요일 이후에 저장한 적 있으면 숨김, 없으면 계속 표시
+            const lastSaveDate = lastSavedInventory[`meta_last_save_${currentLocation}`];
+            if (lastSaveDate && lastSaveDate >= getThisWeekTuesday()) return '';
+        }
 
         const rawItemKey = `${item.vendor}_${item.품목명}`;
         const locItemKey = `${currentLocation}_${rawItemKey}`;

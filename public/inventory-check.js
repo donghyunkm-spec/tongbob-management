@@ -390,9 +390,13 @@ function checkOrderConfirmation() {
         const daysNeeded = getDaysUntilNextDelivery(vendor);
 
         vendorItems.forEach(item => {
-            if (item.관리주기 === 'weekly' && !isTuesday && vendor !== '인터넷발주') return;
             if (item.발주제외) return;  // 발주제외 품목 스킵
             const rawItemKey = `${vendor}_${item.품목명}`;
+            // 주간품목: 사용량 있으면 매일 계산, 없으면 화요일만
+            if (item.관리주기 === 'weekly' && !isTuesday && vendor !== '인터넷발주') {
+                const weeklyUsage = dailyUsage[rawItemKey] || 0;
+                if (weeklyUsage === 0) return;
+            }
 
             const stock1 = inventory[`1루_${rawItemKey}`] || 0;
             const stock3 = inventory[`3루_${rawItemKey}`] || 0;

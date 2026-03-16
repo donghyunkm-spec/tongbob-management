@@ -423,6 +423,13 @@
                         </div>
                     </div>
                     <div class="form-row">
+                        <label>하루 사용량</label>
+                        <div style="display:flex; align-items:center; gap:5px;">
+                            <input type="number" id="editDailyUsage" placeholder="예: 0.5" step="0.1" min="0" style="flex:1;">
+                            <span id="editDailyUsageUnit" style="font-size:12px; color:#666; min-width:30px;"></span>
+                        </div>
+                    </div>
+                    <div class="form-row">
                         <label>인분 정보 <span style="font-size:11px; color:#888; font-weight:normal;">(1단위당 몇 인분인지)</span></label>
                         <div id="editServingsContainer"></div>
                         <button type="button" onclick="addEditServingRow()" style="margin-top:5px; padding:5px 10px; font-size:12px; background:#e3f2fd; border:1px solid #90caf9; border-radius:4px; cursor:pointer; color:#1565c0;">+ 용도 추가</button>

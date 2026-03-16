@@ -182,6 +182,15 @@ function getDaysSince(dateString) {
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
+function getThisWeekTuesday() {
+    const now = new Date();
+    const day = now.getDay(); // 0=일, 1=월, 2=화, ...
+    const diff = day >= 2 ? day - 2 : day + 5; // 이번 주 화요일까지의 차이
+    const tue = new Date(now);
+    tue.setDate(now.getDate() - diff);
+    return tue.toISOString().split('T')[0];
+}
+
 function getMeatVendorInfo(itemName) {
     let info = { type: 'weight', weight: 1, unit: 'kg', inputUnit: 'kg' };
     const weightMatch = itemName.match(/\/(\d+(?:\.\d+)?)kg\//);
