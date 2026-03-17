@@ -331,11 +331,20 @@ app.post('/api/staff/exception', async (req, res) => {
         const todayStr = new Date().toISOString().split('T')[0];
         if (date === todayStr) {
             try {
-                const msg = getDailyScheduleMessage(new Date());
-                await sendToKakao(`📢 [긴급] 당일 근무 변경 알림\n(${actor}님 수정)\n\n${msg}`);
-                const changeLabel = type === 'off' ? '임시 휴무 처리' : type === 'work' ? '임시 출근 등록' : '원래 스케줄로 복귀';
-                const detailedMsg = getDailyScheduleMessageDetailed(new Date());
-                await sendToTelegram(`📢 [당일 근무 변경]\n✏️ ${target.name} → ${changeLabel}\n(${actor}님 수정)\n\n📋 전체 근무현황\n${detailedMsg}`);
+                // 원래 스케줄 기준으로 변경 전 상태 파악
+                const todayObj = new Date();
+                const dayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                const dayKey = dayMap[todayObj.getDay()];
+                const schedule = getScheduleForDate(target, todayStr);
+                const wasScheduledToWork = schedule.workDays.includes(dayKey);
+                const beforeLabel = wasScheduledToWork ? '근무' : '휴무';
+                const afterLabel = type === 'off' ? '임시휴무' : type === 'work' ? '임시근무' : beforeLabel;
+                const changeDesc = `${target.name}: ${beforeLabel} → ${afterLabel}`;
+
+                const msg = getDailyScheduleMessage(todayObj);
+                await sendToKakao(`📢 [긴급] 당일 근무 변경 알림\n(${actor}님 수정)\n\n🔄 ${changeDesc}\n\n${msg}`);
+                const detailedMsg = getDailyScheduleMessageDetailed(todayObj);
+                await sendToTelegram(`📢 [당일 근무 변경]\n🔄 ${changeDesc}\n(${actor}님 수정)\n\n📋 전체 근무현황\n${detailedMsg}`);
             } catch (e) {
                 console.error('알림 전송 실패:', e.message);
             }
@@ -919,13 +928,20 @@ function getDailyScheduleMessage(dateObj) {
 
     let workers = [];
     staffList.forEach(s => {
+        if (s.deleted) return;
+        // startDate/endDate 필터링
+        const d0 = new Date(dateStr); d0.setHours(0,0,0,0);
+        if (s.startDate) { const sd = new Date(s.startDate); sd.setHours(0,0,0,0); if (d0 < sd) return; }
+        if (s.endDate) { const ed = new Date(s.endDate); ed.setHours(0,0,0,0); if (d0 > ed) return; }
+
         let isWorking = false;
-        // 요일별 시간 우선 사용
-        let timeStr = (s.dayTimes && s.dayTimes[dayKey]) ? s.dayTimes[dayKey] : s.time;
+        // scheduleHistory 기반 스케줄 조회
+        const schedule = getScheduleForDate(s, dateStr);
+        let timeStr = (schedule.dayTimes && schedule.dayTimes[dayKey]) ? schedule.dayTimes[dayKey] : schedule.time;
         if (s.exceptions && s.exceptions[dateStr]) {
             const ex = s.exceptions[dateStr];
             if (ex.type === 'work') { isWorking = true; timeStr = ex.time; }
-        } else { if (s.workDays.includes(dayKey)) isWorking = true; }
+        } else { if (schedule.workDays.includes(dayKey)) isWorking = true; }
         if (isWorking) workers.push({ name: s.name, time: timeStr });
     });
 
@@ -947,13 +963,21 @@ function getDailyScheduleMessageDetailed(dateObj) {
     let workers = [];
     let offWorkers = [];
     staffList.forEach(s => {
-        let timeStr = (s.dayTimes && s.dayTimes[dayKey]) ? s.dayTimes[dayKey] : s.time;
+        if (s.deleted) return;
+        // startDate/endDate 필터링
+        const d0 = new Date(dateStr); d0.setHours(0,0,0,0);
+        if (s.startDate) { const sd = new Date(s.startDate); sd.setHours(0,0,0,0); if (d0 < sd) return; }
+        if (s.endDate) { const ed = new Date(s.endDate); ed.setHours(0,0,0,0); if (d0 > ed) return; }
+
+        // scheduleHistory 기반 스케줄 조회
+        const schedule = getScheduleForDate(s, dateStr);
+        let timeStr = (schedule.dayTimes && schedule.dayTimes[dayKey]) ? schedule.dayTimes[dayKey] : schedule.time;
         if (s.exceptions && s.exceptions[dateStr]) {
             const ex = s.exceptions[dateStr];
             if (ex.type === 'work') workers.push({ name: s.name, time: ex.time });
             else if (ex.type === 'off') offWorkers.push(s.name);
         } else {
-            if (s.workDays.includes(dayKey)) workers.push({ name: s.name, time: timeStr });
+            if (schedule.workDays.includes(dayKey)) workers.push({ name: s.name, time: timeStr });
         }
     });
 
