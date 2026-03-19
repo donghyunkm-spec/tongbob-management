@@ -466,6 +466,17 @@ function renderWeeklyView() {
              return getStartTimeValue(a.time) - getStartTimeValue(b.time)
         });
 
+        // 헤더에 출근 인원수 표시
+        const workingCount = dayWorkers.filter(w => !w.isOff).length;
+        const headerEl2 = document.getElementById(`header-${dayKey}`);
+        if (headerEl2) {
+            const headerDate2 = new Date(currentWeekStartDate);
+            headerDate2.setDate(headerDate2.getDate() + i);
+            const m = headerDate2.getMonth() + 1;
+            const d = headerDate2.getDate();
+            headerEl2.innerHTML = `${m}/${d}<br>${DAY_MAP[dayKey]}<span class="weekly-count">${workingCount}명</span>`;
+        }
+
         const col = document.getElementById(`col-${dayKey}`);
         if(col) {
             dayWorkers.forEach(w => {

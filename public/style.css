@@ -1207,6 +1207,17 @@ input:focus, select:focus {
 .weekly-header.sunday { background: #e53935; } /* 일요일은 빨강 */
 .weekly-header.saturday { background: #1e88e5; } /* 토요일은 파랑 */
 
+.weekly-count {
+    display: inline-block;
+    background: rgba(255,255,255,0.3);
+    border-radius: 10px;
+    padding: 1px 7px;
+    font-size: 11px;
+    font-weight: normal;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+
 .weekly-col {
     border-right: 1px solid #eee;
     min-height: 300px;
