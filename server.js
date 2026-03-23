@@ -115,12 +115,13 @@ function initializeInventoryData() {
         const initialItems = {
             '고센유통': [],
             '한강유통(고기)': [],
-            '인터넷발주': []
+            '인터넷발주': [],
+            '기타': []
         };
         writeJson(INVENTORY_ITEMS_FILE, initialItems);
     }
     if (!fs.existsSync(INVENTORY_HOLIDAYS_FILE)) {
-        const initialHolidays = { 'store': [], '고센유통': [], '한강유통(고기)': [], '인터넷발주': [] };
+        const initialHolidays = { 'store': [], '고센유통': [], '한강유통(고기)': [], '인터넷발주': [], '기타': [] };
         writeJson(INVENTORY_HOLIDAYS_FILE, initialHolidays);
     }
     // 나머지 파일들은 readJson 호출 시 기본값으로 처리됨
@@ -1077,7 +1078,7 @@ cron.schedule('0 10 * * *', async () => {
         const currentInventory = readJson(INVENTORY_CURRENT_FILE, {});
         let stockMsg = `📊 [전체 재고 현황]\n${today.getMonth()+1}/${today.getDate()} 기준\n`;
 
-        const vendorOrder = ['고센유통', '한강유통(고기)', '인터넷발주'];
+        const vendorOrder = ['고센유통', '한강유통(고기)', '인터넷발주', '기타'];
         vendorOrder.forEach(vendor => {
             if (!itemsData[vendor] || itemsData[vendor].length === 0) return;
             stockMsg += `\n📦 ${vendor}\n`;

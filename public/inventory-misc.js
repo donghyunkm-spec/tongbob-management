@@ -23,6 +23,7 @@ function renderAllHolidays() {
     renderHolidayList('고센유통', `${vendorIdMap['고센유통']}HolidayList`);
     renderHolidayList('한강유통(고기)', `${vendorIdMap['한강유통(고기)']}HolidayList`);
     renderHolidayList('인터넷발주', `${vendorIdMap['인터넷발주']}HolidayList`);
+    renderHolidayList('기타', `${vendorIdMap['기타']}HolidayList`);
 }
 
 function renderHolidayList(type, containerId) {
@@ -154,7 +155,7 @@ function renderInventoryHistory(record, vendorFilter) {
     `;
 
     let hasData = false;
-    const vendorOrder = ['고센유통', '한강유통(고기)', '인터넷발주'];
+    const vendorOrder = ['고센유통', '한강유통(고기)', '인터넷발주', '기타'];
 
     vendorOrder.forEach(vendorName => {
         if (vendorFilter !== 'all' && vendorFilter !== vendorName) return;

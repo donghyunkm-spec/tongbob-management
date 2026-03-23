@@ -147,6 +147,7 @@ function renderInventoryCheck() {
                 <option value="고센유통" ${checkVendorFilter==='고센유통'?'selected':''}>고센</option>
                 <option value="한강유통(고기)" ${checkVendorFilter==='한강유통(고기)'?'selected':''}>고기</option>
                 <option value="인터넷발주" ${checkVendorFilter==='인터넷발주'?'selected':''}>인터넷</option>
+                <option value="기타" ${checkVendorFilter==='기타'?'selected':''}>기타</option>
             </select>
 
             <input type="text" placeholder="품목명 검색" value="${checkSearchText}"
@@ -377,8 +378,8 @@ function triggerOrderProcess() {
 }
 
 function checkOrderConfirmation() {
-    const confirmItems = { '고센유통': [], '한강유통(고기)': [], '인터넷발주': [] };
-    const checkItems = { '고센유통': [], '한강유통(고기)': [], '인터넷발주': [] };
+    const confirmItems = { '고센유통': [], '한강유통(고기)': [], '인터넷발주': [], '기타': [] };
+    const checkItems = { '고센유통': [], '한강유통(고기)': [], '인터넷발주': [], '기타': [] };
     const dangerItems = [];
 
     let missingInputCount = 0;
@@ -575,7 +576,7 @@ function updateOrderAmount(vendor, index, newValue) {
 
 async function proceedToOrder() {
     closeConfirmModal();
-    const orderData = { '고센유통': [], '한강유통(고기)': [], '인터넷발주': [] };
+    const orderData = { '고센유통': [], '한강유통(고기)': [], '인터넷발주': [], '기타': [] };
     const currentInventoryCopy = { ...inventory };
 
     for (const vendor in currentConfirmItems) {

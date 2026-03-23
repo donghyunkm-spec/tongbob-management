@@ -9,7 +9,7 @@ let lastSavedInventory = {};
 let dailyUsage = {};
 let holidays = {
     'store': [], 'store_open': [],
-    '고센유통': [], '한강유통(고기)': [], '인터넷발주': []
+    '고센유통': [], '한강유통(고기)': [], '인터넷발주': [], '기타': []
 };
 let lastOrderDates = {};
 let recentHistory = [];
@@ -17,7 +17,7 @@ let recentHistory = [];
 // 화면 상태 변수
 let currentLocation = '1루';
 let currentStandardVendor = 'all';
-let currentSortOrder = 'default';
+let currentSortOrder = 'default'; 
 let showWeeklyForced = false;
 let checkDateOffset = 0;
 let currentConfirmItems = {};
@@ -34,7 +34,8 @@ let currentNoOrderPeriod = 5;
 
 const vendorIdMap = {
     'store': 'store', '고센유통': 'goshen',
-    '한강유통(고기)': 'meat', '인터넷발주': 'internet'
+    '한강유통(고기)': 'meat', '인터넷발주': 'internet',
+    '기타': 'etc_vendor'
 };
 
 const API_BASE = '';

@@ -997,6 +997,7 @@
                                 <option value="고센유통">고센</option>
                                 <option value="한강유통(고기)">고기</option>
                                 <option value="인터넷발주">인터넷</option>
+                                <option value="기타">기타</option>
                             </select>
                         </div>
 
@@ -1103,6 +1104,15 @@
                         </div>
                         <div class="holiday-list" id="internetHolidayList"></div>
                     </div>
+
+                    <div class="holiday-section" style="margin-top:20px;">
+                        <h4>📦 기타 휴일</h4>
+                        <div style="display:flex; gap:5px;">
+                            <input type="date" id="etc_vendorHolidayDate">
+                            <button onclick="addHoliday('기타')" class="btn-primary">추가</button>
+                        </div>
+                        <div class="holiday-list" id="etc_vendorHolidayList"></div>
+                    </div>
                 </div>
             </div>
 
@@ -1115,6 +1125,7 @@
                             <option value="고센유통">고센</option>
                             <option value="한강유통(고기)">고기</option>
                             <option value="인터넷발주">인터넷</option>
+                            <option value="기타">기타</option>
                         </select>
                     </div>
                     <div id="orderHistoryList" class="history-list"></div>

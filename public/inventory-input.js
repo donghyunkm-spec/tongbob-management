@@ -381,6 +381,7 @@ function renderStandardForm() {
                 <button class="vendor-btn ${currentStandardVendor==='고센유통'?'active':''}" onclick="selectStandardVendor('고센유통')">고센</button>
                 <button class="vendor-btn ${currentStandardVendor==='한강유통(고기)'?'active':''}" onclick="selectStandardVendor('한강유통(고기)')">고기</button>
                 <button class="vendor-btn ${currentStandardVendor==='인터넷발주'?'active':''}" onclick="selectStandardVendor('인터넷발주')">인터넷</button>
+                <button class="vendor-btn ${currentStandardVendor==='기타'?'active':''}" onclick="selectStandardVendor('기타')">기타</button>
             </div>
             <button onclick="saveStandard()" class="btn-sticky-action" style="background:#1976D2;">💾 저장</button>
         </div>
