@@ -387,6 +387,15 @@
             <div class="modal-body">
                 <input type="hidden" id="editVendor"><input type="hidden" id="editIndex">
                 <div class="add-item-form-grid">
+                    <div class="form-row">
+                        <label>거래처</label>
+                        <select id="editVendorSelect" style="padding:8px; width:100%;">
+                            <option value="고센유통">고센</option>
+                            <option value="한강유통(고기)">고기</option>
+                            <option value="인터넷발주">인터넷</option>
+                            <option value="기타">기타</option>
+                        </select>
+                    </div>
                     <div class="form-row"><label>품목명</label><input type="text" id="editName"></div>
                     <div class="form-row"><label>단위</label><input type="text" id="editUnit"></div>
                     <div class="form-row"><label>중요도</label><select id="editImportance"><option value="중">중</option><option value="상">상</option><option value="하">하</option></select></div>
@@ -421,6 +430,11 @@
                             <input type="checkbox" id="editSkipOrder" style="width:18px; height:18px;">
                             <span style="font-size:12px; color:#666;">체크하면 발주 계산에서 제외 (직접 만드는 품목 등)</span>
                         </div>
+                    </div>
+                    <div class="form-row">
+                        <label>원재료 연결</label>
+                        <input type="text" id="editSourceItems" placeholder="예: 양배추 또는 굵은고춧가루, 설탕, 식초">
+                        <span style="font-size:11px; color:#888;">부족 시 이 원재료를 발주해야 함 (쉼표로 구분)</span>
                     </div>
                     <div class="form-row">
                         <label>하루 사용량</label>

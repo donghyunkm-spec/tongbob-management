@@ -381,6 +381,7 @@ function checkOrderConfirmation() {
     const confirmItems = { '고센유통': [], '한강유통(고기)': [], '인터넷발주': [], '기타': [] };
     const checkItems = { '고센유통': [], '한강유통(고기)': [], '인터넷발주': [], '기타': [] };
     const dangerItems = [];
+    const sourceAlertItems = []; // 원재료 연결 품목 중 부족한 것
 
     let missingInputCount = 0;
     const today = new Date();
@@ -392,6 +393,25 @@ function checkOrderConfirmation() {
 
         vendorItems.forEach(item => {
             if (item.발주제외) return;  // 발주제외 품목 스킵
+
+            // 원재료 연결 품목: 발주 계산에서 제외, 재고 부족 시 알림만
+            if (item.sourceItems && item.sourceItems.length > 0) {
+                const rawItemKey = `${vendor}_${item.품목명}`;
+                const stock1 = inventory[`1루_${rawItemKey}`] || 0;
+                const stock3 = inventory[`3루_${rawItemKey}`] || 0;
+                const totalStock = stock1 + stock3;
+                const usage = dailyUsage[rawItemKey] || 0;
+                const neededTotal = usage * daysNeeded;
+                if (totalStock < neededTotal || totalStock === 0) {
+                    sourceAlertItems.push({
+                        품목명: item.품목명,
+                        currentStock: totalStock,
+                        sourceItems: item.sourceItems,
+                        발주단위: item.발주단위
+                    });
+                }
+                return;
+            }
             const rawItemKey = `${vendor}_${item.품목명}`;
             // 주간품목: 사용량 있으면 매일 계산, 없으면 화요일만
             if (item.관리주기 === 'weekly' && !isTuesday && vendor !== '인터넷발주') {
@@ -464,15 +484,33 @@ function checkOrderConfirmation() {
     }
 
     currentConfirmItems = confirmItems;
-    showConfirmModal(confirmItems, checkItems, missingInputCount, dangerItems);
+    showConfirmModal(confirmItems, checkItems, missingInputCount, dangerItems, sourceAlertItems);
 }
 
-function showConfirmModal(confirmItems, checkItems, missingInputCount, dangerItems) {
+function showConfirmModal(confirmItems, checkItems, missingInputCount, dangerItems, sourceAlertItems) {
     const modal = document.getElementById('confirmModal');
     const content = document.getElementById('confirmContent');
 
     let html = '';
     let hasOrder = false;
+
+    // 원재료 연결 품목 알림
+    if (sourceAlertItems && sourceAlertItems.length > 0) {
+        html += `<div style="background:#e8eaf6; border:3px solid #5c6bc0; border-radius:8px; padding:12px; margin-bottom:20px;">
+            <h3 style="color:#283593; margin:0 0 10px 0; font-size:16px;">🔗 원재료 확인 필요 (${sourceAlertItems.length}개)</h3>
+            <p style="font-size:12px; color:#283593; margin-bottom:10px;">아래 품목은 직접 발주하지 않고 원재료를 주문해야 합니다.</p>`;
+        sourceAlertItems.forEach(item => {
+            html += `<div style="background:white; border:1px solid #9fa8da; border-radius:6px; padding:10px; margin-bottom:8px;">
+                <div style="font-weight:bold; font-size:14px; color:#283593; margin-bottom:4px;">
+                    📌 ${item.품목명} <span style="font-size:12px; color:#666; font-weight:normal;">(현재 ${item.currentStock} ${item.발주단위})</span>
+                </div>
+                <div style="font-size:13px; color:#333;">
+                    👉 발주 원재료: <strong style="color:#e65100;">${item.sourceItems.join(', ')}</strong>
+                </div>
+            </div>`;
+        });
+        html += `</div>`;
+    }
 
     // 재고 0 경고
     if (dangerItems && dangerItems.length > 0) {

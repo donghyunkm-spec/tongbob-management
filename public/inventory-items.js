@@ -393,6 +393,10 @@ function openEditItemModal(vendor, index) {
     document.getElementById('editVendor').value = vendor;
     document.getElementById('editIndex').value = index;
 
+    // 거래처 선택
+    const editVendorSelect = document.getElementById('editVendorSelect');
+    if (editVendorSelect) editVendorSelect.value = vendor;
+
     document.getElementById('editName').value = item.품목명;
     document.getElementById('editUnit').value = item.발주단위;
     document.getElementById('editImportance').value = item.중요도 || '중';
@@ -408,6 +412,10 @@ function openEditItemModal(vendor, index) {
     // 발주제외 설정
     const editSkipOrder = document.getElementById('editSkipOrder');
     if (editSkipOrder) editSkipOrder.checked = item.발주제외 || false;
+
+    // 원재료 연결 설정
+    const editSourceItems = document.getElementById('editSourceItems');
+    if (editSourceItems) editSourceItems.value = (item.sourceItems || []).join(', ');
 
     // 하루 사용량 설정
     const usageKey = `${vendor}_${item.품목명}`;
@@ -466,9 +474,17 @@ function saveEditItem() {
     const newThreshold = thresholdVal ? parseFloat(thresholdVal) : null;
     const newMinOrder = minOrderVal ? parseFloat(minOrderVal) : null;
 
+    // 거래처 변경 수집
+    const newVendor = document.getElementById('editVendorSelect').value;
+
     // 발주제외 수집
     const editSkipOrder = document.getElementById('editSkipOrder');
     const newSkipOrder = editSkipOrder ? editSkipOrder.checked : false;
+
+    // 원재료 연결 수집
+    const editSourceItems = document.getElementById('editSourceItems');
+    const sourceItemsRaw = editSourceItems ? editSourceItems.value.trim() : '';
+    const newSourceItems = sourceItemsRaw ? sourceItemsRaw.split(',').map(s => s.trim()).filter(s => s) : [];
 
     // 하루 사용량 수집
     const editDailyUsage = document.getElementById('editDailyUsage');
@@ -495,7 +511,7 @@ function saveEditItem() {
     }
 
     // 데이터 업데이트
-    items[vendor][index] = {
+    const updatedItem = {
         ...items[vendor][index],
         "품목명": newName,
         "발주단위": newUnit,
@@ -508,11 +524,25 @@ function saveEditItem() {
         "발주제외": newSkipOrder,
         "servings": newServings.length > 0 ? newServings : undefined
     };
+    if (newSourceItems.length > 0) {
+        updatedItem.sourceItems = newSourceItems;
+    } else {
+        delete updatedItem.sourceItems;
+    }
     // 이전 텍스트 형식 제거
-    delete items[vendor][index].servingInfo;
+    delete updatedItem.servingInfo;
+
+    // 거래처 변경 처리
+    if (newVendor !== vendor) {
+        items[vendor].splice(index, 1);
+        if (!items[newVendor]) items[newVendor] = [];
+        items[newVendor].push(updatedItem);
+    } else {
+        items[vendor][index] = updatedItem;
+    }
 
     // 하루 사용량 저장
-    const usageKey = `${vendor}_${items[vendor][index].품목명}`;
+    const usageKey = `${newVendor}_${newName}`;
     dailyUsage[usageKey] = newDailyUsage;
     // 비동기로 사용량 서버 저장 (실패해도 UI 블로킹 안함)
     fetch(`${API_BASE}/api/inventory/daily-usage`, {
