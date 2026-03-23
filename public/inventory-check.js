@@ -392,9 +392,7 @@ function checkOrderConfirmation() {
         const daysNeeded = getDaysUntilNextDelivery(vendor);
 
         vendorItems.forEach(item => {
-            if (item.발주제외) return;  // 발주제외 품목 스킵
-
-            // 원재료 연결 품목: 발주 계산에서 제외, 재고 부족 시 알림만
+            // 원재료 연결 품목: 발주제외 여부와 관계없이 재고 부족 시 알림
             if (item.sourceItems && item.sourceItems.length > 0) {
                 const rawItemKey = `${vendor}_${item.품목명}`;
                 const stock1 = inventory[`1루_${rawItemKey}`] || 0;
@@ -412,6 +410,7 @@ function checkOrderConfirmation() {
                 }
                 return;
             }
+            if (item.발주제외) return;  // 발주제외 품목 스킵
             const rawItemKey = `${vendor}_${item.품목명}`;
             // 주간품목: 사용량 있으면 매일 계산, 없으면 화요일만
             if (item.관리주기 === 'weekly' && !isTuesday && vendor !== '인터넷발주') {
