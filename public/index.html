@@ -444,6 +444,18 @@
                         </div>
                     </div>
                     <div class="form-row">
+                        <label>단가 (원가)</label>
+                        <div style="display:flex; align-items:center; gap:5px;">
+                            <input type="number" id="editUnitCost" placeholder="예: 15000" step="1" min="0" style="flex:1;">
+                            <span style="font-size:12px; color:#666;">원 / <span id="editUnitCostUnit"></span></span>
+                        </div>
+                        <span style="font-size:11px; color:#888;">1단위(kg, 박스 등)당 구매 원가</span>
+                    </div>
+                    <div class="form-row" id="editCostHistoryRow" style="display:none;">
+                        <label>단가 변동 이력</label>
+                        <div id="editCostHistoryList" style="max-height:100px; overflow-y:auto; font-size:11px; background:#f5f5f5; padding:5px; border-radius:4px;"></div>
+                    </div>
+                    <div class="form-row">
                         <label>인분 정보 <span style="font-size:11px; color:#888; font-weight:normal;">(1단위당 몇 인분인지)</span></label>
                         <div id="editServingsContainer"></div>
                         <button type="button" onclick="addEditServingRow()" style="margin-top:5px; padding:5px 10px; font-size:12px; background:#e3f2fd; border:1px solid #90caf9; border-radius:4px; cursor:pointer; color:#1565c0;">+ 용도 추가</button>
@@ -950,13 +962,14 @@
         </div>
         <div id="inventory-content" class="tab-content">
             <div class="accounting-card" style="padding: 10px; margin-bottom: 15px;">
-                <div class="tabs sub-tabs" style="grid-template-columns: repeat(6, 1fr); margin-bottom: 0; font-size: 12px;">
+                <div class="tabs sub-tabs" style="grid-template-columns: repeat(7, 1fr); margin-bottom: 0; font-size: 12px;">
                     <button class="tab active" onclick="showInvTab('inventory')">재고입력</button>
                     <button class="tab tab-check" onclick="showInvTab('check')">🔎 재고확인</button>
                     <button class="tab" onclick="showInvTab('standard')">사용량</button>
                     <button class="tab" onclick="showInvTab('manageItems')">품목관리</button>
                     <button class="tab" onclick="showInvTab('holidays')">휴일</button>
                     <button class="tab" onclick="showInvTab('orderHistory')">발주내역</button>
+                    <button class="tab" onclick="showInvTab('costAnalysis')">💰원가</button>
                 </div>
             </div>
 
@@ -1143,6 +1156,12 @@
                         </select>
                     </div>
                     <div id="orderHistoryList" class="history-list"></div>
+                </div>
+            </div>
+
+            <div id="costAnalysis-tab" class="inv-tab-content" style="display:none;">
+                <div class="form-container">
+                    <div id="costAnalysisContent"></div>
                 </div>
             </div>
         </div>

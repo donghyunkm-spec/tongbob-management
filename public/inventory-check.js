@@ -75,6 +75,8 @@ function renderInventoryCheck() {
             const usage = dailyUsage[rawItemKey] || 0;
             const diff = totalStock - usage;
 
+            const cost = (item.unitCost || 0) * totalStock;
+
             allCheckItems.push({
                 ...item,
                 vendor,
@@ -83,7 +85,8 @@ function renderInventoryCheck() {
                 stock3,
                 totalStock,
                 usage,
-                diff
+                diff,
+                cost
             });
         });
     });
@@ -173,6 +176,7 @@ function renderInventoryCheck() {
                     <th style="background:#e3f2fd;">합계</th>
                     <th>1일사용</th>
                     <th>차이</th>
+                    <th>원가</th>
                 </tr>
             </thead>
             <tbody>
@@ -181,11 +185,11 @@ function renderInventoryCheck() {
     let lastVendor = '';
 
     if (filteredItems.length === 0) {
-        tableHtml += `<tr><td colspan="6" style="text-align:center; padding:20px; color:#999;">검색 결과가 없습니다.</td></tr>`;
+        tableHtml += `<tr><td colspan="7" style="text-align:center; padding:20px; color:#999;">검색 결과가 없습니다.</td></tr>`;
     } else {
         filteredItems.forEach(item => {
             if (checkSortKey === 'vendor' && item.vendor !== lastVendor) {
-                tableHtml += `<tr style="background:#f8f9fa;"><td colspan="6" style="text-align:left; font-size:12px; font-weight:bold; color:#555; padding-left:10px;">📦 ${item.vendor}</td></tr>`;
+                tableHtml += `<tr style="background:#f8f9fa;"><td colspan="7" style="text-align:left; font-size:12px; font-weight:bold; color:#555; padding-left:10px;">📦 ${item.vendor}</td></tr>`;
                 lastVendor = item.vendor;
             }
 
@@ -223,9 +227,19 @@ function renderInventoryCheck() {
                     <td class="check-val" style="background:#e3f2fd;">${item.totalStock}</td>
                     <td>${item.usage}</td>
                     <td class="${diffClass} check-val">${diffSign}${parseFloat(item.diff.toFixed(1))}</td>
+                    <td style="text-align:right; font-size:11px; color:#555;">${item.cost > 0 ? Number(item.cost.toFixed(0)).toLocaleString() : '-'}</td>
                 </tr>
             `;
         });
+    }
+
+    // 원가 합계 행
+    const totalCost = filteredItems.reduce((sum, it) => sum + (it.cost || 0), 0);
+    if (totalCost > 0) {
+        tableHtml += `<tr style="background:#e8f5e9; font-weight:bold;">
+            <td colspan="6" style="text-align:right; font-size:13px;">재고 총 원가</td>
+            <td style="text-align:right; font-size:13px; color:#1b5e20;">${Number(totalCost.toFixed(0)).toLocaleString()}원</td>
+        </tr>`;
     }
 
     tableHtml += `</tbody></table>`;
@@ -535,11 +549,13 @@ function showConfirmModal(confirmItems, checkItems, missingInputCount, dangerIte
         const list = confirmItems[vendor];
         if (list.length > 0) {
             hasOrder = true;
-            html += `<h4 style="margin:10px 0 5px 0; font-size:14px;">${vendor}</h4>
+            const vendorTotal = list.reduce((sum, i) => sum + (i.unitCost || 0) * i.orderAmount, 0);
+            html += `<h4 style="margin:10px 0 5px 0; font-size:14px;">${vendor} ${vendorTotal > 0 ? `<span style="font-size:12px; color:#e65100; font-weight:normal;">예상 ${vendorTotal.toLocaleString()}원</span>` : ''}</h4>
             <table class="confirm-table" style="background:white;">
-                <thead><tr><th>품목</th><th>현재재고</th><th>발주량</th></tr></thead>
+                <thead><tr><th>품목</th><th>현재재고</th><th>발주량</th><th>예상원가</th></tr></thead>
                 <tbody>`;
             list.forEach((i, idx) => {
+                const itemCost = (i.unitCost || 0) * i.orderAmount;
                 html += `<tr>
                     <td style="font-weight:bold;">${i.품목명}</td>
                     <td>${i.currentStock}</td>
@@ -550,12 +566,25 @@ function showConfirmModal(confirmItems, checkItems, missingInputCount, dangerIte
                                style="width:60px; padding:4px; text-align:right; font-weight:bold; border:2px solid #1976D2; border-radius:4px;">
                         ${i.displayUnit}
                     </td>
+                    <td style="text-align:right; font-size:12px;">${itemCost > 0 ? itemCost.toLocaleString() + '원' : '-'}</td>
                 </tr>`;
             });
             html += `</tbody></table>`;
         }
     }
-    if(!hasOrder) html += `<p style="text-align:center; color:#666;">발주할 품목이 없습니다.</p>`;
+    if(!hasOrder) {
+        html += `<p style="text-align:center; color:#666;">발주할 품목이 없습니다.</p>`;
+    } else {
+        let grandTotal = 0;
+        for (const v in confirmItems) {
+            confirmItems[v].forEach(i => { grandTotal += (i.unitCost || 0) * i.orderAmount; });
+        }
+        if (grandTotal > 0) {
+            html += `<div style="text-align:right; font-size:16px; font-weight:bold; color:#e65100; margin-top:10px; padding:10px; background:#fff8e1; border-radius:6px;">
+                총 발주 예상원가: ${grandTotal.toLocaleString()}원
+            </div>`;
+        }
+    }
     html += `</div>`;
 
     // 미발주 품목

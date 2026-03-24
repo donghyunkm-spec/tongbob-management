@@ -123,6 +123,9 @@ function renderManageItems() {
                            </span>`
                         : ''}
                     ${(() => { const u = dailyUsage[`${item.vendor}_${item.품목명}`]; return u ? `<span style="background:#f3e5f5; color:#6a1b9a; font-size:10px; padding:2px 5px; border-radius:3px; margin-left:5px;">📦 사용량:${u}/${item.발주단위||'단위'}</span>` : ''; })()}
+                    ${item.unitCost
+                        ? `<span style="background:#e8f5e9; color:#1b5e20; font-size:10px; padding:2px 5px; border-radius:3px; margin-left:5px;">💰 ${Number(item.unitCost).toLocaleString()}원/${item.발주단위||'단위'}</span>`
+                        : ''}
                     ${item.발주제외
                         ? `<span style="background:#ffebee; color:#c62828; font-size:10px; padding:2px 5px; border-radius:3px; margin-left:5px;">🚫 발주제외</span>`
                         : ''}
@@ -427,6 +430,26 @@ function openEditItemModal(vendor, index) {
     const editDailyUsageUnit = document.getElementById('editDailyUsageUnit');
     if (editDailyUsageUnit) editDailyUsageUnit.textContent = item.발주단위 || '';
 
+    // 단가 설정
+    const editUnitCost = document.getElementById('editUnitCost');
+    if (editUnitCost) editUnitCost.value = item.unitCost || '';
+    const editUnitCostUnit = document.getElementById('editUnitCostUnit');
+    if (editUnitCostUnit) editUnitCostUnit.textContent = item.발주단위 || '';
+
+    // 단가 변동 이력 표시
+    const costHistoryRow = document.getElementById('editCostHistoryRow');
+    const costHistoryList = document.getElementById('editCostHistoryList');
+    if (costHistoryRow && costHistoryList) {
+        if (item.costHistory && item.costHistory.length > 0) {
+            costHistoryRow.style.display = 'block';
+            costHistoryList.innerHTML = item.costHistory.slice().reverse()
+                .map(h => `<div style="padding:2px 0; border-bottom:1px solid #eee;">${h.date}: <strong>${Number(h.unitCost).toLocaleString()}원</strong></div>`)
+                .join('');
+        } else {
+            costHistoryRow.style.display = 'none';
+        }
+    }
+
     // 인분 정보 설정 (구조화된 servings)
     const container = document.getElementById('editServingsContainer');
     if (container) {
@@ -490,6 +513,10 @@ function saveEditItem() {
     const editDailyUsage = document.getElementById('editDailyUsage');
     const newDailyUsage = editDailyUsage ? parseFloat(editDailyUsage.value) || 0 : 0;
 
+    // 단가 수집
+    const editUnitCost = document.getElementById('editUnitCost');
+    const newUnitCost = editUnitCost ? (parseFloat(editUnitCost.value) || 0) : 0;
+
     // 인분 정보 수집 (구조화)
     const newServings = getEditServings();
 
@@ -510,6 +537,13 @@ function saveEditItem() {
         return;
     }
 
+    // 단가 변동 이력 추적
+    const oldUnitCost = items[vendor][index].unitCost || 0;
+    let costHistory = items[vendor][index].costHistory ? [...items[vendor][index].costHistory] : [];
+    if (newUnitCost > 0 && newUnitCost !== oldUnitCost) {
+        costHistory.push({ date: new Date().toISOString().split('T')[0], unitCost: newUnitCost });
+    }
+
     // 데이터 업데이트
     const updatedItem = {
         ...items[vendor][index],
@@ -522,7 +556,9 @@ function saveEditItem() {
         "thresholdQty": newThreshold,
         "minOrderQty": newMinOrder,
         "발주제외": newSkipOrder,
-        "servings": newServings.length > 0 ? newServings : undefined
+        "servings": newServings.length > 0 ? newServings : undefined,
+        "unitCost": newUnitCost || undefined,
+        "costHistory": costHistory.length > 0 ? costHistory : undefined
     };
     if (newSourceItems.length > 0) {
         updatedItem.sourceItems = newSourceItems;

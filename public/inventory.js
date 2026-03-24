@@ -162,6 +162,8 @@ function showInvTab(tabName) {
         selectStandardVendor('all');
     } else if (tabName === 'manageItems') {
         renderManageItems();
+    } else if (tabName === 'costAnalysis') {
+        renderCostAnalysis();
     } else if (tabName === 'holidays') loadHolidays();
     else if (tabName === 'orderHistory') loadOrderHistory();
 }

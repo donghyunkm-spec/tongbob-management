@@ -502,3 +502,179 @@ function renderManual() {
         </div>
     `;
 }
+
+// ==========================================
+// 원가 분석
+// ==========================================
+async function renderCostAnalysis() {
+    const container = document.getElementById('costAnalysisContent');
+    if (!container) return;
+
+    container.innerHTML = '<div style="text-align:center; padding:30px; color:#999;">로딩 중...</div>';
+
+    // 1. 현재 재고 기반 원가 계산
+    let displayInventory = {};
+    Object.keys(inventory).filter(k => !k.startsWith('meta_')).forEach(k => displayInventory[k] = inventory[k]);
+    Object.keys(lastSavedInventory).filter(k => !k.startsWith('meta_')).forEach(k => {
+        if (displayInventory[k] === undefined) displayInventory[k] = lastSavedInventory[k];
+    });
+
+    let totalCost = 0;
+    let vendorCosts = {};
+    let itemCosts = [];
+    let costHistoryItems = [];
+    let itemsWithCost = 0;
+    let itemsTotal = 0;
+
+    Object.keys(items).forEach(vendor => {
+        let vendorTotal = 0;
+        items[vendor].forEach(item => {
+            itemsTotal++;
+            const key = `${vendor}_${item.품목명}`;
+            const stock1 = displayInventory[`1루_${key}`] || 0;
+            const stock3 = displayInventory[`3루_${key}`] || 0;
+            const total = stock1 + stock3;
+            const cost = (item.unitCost || 0) * total;
+
+            if (item.unitCost) itemsWithCost++;
+            vendorTotal += cost;
+
+            if (cost > 0) {
+                itemCosts.push({ vendor, name: item.품목명, unitCost: item.unitCost, total, cost, unit: item.발주단위 });
+            }
+            if (item.costHistory && item.costHistory.length > 0) {
+                costHistoryItems.push({ vendor, name: item.품목명, unit: item.발주단위, costHistory: item.costHistory });
+            }
+        });
+        vendorCosts[vendor] = vendorTotal;
+        totalCost += vendorTotal;
+    });
+
+    // 2. 오늘 매출 가져오기
+    let todaySales = 0;
+    try {
+        const res = await fetch('/api/accounting');
+        const data = await res.json();
+        if (data.success) {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const daily = data.data.daily?.[todayStr];
+            if (daily) todaySales = (daily.sales || 0);
+        }
+    } catch (e) {}
+
+    const costRate = todaySales > 0 ? ((totalCost / todaySales) * 100).toFixed(1) : null;
+
+    // 3. 렌더링
+    let html = '';
+
+    // 설정 진행률
+    const coveragePercent = itemsTotal > 0 ? Math.round(itemsWithCost / itemsTotal * 100) : 0;
+    html += `<div style="background:#fff3e0; border:1px solid #ffb74d; border-radius:8px; padding:10px; margin-bottom:12px; font-size:12px; color:#e65100;">
+        💡 단가 설정: ${itemsWithCost}/${itemsTotal}개 품목 (${coveragePercent}%)
+        ${coveragePercent < 100 ? ' — 품목관리에서 나머지 품목의 단가를 입력하면 더 정확한 분석이 됩니다.' : ' — 모든 품목 설정 완료!'}
+    </div>`;
+
+    // 요약 카드
+    html += `<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:15px;">
+        <div style="background:#e8f5e9; border-radius:10px; padding:15px; text-align:center;">
+            <div style="font-size:12px; color:#2e7d32;">재고 총 원가</div>
+            <div style="font-size:20px; font-weight:bold; color:#1b5e20;">${totalCost > 0 ? Number(totalCost.toFixed(0)).toLocaleString() + '원' : '-'}</div>
+        </div>
+        <div style="background:#e3f2fd; border-radius:10px; padding:15px; text-align:center;">
+            <div style="font-size:12px; color:#1565c0;">오늘 매출</div>
+            <div style="font-size:20px; font-weight:bold; color:#0d47a1;">${todaySales > 0 ? todaySales.toLocaleString() + '원' : '-'}</div>
+        </div>
+        <div style="background:${costRate && costRate > 35 ? '#ffebee' : costRate && costRate > 30 ? '#fff3e0' : '#e8f5e9'}; border-radius:10px; padding:15px; text-align:center;">
+            <div style="font-size:12px; color:#555;">원가율</div>
+            <div style="font-size:20px; font-weight:bold; color:${costRate && costRate > 35 ? '#c62828' : costRate && costRate > 30 ? '#e65100' : '#1b5e20'};">${costRate ? costRate + '%' : '-'}</div>
+        </div>
+    </div>`;
+
+    // 거래처별 원가
+    html += `<div style="background:white; border:1px solid #e0e0e0; border-radius:10px; padding:15px; margin-bottom:15px;">
+        <h4 style="margin:0 0 12px 0; font-size:14px; color:#333;">📊 거래처별 재고 원가</h4>`;
+
+    const maxVendorCost = Math.max(...Object.values(vendorCosts), 1);
+    const vendorOrder = ['고센유통', '한강유통(고기)', '인터넷발주', '기타'];
+    vendorOrder.forEach(vendor => {
+        const vc = vendorCosts[vendor] || 0;
+        if (vc === 0 && !items[vendor]) return;
+        const ratio = maxVendorCost > 0 ? (vc / maxVendorCost * 100) : 0;
+        const percent = totalCost > 0 ? (vc / totalCost * 100).toFixed(1) : '0';
+        html += `<div style="margin-bottom:10px;">
+            <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:3px;">
+                <span><strong>${vendor}</strong></span>
+                <span style="font-weight:bold;">${vc > 0 ? Number(vc.toFixed(0)).toLocaleString() + '원' : '-'} <span style="font-size:11px; color:#888;">(${percent}%)</span></span>
+            </div>
+            <div style="background:#f0f0f0; border-radius:4px; height:10px; overflow:hidden;">
+                <div style="background:#4caf50; height:100%; width:${ratio}%; border-radius:4px; transition:width 0.3s;"></div>
+            </div>
+        </div>`;
+    });
+    html += `</div>`;
+
+    // 품목별 원가 순위 (Top 15)
+    if (itemCosts.length > 0) {
+        itemCosts.sort((a, b) => b.cost - a.cost);
+        const topItems = itemCosts.slice(0, 15);
+
+        html += `<div style="background:white; border:1px solid #e0e0e0; border-radius:10px; padding:15px; margin-bottom:15px;">
+            <h4 style="margin:0 0 12px 0; font-size:14px; color:#333;">🏆 품목별 원가 TOP ${topItems.length}</h4>
+            <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                <thead><tr style="background:#f5f5f5;">
+                    <th style="padding:6px; text-align:left;">품목</th>
+                    <th style="padding:6px; text-align:right;">단가</th>
+                    <th style="padding:6px; text-align:right;">재고</th>
+                    <th style="padding:6px; text-align:right;">원가</th>
+                </tr></thead><tbody>`;
+        topItems.forEach((ic, idx) => {
+            html += `<tr style="border-bottom:1px solid #eee;">
+                <td style="padding:6px;">
+                    <span style="font-size:10px; background:#eee; padding:1px 4px; border-radius:2px; margin-right:3px;">${ic.vendor.substr(0,2)}</span>
+                    ${ic.name}
+                </td>
+                <td style="padding:6px; text-align:right;">${ic.unitCost.toLocaleString()}원</td>
+                <td style="padding:6px; text-align:right;">${ic.total} ${ic.unit}</td>
+                <td style="padding:6px; text-align:right; font-weight:bold; color:#1b5e20;">${Number(ic.cost.toFixed(0)).toLocaleString()}원</td>
+            </tr>`;
+        });
+        html += `</tbody></table></div>`;
+    }
+
+    // 단가 변동 이력
+    if (costHistoryItems.length > 0) {
+        html += `<div style="background:white; border:1px solid #e0e0e0; border-radius:10px; padding:15px; margin-bottom:15px;">
+            <h4 style="margin:0 0 12px 0; font-size:14px; color:#333;">📈 단가 변동 이력</h4>`;
+
+        costHistoryItems.forEach(item => {
+            const history = item.costHistory;
+            const latest = history[history.length - 1];
+            const prev = history.length >= 2 ? history[history.length - 2] : null;
+            let changeText = '';
+            if (prev) {
+                const diff = latest.unitCost - prev.unitCost;
+                const diffPercent = prev.unitCost > 0 ? ((diff / prev.unitCost) * 100).toFixed(1) : '0';
+                const color = diff > 0 ? '#c62828' : '#1b5e20';
+                const sign = diff > 0 ? '+' : '';
+                changeText = `<span style="color:${color}; font-weight:bold;">${sign}${diff.toLocaleString()}원 (${sign}${diffPercent}%)</span>`;
+            }
+
+            html += `<div style="padding:8px 0; border-bottom:1px solid #f0f0f0;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-size:13px;">
+                        <span style="font-size:10px; background:#eee; padding:1px 4px; border-radius:2px; margin-right:3px;">${item.vendor.substr(0,2)}</span>
+                        <strong>${item.name}</strong>
+                    </span>
+                    <span style="font-size:13px; font-weight:bold;">${latest.unitCost.toLocaleString()}원/${item.unit}</span>
+                </div>
+                <div style="font-size:11px; color:#888; margin-top:2px;">
+                    최근 변동: ${latest.date} ${changeText}
+                    <span style="margin-left:8px;">총 ${history.length}회 변경</span>
+                </div>
+            </div>`;
+        });
+        html += `</div>`;
+    }
+
+    container.innerHTML = html;
+}

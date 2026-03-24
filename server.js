@@ -909,11 +909,30 @@ async function generateAndSendBriefing() {
         const data = extractStoreCosts(acc, staff, monthStr, dayNum);
         const formatMoney = (n) => n.toLocaleString();
 
+        // 재고 원가 계산
+        const inventoryItems = readJson(INVENTORY_ITEMS_FILE, {});
+        const currentInv = readJson(INVENTORY_CURRENT_FILE, {});
+        let invCost = 0;
+        for (const vendor in inventoryItems) {
+            (inventoryItems[vendor] || []).forEach(item => {
+                const key = `${vendor}_${item.품목명}`;
+                const s1 = currentInv[`1루_${key}`] || 0;
+                const s3 = currentInv[`3루_${key}`] || 0;
+                invCost += (item.unitCost || 0) * (s1 + s3);
+            });
+        }
+
         let msg = `[📅 ${today.getMonth()+1}월 ${today.getDate()}일 경영 브리핑]\n\n`;
         msg += `■ 매출: ${formatMoney(data.sales)}원\n`;
         msg += `■ 예상순익: ${formatMoney(data.profitPred)}원\n`;
         msg += `■ 실질손익: ${formatMoney(data.profitReal)}원 (고정비 완납기준)`;
-        
+        if (invCost > 0) {
+            msg += `\n■ 재고원가: ${formatMoney(invCost)}원`;
+            if (data.sales > 0) {
+                msg += ` (원가율 ${(invCost / data.sales * 100).toFixed(1)}%)`;
+            }
+        }
+
         await sendToKakao(msg);
     } catch (e) { console.error('브리핑 실패:', e); }
 }
@@ -1098,6 +1117,30 @@ cron.schedule('0 10 * * *', async () => {
                 stockMsg += `  ${item.품목명} → ${stockText} (합계:${total})${warn}\n`;
             });
         });
+
+        // 재고 총 원가 추가
+        let totalInvCost = 0;
+        let vendorCostsMap = {};
+        vendorOrder.forEach(vendor => {
+            let vCost = 0;
+            if (itemsData[vendor]) {
+                itemsData[vendor].forEach(item => {
+                    const key = `${vendor}_${item.품목명}`;
+                    const s1 = currentInventory[`1루_${key}`] || 0;
+                    const s3 = currentInventory[`3루_${key}`] || 0;
+                    vCost += (item.unitCost || 0) * (s1 + s3);
+                });
+            }
+            vendorCostsMap[vendor] = vCost;
+            totalInvCost += vCost;
+        });
+
+        if (totalInvCost > 0) {
+            stockMsg += `\n💰 재고 총 원가: ${totalInvCost.toLocaleString()}원\n`;
+            vendorOrder.forEach(v => {
+                if (vendorCostsMap[v] > 0) stockMsg += `  ${v}: ${vendorCostsMap[v].toLocaleString()}원\n`;
+            });
+        }
 
         await sendToTelegram(stockMsg);
     } catch (e) { console.error('미발주 알림 실패:', e); }

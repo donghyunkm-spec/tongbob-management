@@ -66,7 +66,7 @@ Single-page application with vanilla JavaScript. No build process. Scripts are l
 - `inventory-input.js` - Stock input UI
 - `inventory-check.js` - Stock check/verification UI
 - `inventory-items.js` - Item management UI
-- `inventory-misc.js` - Orders, history, holidays UI
+- `inventory-misc.js` - Orders, history, holidays UI, cost analysis
 
 All API calls use `fetch()` directly.
 
@@ -124,6 +124,8 @@ if (s.endDate)   { const d = new Date(s.endDate);   d.setHours(0,0,0,0); if (dat
 **Schedule Exceptions:** Staff records include `exceptions[dateStr]` for per-day overrides with `type` (`work`/`off`) and optional `time` fields. Temp workers are stored via `POST /api/staff/temp` and use `isTemp: true`.
 
 **Day-specific Times:** Staff can have a `dayTimes` object (e.g., `{ "월": "09:00-18:00", "화": "10:00-19:00" }`) for per-weekday time variations alongside the default `time` field.
+
+**Item Cost Management:** Items optionally have `unitCost` (number, won per unit) and `costHistory` (array of `{date, unitCost}` entries). When `unitCost` changes in the edit modal, the old value is appended to `costHistory`. Cost data is displayed in the inventory check table (원가 column), order confirmation modal (예상원가), cost analysis tab (💰원가), and telegram/kakao briefings. Items without `unitCost` default to 0 and show "-" in cost columns.
 
 **Graceful Defaults:** `readJson()` returns a default value (empty array/object) when files are missing or unreadable, so the server never crashes on missing data files.
 
