@@ -788,10 +788,10 @@
     
             <div class="tabs sub-tabs" style="grid-template-columns: repeat(6, 1fr); margin-bottom: 15px;">
                 <button class="tab active" onclick="switchAccSubTab('acc-daily', this)">일일입력</button>
-                <button class="tab" onclick="switchAccSubTab('acc-history', this)">입력내역</button>
+                <button class="tab" id="tab-history" onclick="switchAccSubTab('acc-history', this)">입력내역</button>
                 <button class="tab tab-prediction" id="tab-prediction" onclick="switchAccSubTab('acc-prediction', this)">예상순익</button>
                 <button class="tab" id="tab-dashboard" onclick="switchAccSubTab('acc-dashboard', this)">월간분석</button>
-                <button class="tab" onclick="switchAccSubTab('acc-monthly', this)">고정비</button>
+                <button class="tab" id="tab-monthly" onclick="switchAccSubTab('acc-monthly', this)">고정비</button>
                 <button class="tab tab-logs" id="tab-logs" onclick="switchAccSubTab('acc-logs', this)">변경이력</button>
             </div>
 
@@ -814,25 +814,27 @@
     
                     <h4 style="color:#1976D2; margin-bottom:10px; background:#e3f2fd; padding:8px; border-radius:5px;">🏪 1루 매출</h4>
                     <div class="input-grid">
-                        <div><span class="category-label">💳 카드 매출</span><input type="number" id="inpCard1" class="money-input" placeholder="0"></div>
-                        <div><span class="category-label">💵 현금 매출</span><input type="number" id="inpCash1" class="money-input" placeholder="0"></div>
-                        <div><span class="category-label">🛵 배달 매출</span><input type="number" id="inpDelivery1" class="money-input" placeholder="0"></div>
-                        <div><span class="category-label">🏦 계좌이체 (참고)</span><input type="number" id="inpTransfer1" class="money-input" placeholder="0" style="background:#fff9c4;"></div>
+                        <div><span class="category-label">💳 카드 매출</span><input type="text" inputmode="numeric" id="inpCard1" class="money-input" placeholder="0" oninput="formatMoneyInput(this); updateSalesSubtotal('1')"></div>
+                        <div><span class="category-label">💵 현금 매출</span><input type="text" inputmode="numeric" id="inpCash1" class="money-input" placeholder="0" oninput="formatMoneyInput(this); updateSalesSubtotal('1')"></div>
+                        <div><span class="category-label">🛵 배달 매출</span><input type="text" inputmode="numeric" id="inpDelivery1" class="money-input" placeholder="0" oninput="formatMoneyInput(this)"></div>
+                        <div><span class="category-label">🏦 계좌이체 (참고)</span><input type="text" inputmode="numeric" id="inpTransfer1" class="money-input" placeholder="0" oninput="formatMoneyInput(this)" style="background:#fff9c4;"></div>
                     </div>
+                    <div id="salesSubtotal1" style="text-align:right; font-weight:bold; color:#1976D2; padding:8px 5px; font-size:15px; background:#e3f2fd; border-radius:5px; margin-top:5px;">카드+현금 매출: 0원</div>
 
                     <h4 style="color:#1976D2; margin-top:20px; margin-bottom:10px; background:#e1f5fe; padding:8px; border-radius:5px;">🏪 3루 매출</h4>
                     <div class="input-grid">
-                        <div><span class="category-label">💳 카드 매출</span><input type="number" id="inpCard3" class="money-input" placeholder="0"></div>
-                        <div><span class="category-label">💵 현금 매출</span><input type="number" id="inpCash3" class="money-input" placeholder="0"></div>
-                        <div><span class="category-label">🛵 배달 매출</span><input type="number" id="inpDelivery3" class="money-input" placeholder="0"></div>
-                        <div><span class="category-label">🏦 계좌이체 (참고)</span><input type="number" id="inpTransfer3" class="money-input" placeholder="0" style="background:#fff9c4;"></div>
+                        <div><span class="category-label">💳 카드 매출</span><input type="text" inputmode="numeric" id="inpCard3" class="money-input" placeholder="0" oninput="formatMoneyInput(this); updateSalesSubtotal('3')"></div>
+                        <div><span class="category-label">💵 현금 매출</span><input type="text" inputmode="numeric" id="inpCash3" class="money-input" placeholder="0" oninput="formatMoneyInput(this); updateSalesSubtotal('3')"></div>
+                        <div><span class="category-label">🛵 배달 매출</span><input type="text" inputmode="numeric" id="inpDelivery3" class="money-input" placeholder="0" oninput="formatMoneyInput(this)"></div>
+                        <div><span class="category-label">🏦 계좌이체 (참고)</span><input type="text" inputmode="numeric" id="inpTransfer3" class="money-input" placeholder="0" oninput="formatMoneyInput(this)" style="background:#fff9c4;"></div>
                     </div>
+                    <div id="salesSubtotal3" style="text-align:right; font-weight:bold; color:#1976D2; padding:8px 5px; font-size:15px; background:#e1f5fe; border-radius:5px; margin-top:5px;">카드+현금 매출: 0원</div>
     
                     <h4 style="color:#d32f2f; margin-top:25px; margin-bottom:10px; border-top:1px dashed #ddd; padding-top:15px;">📤 일일 지출 (공통)</h4>
                     <div class="input-grid">
-                        <div><span class="category-label">🥬 고센유통</span><input type="number" id="inpFood" class="money-input" placeholder="0"></div>
-                        <div><span class="category-label">🥩 한강유통(고기)</span><input type="number" id="inpMeat" class="money-input" placeholder="0"></div>
-                        <div style="grid-column: span 2;"><span class="category-label">🍦 기타 잡비</span><input type="number" id="inpEtc" class="money-input" placeholder="0"></div>
+                        <div><span class="category-label">🥬 고센유통</span><input type="text" inputmode="numeric" id="inpFood" class="money-input" placeholder="0" oninput="formatMoneyInput(this)"></div>
+                        <div><span class="category-label">🥩 한강유통(고기)</span><input type="text" inputmode="numeric" id="inpMeat" class="money-input" placeholder="0" oninput="formatMoneyInput(this)"></div>
+                        <div style="grid-column: span 2;"><span class="category-label">🍦 기타 잡비</span><input type="text" inputmode="numeric" id="inpEtc" class="money-input" placeholder="0" oninput="formatMoneyInput(this)"></div>
                     </div>
 
                     <div style="margin-top:15px; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">

@@ -1,5 +1,42 @@
 // staff-accounting.js - 가계부 및 대시보드
 
+// ==========================================
+// 금액 입력 포맷팅 (3자리 콤마)
+// ==========================================
+function formatMoneyInput(el) {
+    const cursorPos = el.selectionStart;
+    const oldLen = el.value.length;
+    const raw = el.value.replace(/[^0-9]/g, '');
+    if (raw === '') { el.value = ''; return; }
+    el.value = Number(raw).toLocaleString();
+    const newLen = el.value.length;
+    const newPos = Math.max(0, cursorPos + (newLen - oldLen));
+    el.setSelectionRange(newPos, newPos);
+}
+
+function parseMoneyValue(el) {
+    if (!el) return 0;
+    return parseInt(el.value.replace(/,/g, '')) || 0;
+}
+
+function setMoneyValue(id, val) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (val) {
+        el.value = Number(val).toLocaleString();
+    } else {
+        el.value = '';
+    }
+}
+
+function updateSalesSubtotal(loc) {
+    const card = parseMoneyValue(document.getElementById('inpCard' + loc));
+    const cash = parseMoneyValue(document.getElementById('inpCash' + loc));
+    const total = card + cash;
+    const el = document.getElementById('salesSubtotal' + loc);
+    if (el) el.textContent = '카드+현금 매출: ' + total.toLocaleString() + '원';
+}
+
 // 특정 날짜에 해당하는 직원 스케줄 반환 (이력 기반)
 function getScheduleForDate(staff, dateStr) {
     if (!staff.scheduleHistory || staff.scheduleHistory.length === 0) {
@@ -91,21 +128,25 @@ function loadDailyAccounting() {
     const dayData = (accountingData.daily && accountingData.daily[datePicker]) ? accountingData.daily[datePicker] : {};
 
     // 1루 매출
-    if(document.getElementById('inpCard1')) document.getElementById('inpCard1').value = dayData.card1 || '';
-    if(document.getElementById('inpCash1')) document.getElementById('inpCash1').value = dayData.cash1 || '';
-    if(document.getElementById('inpDelivery1')) document.getElementById('inpDelivery1').value = dayData.delivery1 || '';
-    if(document.getElementById('inpTransfer1')) document.getElementById('inpTransfer1').value = dayData.transfer1 || '';
+    setMoneyValue('inpCard1', dayData.card1);
+    setMoneyValue('inpCash1', dayData.cash1);
+    setMoneyValue('inpDelivery1', dayData.delivery1);
+    setMoneyValue('inpTransfer1', dayData.transfer1);
 
     // 3루 매출
-    if(document.getElementById('inpCard3')) document.getElementById('inpCard3').value = dayData.card3 || '';
-    if(document.getElementById('inpCash3')) document.getElementById('inpCash3').value = dayData.cash3 || '';
-    if(document.getElementById('inpDelivery3')) document.getElementById('inpDelivery3').value = dayData.delivery3 || '';
-    if(document.getElementById('inpTransfer3')) document.getElementById('inpTransfer3').value = dayData.transfer3 || '';
+    setMoneyValue('inpCard3', dayData.card3);
+    setMoneyValue('inpCash3', dayData.cash3);
+    setMoneyValue('inpDelivery3', dayData.delivery3);
+    setMoneyValue('inpTransfer3', dayData.transfer3);
 
     // 지출 (공통)
-    document.getElementById('inpFood').value = dayData.food || '';
-    document.getElementById('inpMeat').value = dayData.meat || '';
-    document.getElementById('inpEtc').value = dayData.etc || '';
+    setMoneyValue('inpFood', dayData.food);
+    setMoneyValue('inpMeat', dayData.meat);
+    setMoneyValue('inpEtc', dayData.etc);
+
+    // 소계 업데이트
+    updateSalesSubtotal('1');
+    updateSalesSubtotal('3');
 
     // 메모 (각각)
     if(document.getElementById('inpNote1')) document.getElementById('inpNote1').value = dayData.note1 || '';
@@ -123,21 +164,21 @@ async function saveDailyAccounting() {
     if (!dateStr) { alert('날짜를 선택해주세요.'); return; }
 
     // 1루 매출 입력
-    const card1 = parseInt(document.getElementById('inpCard1').value) || 0;
-    const cash1 = parseInt(document.getElementById('inpCash1').value) || 0;
-    const delivery1 = parseInt(document.getElementById('inpDelivery1').value) || 0;
-    const transfer1 = parseInt(document.getElementById('inpTransfer1').value) || 0;
+    const card1 = parseMoneyValue(document.getElementById('inpCard1'));
+    const cash1 = parseMoneyValue(document.getElementById('inpCash1'));
+    const delivery1 = parseMoneyValue(document.getElementById('inpDelivery1'));
+    const transfer1 = parseMoneyValue(document.getElementById('inpTransfer1'));
 
     // 3루 매출 입력
-    const card3 = parseInt(document.getElementById('inpCard3').value) || 0;
-    const cash3 = parseInt(document.getElementById('inpCash3').value) || 0;
-    const delivery3 = parseInt(document.getElementById('inpDelivery3').value) || 0;
-    const transfer3 = parseInt(document.getElementById('inpTransfer3').value) || 0;
+    const card3 = parseMoneyValue(document.getElementById('inpCard3'));
+    const cash3 = parseMoneyValue(document.getElementById('inpCash3'));
+    const delivery3 = parseMoneyValue(document.getElementById('inpDelivery3'));
+    const transfer3 = parseMoneyValue(document.getElementById('inpTransfer3'));
 
     // 지출 입력 (공통)
-    const food = parseInt(document.getElementById('inpFood').value) || 0;
-    const meat = parseInt(document.getElementById('inpMeat').value) || 0;
-    const etc = parseInt(document.getElementById('inpEtc').value) || 0;
+    const food = parseMoneyValue(document.getElementById('inpFood'));
+    const meat = parseMoneyValue(document.getElementById('inpMeat'));
+    const etc = parseMoneyValue(document.getElementById('inpEtc'));
 
     // 메모 (각각)
     const note1 = document.getElementById('inpNote1').value || '';
@@ -176,7 +217,11 @@ async function saveDailyAccounting() {
         if(!accountingData.daily) accountingData.daily = {};
         accountingData.daily[dateStr] = data;
         alert('저장되었습니다.');
-        switchAccSubTab('acc-history');
+        if (currentUser && currentUser.role === 'manager') {
+            // 매니저는 입력내역 탭이 없으므로 일일입력에 유지
+        } else {
+            switchAccSubTab('acc-history');
+        }
     } catch(e) {
         alert('저장 실패: 서버 오류');
     }
