@@ -193,8 +193,8 @@ function renderInventoryCheck() {
                 lastVendor = item.vendor;
             }
 
-            let displayUnit = item.발주단위;
-            if (item.vendor === '한강유통(고기)') displayUnit = getMeatVendorInfo(item.품목명).inputUnit;
+            let displayUnit = item.재고단위 || item.발주단위;
+            if (!item.재고단위 && item.vendor === '한강유통(고기)') displayUnit = getMeatVendorInfo(item.품목명).inputUnit;
 
             const diffClass = (item.diff >= 0) ? 'diff-plus' : 'diff-minus';
             const diffSign = (item.diff > 0) ? '+' : '';
@@ -464,17 +464,17 @@ function checkOrderConfirmation() {
 
             let displayQty = 0;
             let displayUnit = item.발주단위;
-            if (vendor === '한강유통(고기)') {
+            if (item.재고단위 && item.unitsPerOrder) {
+                // 재고단위와 발주단위가 다른 경우 (예: 팩→kg, 봉→박스 변환)
+                displayUnit = item.발주단위;
+                if (orderAmountRaw > 0) displayQty = Math.ceil(orderAmountRaw / item.unitsPerOrder);
+            } else if (vendor === '한강유통(고기)') {
                 const meatInfo = getMeatVendorInfo(item.품목명);
                 displayUnit = meatInfo.unit;
                 if (orderAmountRaw > 0) {
                     const packs = Math.ceil(orderAmountRaw / meatInfo.weight);
                     displayQty = (meatInfo.type === 'weight' && meatInfo.unit === 'kg') ? packs * meatInfo.weight : packs;
                 }
-            } else if (item.재고단위 && item.unitsPerOrder) {
-                // 재고단위와 발주단위가 다른 경우 (예: 봉 → 박스 변환)
-                displayUnit = item.발주단위;
-                if (orderAmountRaw > 0) displayQty = Math.ceil(orderAmountRaw / item.unitsPerOrder);
             } else if (vendor === '고센유통') {
                 if (orderAmountRaw > 0) displayQty = Math.ceil(orderAmountRaw);
             } else {

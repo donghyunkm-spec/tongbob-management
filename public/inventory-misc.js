@@ -169,8 +169,8 @@ function renderInventoryHistory(record, vendorFilter) {
                 if (vendorInventory[itemKey] !== undefined) {
                     hasData = true;
                     const stock = vendorInventory[itemKey];
-                    let displayUnit = item.발주단위;
-                    if (vendorName === '한강유통(고기)') {
+                    let displayUnit = item.재고단위 || item.발주단위;
+                    if (!item.재고단위 && vendorName === '한강유통(고기)') {
                         const meatVendorInfo = getMeatVendorInfo(item.품목명);
                         displayUnit = meatVendorInfo.inputUnit;
                     }

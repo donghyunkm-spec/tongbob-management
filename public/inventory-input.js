@@ -232,7 +232,7 @@ function renderUnifiedInventoryForm() {
         const prevDateLabel = lastSaveDate ? lastSaveDate.substring(5).replace('-', '/') : '-';
 
         let displayUnit = item.재고단위 || item.발주단위;
-        if (item.vendor === '한강유통(고기)') displayUnit = getMeatVendorInfo(item.품목명).inputUnit;
+        if (!item.재고단위 && item.vendor === '한강유통(고기)') displayUnit = getMeatVendorInfo(item.품목명).inputUnit;
 
         const lastDate = lastOrderDates[rawItemKey];
         const daysSince = lastDate ? getDaysSince(lastDate) : 999;
@@ -395,7 +395,7 @@ function renderStandardForm() {
             const itemKey = `${vendor}_${item.품목명}`;
             const usage = dailyUsage[itemKey] || 0;
             let displayUnit = item.재고단위 || item.발주단위;
-            if (vendor === '한강유통(고기)') displayUnit = getMeatVendorInfo(item.품목명).inputUnit;
+            if (!item.재고단위 && vendor === '한강유통(고기)') displayUnit = getMeatVendorInfo(item.품목명).inputUnit;
 
             listHtml += `
                 <div class="standard-row" style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
