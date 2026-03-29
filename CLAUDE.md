@@ -30,11 +30,11 @@ Single Express.js file handling all API routes. Uses file-based JSON storage (no
 **Environment Variables (see .env.example):**
 - `KAKAO_REST_API_KEY` - Kakao OAuth API key
 - `KAKAO_REDIRECT_URI` - OAuth callback URL
-- `ADMIN_PASSWORD`, `MANAGER_PASSWORD`, `STAFF_PASSWORD` - Login credentials (defaults provided)
+- `ADMIN_PASSWORD`, `MANAGER_PASSWORD`, `STAFF_PASSWORD`, `INVENTORY_PASSWORD` - Login credentials (defaults provided)
 - `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID` - Telegram bot notifications (optional; silently skipped if absent)
 
 **API Groups:**
-1. **Auth** (`/api/login`) - Password-based login returning role: `admin`, `manager`, or `viewer`
+1. **Auth** (`/api/login`) - Password-based login returning role: `admin`, `manager`, `viewer`, or `inventory`
 2. **Staff Management** (`/api/staff/*`) - Employee CRUD, schedule exceptions, temp workers; soft delete with 30-day retention before permanent removal
 3. **Accounting** (`/api/accounting/*`) - Daily sales entry, monthly fixed costs
 4. **Inventory** (`/api/inventory/*`) - Items by vendor, current stock, daily usage, orders, holidays, history
@@ -105,7 +105,7 @@ All JSON files are auto-initialized if missing:
 
 **Staff Salary Calculation:** Supports both monthly (`salaryType: 'monthly'`) and hourly (`salaryType: 'hourly'`) with prorated calculations based on `startDate`/`endDate`. Salary fields are stripped from API responses for non-admin roles.
 
-**Role Access:** `admin` → full access including salary data; `manager` → most features; `viewer` (staff) → read-only schedule view.
+**Role Access:** `admin` → full access including salary data; `manager` → most features; `viewer` (staff) → read-only schedule view; `inventory` → inventory tab only.
 
 **Schedule startDate/endDate Filtering:** All three schedule views (daily/weekly/monthly) must filter out staff whose `startDate` > target date or `endDate` < target date. The pattern used in weekly/monthly views is:
 ```js

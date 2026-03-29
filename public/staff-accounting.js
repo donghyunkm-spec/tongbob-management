@@ -252,6 +252,14 @@ function loadHistoryTable(filterKey = 'all') {
         'food': '🥬 고센', 'meat': '🥩 고기', 'etc': '🍦 잡비'
     };
 
+    // 위치별 필드 합산 헬퍼 (card1+card3, 또는 구버전 card)
+    function sumField(d, field) {
+        if (d[field + '1'] !== undefined || d[field + '3'] !== undefined) {
+            return (d[field + '1'] || 0) + (d[field + '3'] || 0);
+        }
+        return d[field] || 0;
+    }
+
     const rows = [];
 
     // 1) 일일 데이터 처리
@@ -261,10 +269,10 @@ function loadHistoryTable(filterKey = 'all') {
 
             const d = accountingData.daily[date];
 
-            // 필터링
+            // 필터링 - 위치별 합산 지원
             let valToCheck = 0;
-            if (filterKey === 'sales') valToCheck = d.sales;
-            else if (filterKey !== 'all') valToCheck = d[filterKey];
+            if (filterKey === 'sales') valToCheck = d.sales || 0;
+            else if (filterKey !== 'all') valToCheck = sumField(d, filterKey);
 
             if (filterKey !== 'all') {
                 if (!valToCheck) return;
@@ -281,16 +289,22 @@ function loadHistoryTable(filterKey = 'all') {
                 const label = labelMap[filterKey] || filterKey;
                 details.push(`<span style="background:#fff9c4; font-weight:bold;">${label}: ${valToCheck.toLocaleString()}</span>`);
             } else {
-                if(d.card) details.push(`💳${d.card.toLocaleString()}`);
-                if(d.cash) details.push(`💵${d.cash.toLocaleString()}`);
-                if(d.delivery) details.push(`🛵${d.delivery.toLocaleString()}`);
-                if(d.transfer) details.push(`(이체:${d.transfer.toLocaleString()})`);
+                const cardTotal = sumField(d, 'card');
+                const cashTotal = sumField(d, 'cash');
+                const deliveryTotal = sumField(d, 'delivery');
+                const transferTotal = sumField(d, 'transfer');
+
+                if(cardTotal) details.push(`💳${cardTotal.toLocaleString()}`);
+                if(cashTotal) details.push(`💵${cashTotal.toLocaleString()}`);
+                if(deliveryTotal) details.push(`🛵${deliveryTotal.toLocaleString()}`);
+                if(transferTotal) details.push(`(이체:${transferTotal.toLocaleString()})`);
 
                 if(d.food) details.push(`고센:${d.food.toLocaleString()}`);
                 if(d.etc) details.push(`잡비:${d.etc.toLocaleString()}`);
             }
 
-            if(d.note) details.push(`📝${d.note}`);
+            const noteText = [d.note1, d.note3, d.note].filter(Boolean).join(' / ');
+            if(noteText) details.push(`📝${noteText}`);
 
             rows.push({
                 date: date, dayStr: `${date.substring(8)}일`,

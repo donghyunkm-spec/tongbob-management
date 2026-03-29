@@ -62,15 +62,30 @@ async function onLoginSuccess(user) {
         userInfoDiv.style.display = 'flex';
     }
 
+    const roleNameMap = { admin: '사장', manager: '점장', viewer: '직원', inventory: '재고담당' };
     const userNameSpan = document.getElementById('userName');
     if(userNameSpan) {
-        userNameSpan.textContent = `${user.name} (${user.role === 'admin' ? '사장' : user.role === 'manager' ? '점장' : '직원'})`;
+        userNameSpan.textContent = `${user.name} (${roleNameMap[user.role] || user.role})`;
     }
 
     // 로그인 성공 시 재고관리 탭 표시
     const inventoryTab = document.getElementById('tab-inventory');
     if(inventoryTab) {
         inventoryTab.style.display = 'block';
+    }
+
+    // 재고담당 전용: 재고관리 탭만 표시, 나머지 숨김
+    if (user.role === 'inventory') {
+        // 매장관리(출퇴근) 메인탭과 매입/매출 탭 숨김
+        document.querySelectorAll('.main-tabs > button').forEach(btn => {
+            const onclick = btn.getAttribute('onclick') || '';
+            if (!onclick.includes("'inventory'") && !onclick.includes("'manual'")) {
+                btn.style.display = 'none';
+            }
+        });
+        // 재고관리 탭으로 자동 전환
+        if(typeof switchTab === 'function') switchTab('inventory');
+        return;
     }
 
     // 관리자(사장님) 전용 권한

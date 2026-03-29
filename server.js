@@ -140,10 +140,12 @@ app.post('/api/login', (req, res) => {
     const ADMIN_PW = process.env.ADMIN_PASSWORD || 'admin1234!';
     const MANAGER_PW = process.env.MANAGER_PASSWORD || 'manager1234';
     const STAFF_PW = process.env.STAFF_PASSWORD || 'staff1234';
+    const INVENTORY_PW = process.env.INVENTORY_PASSWORD || 'inventory1234';
 
     if (password === ADMIN_PW) res.json({ success: true, role: 'admin', name: '사장님' });
     else if (password === MANAGER_PW) res.json({ success: true, role: 'manager', name: '관리자' });
     else if (password === STAFF_PW) res.json({ success: true, role: 'viewer', name: '직원' });
+    else if (password === INVENTORY_PW) res.json({ success: true, role: 'inventory', name: '재고담당' });
     else res.status(401).json({ success: false });
 });
 
