@@ -533,7 +533,8 @@ async function renderCostAnalysis() {
             const key = `${vendor}_${item.품목명}`;
             const stock1 = displayInventory[`1루_${key}`] || 0;
             const stock3 = displayInventory[`3루_${key}`] || 0;
-            const total = stock1 + stock3;
+            const stockW = displayInventory[`창고_${key}`] || 0;
+            const total = stock1 + stock3 + stockW;
             const cost = (item.unitCost || 0) * total;
 
             if (item.unitCost) itemsWithCost++;

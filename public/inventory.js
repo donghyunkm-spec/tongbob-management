@@ -107,7 +107,7 @@ async function loadInventoryDataAll() {
             });
 
             // 각 위치별로 inventory에 로드
-            ['1루', '3루'].forEach(loc => {
+            ['1루', '3루', '창고'].forEach(loc => {
                 const lastSaveDate = lastSavedInventory[`meta_last_save_${loc}`];
                 const prefix = `${loc}_`;
 

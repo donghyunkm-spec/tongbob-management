@@ -30,25 +30,24 @@ function renderInventoryCheck() {
     let lastSaveDate1 = null;
     let lastSaveDate3 = null;
 
+    let lastSaveDateW = null;
+
     if (checkDateOffset === 0) {
-        const hasInput1 = Object.keys(inventory).some(k => k.startsWith('1루_') && !k.startsWith('meta_'));
-        const hasInput3 = Object.keys(inventory).some(k => k.startsWith('3루_') && !k.startsWith('meta_'));
-
-        if (hasInput1) {
-            Object.keys(inventory).filter(k => k.startsWith('1루_')).forEach(k => displayInventory[k] = inventory[k]);
-            lastSaveDate1 = '오늘 입력중';
-        } else {
-            Object.keys(lastSavedInventory).filter(k => k.startsWith('1루_') && !k.startsWith('meta_')).forEach(k => displayInventory[k] = lastSavedInventory[k]);
-            lastSaveDate1 = lastSavedInventory['meta_last_save_1루'] || '기록없음';
-        }
-
-        if (hasInput3) {
-            Object.keys(inventory).filter(k => k.startsWith('3루_')).forEach(k => displayInventory[k] = inventory[k]);
-            lastSaveDate3 = '오늘 입력중';
-        } else {
-            Object.keys(lastSavedInventory).filter(k => k.startsWith('3루_') && !k.startsWith('meta_')).forEach(k => displayInventory[k] = lastSavedInventory[k]);
-            lastSaveDate3 = lastSavedInventory['meta_last_save_3루'] || '기록없음';
-        }
+        ['1루', '3루', '창고'].forEach(loc => {
+            const hasInput = Object.keys(inventory).some(k => k.startsWith(`${loc}_`) && !k.startsWith('meta_'));
+            if (hasInput) {
+                Object.keys(inventory).filter(k => k.startsWith(`${loc}_`)).forEach(k => displayInventory[k] = inventory[k]);
+                if (loc === '1루') lastSaveDate1 = '오늘 입력중';
+                else if (loc === '3루') lastSaveDate3 = '오늘 입력중';
+                else lastSaveDateW = '오늘 입력중';
+            } else {
+                Object.keys(lastSavedInventory).filter(k => k.startsWith(`${loc}_`) && !k.startsWith('meta_')).forEach(k => displayInventory[k] = lastSavedInventory[k]);
+                const meta = lastSavedInventory[`meta_last_save_${loc}`] || '기록없음';
+                if (loc === '1루') lastSaveDate1 = meta;
+                else if (loc === '3루') lastSaveDate3 = meta;
+                else lastSaveDateW = meta;
+            }
+        });
     } else if (checkDateOffset > 0) {
         container.innerHTML = `<div style="padding:50px; text-align:center; color:#999;">미래의 데이터는 볼 수 없습니다.</div>`;
         return;
@@ -58,6 +57,7 @@ function renderInventoryCheck() {
             Object.values(record.inventory).forEach(vendorObj => Object.assign(displayInventory, vendorObj));
             lastSaveDate1 = dateStr;
             lastSaveDate3 = dateStr;
+            lastSaveDateW = dateStr;
         } else {
             container.innerHTML = `<div style="padding:50px; text-align:center; color:#999;">${dateStr} 기록이 없습니다.</div>`;
             return;
@@ -71,7 +71,8 @@ function renderInventoryCheck() {
             const rawItemKey = `${vendor}_${item.품목명}`;
             const stock1 = displayInventory[`1루_${rawItemKey}`] || 0;
             const stock3 = displayInventory[`3루_${rawItemKey}`] || 0;
-            const totalStock = parseFloat((stock1 + stock3).toFixed(2));
+            const stockW = displayInventory[`창고_${rawItemKey}`] || 0;
+            const totalStock = parseFloat((stock1 + stock3 + stockW).toFixed(2));
             const usage = dailyUsage[rawItemKey] || 0;
             const diff = parseFloat((totalStock - usage).toFixed(2));
 
@@ -83,6 +84,7 @@ function renderInventoryCheck() {
                 rawItemKey,
                 stock1,
                 stock3,
+                stockW,
                 totalStock,
                 usage,
                 diff,
@@ -108,8 +110,8 @@ function renderInventoryCheck() {
     } else {
         filteredItems.sort((a, b) => {
             if (a.vendor !== b.vendor) return a.vendor.localeCompare(b.vendor);
-            const sortA = (currentLocation === '1루') ? (a.sort1 ?? 9999) : (a.sort3 ?? 9999);
-            const sortB = (currentLocation === '1루') ? (b.sort1 ?? 9999) : (b.sort3 ?? 9999);
+            const sortA = (currentLocation === '1루') ? (a.sort1 ?? 9999) : (currentLocation === '3루') ? (a.sort3 ?? 9999) : (a.sortW ?? 9999);
+            const sortB = (currentLocation === '1루') ? (b.sort1 ?? 9999) : (currentLocation === '3루') ? (b.sort3 ?? 9999) : (b.sortW ?? 9999);
             return sortA - sortB;
         });
     }
@@ -124,20 +126,23 @@ function renderInventoryCheck() {
 
     const date1Label = formatDateLabel(lastSaveDate1);
     const date3Label = formatDateLabel(lastSaveDate3);
-    const isMismatch = checkDateOffset === 0 && lastSaveDate1 !== lastSaveDate3 &&
-                       lastSaveDate1 !== '오늘 입력중' && lastSaveDate3 !== '오늘 입력중';
+    const dateWLabel = formatDateLabel(lastSaveDateW);
+    const allDates = [lastSaveDate1, lastSaveDate3, lastSaveDateW].filter(d => d && d !== '기록없음');
+    const isMismatch = checkDateOffset === 0 && allDates.length > 1 &&
+                       !allDates.every(d => d === allDates[0] || d === '오늘 입력중');
 
     let dateInfoHtml = '';
     if (checkDateOffset === 0) {
         dateInfoHtml = `
             <div style="margin-bottom:8px; padding:8px 10px; background:#fff; border-radius:5px; border:1px solid #ddd; font-size:12px;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span><strong>1루</strong> 기준: <span style="color:#1976d2;">${date1Label}</span></span>
-                    <span><strong>3루</strong> 기준: <span style="color:#1976d2;">${date3Label}</span></span>
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
+                    <span><strong>1루</strong>: <span style="color:#1976d2;">${date1Label}</span></span>
+                    <span><strong>3루</strong>: <span style="color:#1976d2;">${date3Label}</span></span>
+                    <span><strong>창고</strong>: <span style="color:#1976d2;">${dateWLabel}</span></span>
                 </div>
                 ${isMismatch ? `
                 <div style="margin-top:6px; padding:6px 8px; background:#fff3e0; border:1px solid #ffb74d; border-radius:4px; color:#e65100;">
-                    <strong>⚠️ 주의:</strong> 1루와 3루 재고 기준일이 다릅니다! 발주 전 최신 재고를 입력해주세요.
+                    <strong>⚠️ 주의:</strong> 위치별 재고 기준일이 다릅니다! 발주 전 최신 재고를 입력해주세요.
                 </div>` : ''}
             </div>
         `;
@@ -173,6 +178,7 @@ function renderInventoryCheck() {
                     <th style="min-width:110px;">품목명</th>
                     <th>1루</th>
                     <th>3루</th>
+                    <th>창고</th>
                     <th style="background:#e3f2fd;">합계</th>
                     <th>1일사용</th>
                     <th>차이</th>
@@ -185,11 +191,11 @@ function renderInventoryCheck() {
     let lastVendor = '';
 
     if (filteredItems.length === 0) {
-        tableHtml += `<tr><td colspan="7" style="text-align:center; padding:20px; color:#999;">검색 결과가 없습니다.</td></tr>`;
+        tableHtml += `<tr><td colspan="8" style="text-align:center; padding:20px; color:#999;">검색 결과가 없습니다.</td></tr>`;
     } else {
         filteredItems.forEach(item => {
             if (checkSortKey === 'vendor' && item.vendor !== lastVendor) {
-                tableHtml += `<tr style="background:#f8f9fa;"><td colspan="7" style="text-align:left; font-size:12px; font-weight:bold; color:#555; padding-left:10px;">📦 ${item.vendor}</td></tr>`;
+                tableHtml += `<tr style="background:#f8f9fa;"><td colspan="8" style="text-align:left; font-size:12px; font-weight:bold; color:#555; padding-left:10px;">📦 ${item.vendor}</td></tr>`;
                 lastVendor = item.vendor;
             }
 
@@ -226,6 +232,7 @@ function renderInventoryCheck() {
                     </td>
                     <td>${parseFloat(item.stock1.toFixed(2))}${stockUnitTag}</td>
                     <td>${parseFloat(item.stock3.toFixed(2))}${stockUnitTag}</td>
+                    <td>${parseFloat(item.stockW.toFixed(2))}${stockUnitTag}</td>
                     <td class="check-val" style="background:#e3f2fd;">${parseFloat(item.totalStock.toFixed(2))}${stockUnitTag}</td>
                     <td>${parseFloat(item.usage.toFixed(2))}${stockUnitTag}</td>
                     <td class="${diffClass} check-val">${diffSign}${parseFloat(item.diff.toFixed(1))}</td>
@@ -239,7 +246,7 @@ function renderInventoryCheck() {
     const totalCost = filteredItems.reduce((sum, it) => sum + (it.cost || 0), 0);
     if (totalCost > 0) {
         tableHtml += `<tr style="background:#e8f5e9; font-weight:bold;">
-            <td colspan="6" style="text-align:right; font-size:13px;">재고 총 원가</td>
+            <td colspan="7" style="text-align:right; font-size:13px;">재고 총 원가</td>
             <td style="text-align:right; font-size:13px; color:#1b5e20;">${Number(totalCost.toFixed(0)).toLocaleString()}원</td>
         </tr>`;
     }
@@ -374,16 +381,15 @@ function triggerOrderProcess() {
         return;
     }
 
-    const lastSaveDate1 = lastSavedInventory['meta_last_save_1루'];
-    const lastSaveDate3 = lastSavedInventory['meta_last_save_3루'];
-    const hasInput1 = Object.keys(inventory).some(k => k.startsWith('1루_') && !k.startsWith('meta_'));
-    const hasInput3 = Object.keys(inventory).some(k => k.startsWith('3루_') && !k.startsWith('meta_'));
+    const locs = ['1루', '3루', '창고'];
+    const locDates = locs.map(loc => ({ loc, date: lastSavedInventory[`meta_last_save_${loc}`] }));
+    const hasAnyInput = locs.some(loc => Object.keys(inventory).some(k => k.startsWith(`${loc}_`) && !k.startsWith('meta_')));
+    const uniqueDates = [...new Set(locDates.map(d => d.date).filter(Boolean))];
 
-    if (!hasInput1 && !hasInput3 && lastSaveDate1 !== lastSaveDate3) {
-        const msg = `⚠️ 1루와 3루 재고 기준일이 다릅니다!\n\n` +
-                    `• 1루: ${lastSaveDate1 || '기록없음'}\n` +
-                    `• 3루: ${lastSaveDate3 || '기록없음'}\n\n` +
-                    `정확한 발주를 위해 최신 재고를 입력해주세요.\n그래도 발주를 진행하시겠습니까?`;
+    if (!hasAnyInput && uniqueDates.length > 1) {
+        const msg = `⚠️ 위치별 재고 기준일이 다릅니다!\n\n` +
+                    locDates.map(d => `• ${d.loc}: ${d.date || '기록없음'}`).join('\n') +
+                    `\n\n정확한 발주를 위해 최신 재고를 입력해주세요.\n그래도 발주를 진행하시겠습니까?`;
         if (!confirm(msg)) return;
     }
 
@@ -413,7 +419,8 @@ function checkOrderConfirmation() {
                 const rawItemKey = `${vendor}_${item.품목명}`;
                 const stock1 = inventory[`1루_${rawItemKey}`] || 0;
                 const stock3 = inventory[`3루_${rawItemKey}`] || 0;
-                const totalStock = stock1 + stock3;
+                const stockW = inventory[`창고_${rawItemKey}`] || 0;
+                const totalStock = stock1 + stock3 + stockW;
                 const usage = dailyUsage[rawItemKey] || 0;
                 const neededTotal = usage * daysNeeded;
                 if (totalStock < neededTotal || totalStock === 0) {
@@ -436,7 +443,8 @@ function checkOrderConfirmation() {
 
             const stock1 = inventory[`1루_${rawItemKey}`] || 0;
             const stock3 = inventory[`3루_${rawItemKey}`] || 0;
-            const totalStock = stock1 + stock3;
+            const stockW = inventory[`창고_${rawItemKey}`] || 0;
+            const totalStock = stock1 + stock3 + stockW;
 
             const usage = dailyUsage[rawItemKey] || 0;
             const neededTotal = usage * daysNeeded;
@@ -834,7 +842,8 @@ function showServingOverview(mode) {
             const rawKey = `${vendor}_${item.품목명}`;
             const stock1 = displayInventory[`1루_${rawKey}`] || 0;
             const stock3 = displayInventory[`3루_${rawKey}`] || 0;
-            const currentTotal = stock1 + stock3;
+            const stockW = displayInventory[`창고_${rawKey}`] || 0;
+            const currentTotal = stock1 + stock3 + stockW;
             const orderQty = orderMap[rawKey] || 0;
             const afterOrderTotal = currentTotal + orderQty;
             const useTotal = (servingViewMode === 'afterOrder') ? afterOrderTotal : currentTotal;

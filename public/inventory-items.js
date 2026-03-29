@@ -28,13 +28,19 @@ function renderManageItems() {
                     <input type="radio" name="sortMode" value="1루"
                         ${manageSortMode==='1루' ? 'checked' : ''}
                         onchange="changeSortMode(this.value)">
-                    ⚾ 1루 순서
+                    ⚾ 1루
                 </label>
                 <label class="sort-toggle-label ${manageSortMode==='3루' ? 'checked' : ''}">
                     <input type="radio" name="sortMode" value="3루"
                         ${manageSortMode==='3루' ? 'checked' : ''}
                         onchange="changeSortMode(this.value)">
-                    ⚾ 3루 순서
+                    ⚾ 3루
+                </label>
+                <label class="sort-toggle-label ${manageSortMode==='창고' ? 'checked' : ''}">
+                    <input type="radio" name="sortMode" value="창고"
+                        ${manageSortMode==='창고' ? 'checked' : ''}
+                        onchange="changeSortMode(this.value)">
+                    📦 창고
                 </label>
             </div>
         </div>
@@ -46,7 +52,7 @@ function renderManageItems() {
 
     // 2. sort 값 없는 품목에 자동 번호 부여 (초기화) - 전체 모드에서는 불필요
     const isAllMode = manageSortMode === 'all';
-    const sortProp = (manageSortMode === '3루') ? 'sort3' : 'sort1';
+    const sortProp = (manageSortMode === '3루') ? 'sort3' : (manageSortMode === '창고') ? 'sortW' : 'sort1';
     if (!isAllMode) {
         let maxSort = -1;
         Object.keys(items).forEach(vendor => {
@@ -159,37 +165,29 @@ function moveGlobalSort(visualIdx, direction) {
             const locations = item.locations || ['1루', '3루'];
             if (!locations.includes(manageSortMode)) return;
 
+            const sp = (manageSortMode === '3루') ? 'sort3' : (manageSortMode === '창고') ? 'sortW' : 'sort1';
             flatList.push({
-                itemRef: item, // 참조 전달 (원본 수정용)
-                sortKey: (manageSortMode === '1루') ? (item.sort1 ?? 9999) : (item.sort3 ?? 9999)
+                itemRef: item,
+                sortKey: item[sp] ?? 9999
             });
         });
     });
 
-    // 정렬
     flatList.sort((a, b) => a.sortKey - b.sortKey);
 
-    // 2. 스왑 대상 확인
     const targetIdx = visualIdx + direction;
     if (targetIdx < 0 || targetIdx >= flatList.length) return;
 
     const current = flatList[visualIdx];
     const target = flatList[targetIdx];
 
-    // 3. 전체 재정렬 (안전한 방법: 0부터 다시 번호 매기기)
+    const sp = (manageSortMode === '3루') ? 'sort3' : (manageSortMode === '창고') ? 'sortW' : 'sort1';
     flatList.forEach((obj, idx) => {
-        if (manageSortMode === '1루') obj.itemRef.sort1 = idx;
-        else obj.itemRef.sort3 = idx;
+        obj.itemRef[sp] = idx;
     });
 
-    // 이제 Swap
-    if (manageSortMode === '1루') {
-        current.itemRef.sort1 = targetIdx;
-        target.itemRef.sort1 = visualIdx;
-    } else {
-        current.itemRef.sort3 = targetIdx;
-        target.itemRef.sort3 = visualIdx;
-    }
+    current.itemRef[sp] = targetIdx;
+    target.itemRef[sp] = visualIdx;
 
     renderManageItems();
 }
@@ -207,34 +205,19 @@ function moveItemSort(vendor, visualIdx, direction) {
     let list = items[vendor];
     let displayList = list.map((item, idx) => ({ item, idx })); // idx는 원본 인덱스
 
-    displayList.sort((a, b) => {
-        const valA = (manageSortMode==='1루') ? (a.item.sort1 ?? 9999) : (a.item.sort3 ?? 9999);
-        const valB = (manageSortMode==='1루') ? (b.item.sort1 ?? 9999) : (b.item.sort3 ?? 9999);
-        return valA - valB;
-    });
+    const sp = (manageSortMode === '3루') ? 'sort3' : (manageSortMode === '창고') ? 'sortW' : 'sort1';
+    displayList.sort((a, b) => (a.item[sp] ?? 9999) - (b.item[sp] ?? 9999));
 
     const targetVisualIdx = visualIdx + direction;
     if (targetVisualIdx < 0 || targetVisualIdx >= displayList.length) return;
 
-    // 2. 두 아이템의 sort 값을 교환
-    displayList.forEach((obj, i) => {
-        if (manageSortMode === '1루') obj.item.sort1 = i;
-        else obj.item.sort3 = i;
-    });
+    displayList.forEach((obj, i) => { obj.item[sp] = i; });
 
-    // 스왑
     const currentObj = displayList[visualIdx];
     const targetObj = displayList[targetVisualIdx];
-
-    if (manageSortMode === '1루') {
-        const temp = currentObj.item.sort1;
-        currentObj.item.sort1 = targetObj.item.sort1;
-        targetObj.item.sort1 = temp;
-    } else {
-        const temp = currentObj.item.sort3;
-        currentObj.item.sort3 = targetObj.item.sort3;
-        targetObj.item.sort3 = temp;
-    }
+    const temp = currentObj.item[sp];
+    currentObj.item[sp] = targetObj.item[sp];
+    targetObj.item[sp] = temp;
 
     // 3. 재렌더링
     renderManageItems();
@@ -300,9 +283,11 @@ async function addNewItem() {
     // [NEW] 위치 정보 수집
     const loc1 = document.getElementById('newItemLoc1');
     const loc3 = document.getElementById('newItemLoc3');
+    const locW = document.getElementById('newItemLocW');
     const locations = [];
     if (loc1 && loc1.checked) locations.push('1루');
     if (loc3 && loc3.checked) locations.push('3루');
+    if (locW && locW.checked) locations.push('창고');
 
     if (!name) {
         showAlert('품목명을 입력하세요', 'error');
@@ -326,12 +311,13 @@ async function addNewItem() {
     const servingPerUnit = parseFloat(document.getElementById('newServingPerUnit')?.value) || 0;
 
     // 새 품목의 sort 값: 전체 품목 중 최대값 + 1
-    let maxSort1 = -1, maxSort3 = -1;
+    let maxSort1 = -1, maxSort3 = -1, maxSortW = -1;
     Object.keys(items).forEach(v => {
         if (!items[v]) return;
         items[v].forEach(it => {
             if (typeof it.sort1 === 'number') maxSort1 = Math.max(maxSort1, it.sort1);
             if (typeof it.sort3 === 'number') maxSort3 = Math.max(maxSort3, it.sort3);
+            if (typeof it.sortW === 'number') maxSortW = Math.max(maxSortW, it.sortW);
         });
     });
 
@@ -342,7 +328,8 @@ async function addNewItem() {
         "관리주기": cycle,
         "locations": locations,
         "sort1": maxSort1 + 1,
-        "sort3": maxSort3 + 1
+        "sort3": maxSort3 + 1,
+        "sortW": maxSortW + 1
     };
     if (servingPerUnit > 0) {
         newItem.servings = [{ name: servingName, perUnit: servingPerUnit }];
@@ -368,6 +355,7 @@ async function addNewItem() {
             if (newServPU) newServPU.value = '';
             if (loc1) loc1.checked = true;
             if (loc3) loc3.checked = true;
+            if (locW) locW.checked = false;
 
             showAlert(`'${name}' 추가되었습니다. (위치: ${locations.join(', ')})`, 'success');
 
@@ -476,10 +464,12 @@ function openEditItemModal(vendor, index) {
     // 위치 정보 설정
     const editLoc1 = document.getElementById('editLoc1');
     const editLoc3 = document.getElementById('editLoc3');
+    const editLocW = document.getElementById('editLocW');
     if (editLoc1 && editLoc3) {
-        const locations = item.locations || ['1루', '3루']; // 기본값: 모든 위치
+        const locations = item.locations || ['1루', '3루'];
         editLoc1.checked = locations.includes('1루');
         editLoc3.checked = locations.includes('3루');
+        if (editLocW) editLocW.checked = locations.includes('창고');
     }
 
     document.getElementById('editItemModal').classList.add('active');
@@ -540,9 +530,11 @@ function saveEditItem() {
     // 위치 정보 수집
     const editLoc1 = document.getElementById('editLoc1');
     const editLoc3 = document.getElementById('editLoc3');
+    const editLocW = document.getElementById('editLocW');
     const newLocations = [];
     if (editLoc1 && editLoc1.checked) newLocations.push('1루');
     if (editLoc3 && editLoc3.checked) newLocations.push('3루');
+    if (editLocW && editLocW.checked) newLocations.push('창고');
 
     if (!newName) {
         showAlert('품목명을 입력해주세요.', 'error');

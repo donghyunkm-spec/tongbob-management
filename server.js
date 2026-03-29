@@ -466,7 +466,7 @@ app.post('/api/inventory/current', (req, res) => {
                 let vendor;
                 
                 // "1루_고센유통_양파" 형식인 경우
-                if (parts[0] === '1루' || parts[0] === '3루') {
+                if (parts[0] === '1루' || parts[0] === '3루' || parts[0] === '창고') {
                     vendor = parts[1]; // "고센유통"
                 } else {
                     // "고센유통_양파" 형식인 경우 (하위 호환성)
@@ -739,7 +739,7 @@ async function sendOrderTelegramSummary(orderRecord, itemsData, currentInventory
     for (const key in currentInventory) {
         if (key.startsWith('meta_')) continue;
         // key: "1루_vendor_itemName" or "3루_vendor_itemName"
-        const parts = key.match(/^(1루|3루)_(.+)$/);
+        const parts = key.match(/^(1루|3루|창고)_(.+)$/);
         if (!parts) continue;
         const rawKey = parts[2];
         stockMap[rawKey] = (stockMap[rawKey] || 0) + (currentInventory[key] || 0);
@@ -920,7 +920,8 @@ async function generateAndSendBriefing() {
                 const key = `${vendor}_${item.품목명}`;
                 const s1 = currentInv[`1루_${key}`] || 0;
                 const s3 = currentInv[`3루_${key}`] || 0;
-                invCost += (item.unitCost || 0) * (s1 + s3);
+                const sW = currentInv[`창고_${key}`] || 0;
+                invCost += (item.unitCost || 0) * (s1 + s3 + sW);
             });
         }
 
@@ -1107,14 +1108,14 @@ cron.schedule('0 10 * * *', async () => {
                 const key = `${vendor}_${item.품목명}`;
                 const stock1 = currentInventory[`1루_${key}`] || 0;
                 const stock3 = currentInventory[`3루_${key}`] || 0;
+                const stockW = currentInventory[`창고_${key}`] || 0;
                 const locations = item.locations || ['1루', '3루'];
-                let stockText;
-                if (locations.length === 1) {
-                    stockText = `${locations[0]}: ${locations[0] === '1루' ? stock1 : stock3}`;
-                } else {
-                    stockText = `1루:${stock1} / 3루:${stock3}`;
-                }
-                const total = stock1 + stock3;
+                let stockParts = [];
+                if (locations.includes('1루')) stockParts.push(`1루:${stock1}`);
+                if (locations.includes('3루')) stockParts.push(`3루:${stock3}`);
+                if (locations.includes('창고')) stockParts.push(`창고:${stockW}`);
+                const stockText = stockParts.length === 1 ? stockParts[0] : stockParts.join(' / ');
+                const total = stock1 + stock3 + stockW;
                 const warn = total === 0 ? ' ⚠️' : '';
                 stockMsg += `  ${item.품목명} → ${stockText} (합계:${total})${warn}\n`;
             });
@@ -1130,7 +1131,8 @@ cron.schedule('0 10 * * *', async () => {
                     const key = `${vendor}_${item.품목명}`;
                     const s1 = currentInventory[`1루_${key}`] || 0;
                     const s3 = currentInventory[`3루_${key}`] || 0;
-                    vCost += (item.unitCost || 0) * (s1 + s3);
+                    const sW = currentInventory[`창고_${key}`] || 0;
+                    vCost += (item.unitCost || 0) * (s1 + s3 + sW);
                 });
             }
             vendorCostsMap[vendor] = vCost;

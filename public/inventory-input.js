@@ -88,7 +88,7 @@ function toggleSortOrder() {
 }
 
 // ==========================================
-// 1루/3루 탭 변경
+// 위치 탭 변경
 // ==========================================
 function setLocation(loc) {
     if (currentLocation === loc) return;
@@ -108,26 +108,27 @@ function renderUnifiedInventoryForm() {
 
     const todayStr = new Date().toISOString().split('T')[0];
 
-    // 1루 마지막 저장일 확인
-    const lastDate1 = inventory['meta_last_save_1루'] || '기록없음';
-    const isToday1 = (lastDate1 === todayStr);
-    const displayDate1 = isToday1 ? '오늘 완료' : (lastDate1 === '기록없음' ? '기록없음' : lastDate1.substring(5).replace('-','/') + ' (과거)');
-    const badgeStyle1 = isToday1
-        ? 'background:#e8f5e9; color:#2e7d32; border:1px solid #c8e6c9;'
-        : 'background:#fff3e0; color:#e65100; border:1px solid #ffe0b2;';
-
-    // 3루 마지막 저장일 확인
-    const lastDate3 = inventory['meta_last_save_3루'] || '기록없음';
-    const isToday3 = (lastDate3 === todayStr);
-    const displayDate3 = isToday3 ? '오늘 완료' : (lastDate3 === '기록없음' ? '기록없음' : lastDate3.substring(5).replace('-','/') + ' (과거)');
-    const badgeStyle3 = isToday3
-        ? 'background:#e8f5e9; color:#2e7d32; border:1px solid #c8e6c9;'
-        : 'background:#fff3e0; color:#e65100; border:1px solid #ffe0b2;';
+    // 위치별 마지막 저장일 확인 헬퍼
+    function getLocSaveInfo(loc) {
+        const lastDate = inventory[`meta_last_save_${loc}`] || '기록없음';
+        const isToday = (lastDate === todayStr);
+        const displayDate = isToday ? '오늘 완료' : (lastDate === '기록없음' ? '기록없음' : lastDate.substring(5).replace('-','/') + ' (과거)');
+        const badgeStyle = isToday
+            ? 'background:#e8f5e9; color:#2e7d32; border:1px solid #c8e6c9;'
+            : 'background:#fff3e0; color:#e65100; border:1px solid #ffe0b2;';
+        return { lastDate, isToday, displayDate, badgeStyle };
+    }
+    const save1 = getLocSaveInfo('1루');
+    const save3 = getLocSaveInfo('3루');
+    const saveW = getLocSaveInfo('창고');
 
     // 매장별 테마 색상
-    const theme = currentLocation === '1루'
-        ? { bg: '#e3f2fd', border: '#1976d2', accent: '#1565c0', light: '#bbdefb', icon: '🔵' }
-        : { bg: '#fff3e0', border: '#f57c00', accent: '#e65100', light: '#ffe0b2', icon: '🟠' };
+    const themeMap = {
+        '1루': { bg: '#e3f2fd', border: '#1976d2', accent: '#1565c0', light: '#bbdefb', icon: '🔵' },
+        '3루': { bg: '#fff3e0', border: '#f57c00', accent: '#e65100', light: '#ffe0b2', icon: '🟠' },
+        '창고': { bg: '#e8f5e9', border: '#388e3c', accent: '#2e7d32', light: '#c8e6c9', icon: '🟢' }
+    };
+    const theme = themeMap[currentLocation] || themeMap['1루'];
 
     let html = `
         <div style="background:${theme.accent}; color:white; padding:12px 16px; margin:-10px -10px 15px -10px; text-align:center; font-size:18px; font-weight:bold; letter-spacing:1px;">
@@ -139,23 +140,31 @@ function renderUnifiedInventoryForm() {
                 <button class="btn-loc-select ${currentLocation==='1루'?'active':''}" onclick="setLocation('1루')"
                     style="${currentLocation==='1루' ? 'background:#1976d2; color:white; border-color:#1565c0;' : ''}">
                     🔵 1루
-                    <span style="display:block; font-size:10px; font-weight:normal; margin-top:2px;">${isToday1 ? '✅' : '⚠️'}</span>
+                    <span style="display:block; font-size:10px; font-weight:normal; margin-top:2px;">${save1.isToday ? '✅' : '⚠️'}</span>
                 </button>
                 <button class="btn-loc-select ${currentLocation==='3루'?'active':''}" onclick="setLocation('3루')"
                     style="${currentLocation==='3루' ? 'background:#f57c00; color:white; border-color:#e65100;' : ''}">
                     🟠 3루
-                    <span style="display:block; font-size:10px; font-weight:normal; margin-top:2px;">${isToday3 ? '✅' : '⚠️'}</span>
+                    <span style="display:block; font-size:10px; font-weight:normal; margin-top:2px;">${save3.isToday ? '✅' : '⚠️'}</span>
+                </button>
+                <button class="btn-loc-select ${currentLocation==='창고'?'active':''}" onclick="setLocation('창고')"
+                    style="${currentLocation==='창고' ? 'background:#388e3c; color:white; border-color:#2e7d32;' : ''}">
+                    🟢 창고
+                    <span style="display:block; font-size:10px; font-weight:normal; margin-top:2px;">${saveW.isToday ? '✅' : '⚠️'}</span>
                 </button>
             </div>
             <button onclick="saveInventory()" class="btn-sticky-action" style="background:${theme.accent};">💾 ${currentLocation} 저장</button>
         </div>
 
-        <div style="margin-bottom:10px; display:flex; gap:5px; font-size:12px; justify-content:center;">
-            <div style="padding:4px 8px; border-radius:12px; ${badgeStyle1}">
-                1루 저장: <strong>${displayDate1}</strong>
+        <div style="margin-bottom:10px; display:flex; gap:5px; font-size:12px; justify-content:center; flex-wrap:wrap;">
+            <div style="padding:4px 8px; border-radius:12px; ${save1.badgeStyle}">
+                1루: <strong>${save1.displayDate}</strong>
             </div>
-            <div style="padding:4px 8px; border-radius:12px; ${badgeStyle3}">
-                3루 저장: <strong>${displayDate3}</strong>
+            <div style="padding:4px 8px; border-radius:12px; ${save3.badgeStyle}">
+                3루: <strong>${save3.displayDate}</strong>
+            </div>
+            <div style="padding:4px 8px; border-radius:12px; ${saveW.badgeStyle}">
+                창고: <strong>${saveW.displayDate}</strong>
             </div>
         </div>
 
@@ -184,7 +193,7 @@ function renderUnifiedInventoryForm() {
 
     Object.keys(items).forEach(vendor => {
         items[vendor].forEach(item => {
-            const sortKey = (currentLocation === '1루') ? (item.sort1 ?? 9999) : (item.sort3 ?? 9999);
+            const sortKey = (currentLocation === '1루') ? (item.sort1 ?? 9999) : (currentLocation === '3루') ? (item.sort3 ?? 9999) : (item.sortW ?? 9999);
             const itemData = { ...item, vendor, sortKey };
 
             if (vendor === '인터넷발주') {
