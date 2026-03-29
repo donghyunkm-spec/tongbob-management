@@ -903,8 +903,12 @@
                         <div class="summary-card total-cost"><div class="lbl">예상 지출</div><div class="val" id="predTotalCost" style="color:#ab47bc;">0원</div></div>
                         <div class="summary-card net-profit"><div class="lbl">예상 순익</div><div class="val" id="predNetProfit">0원</div><div class="sub-val" id="predMargin">0%</div></div>
                     </div>
-                    <div style="margin-top:20px;">
-                        <h4 style="font-size:13px; color:#333; margin-bottom:10px;">📉 <span id="predCostText">비용</span> 상세</h4>
+                    <div class="accounting-card" style="margin-top:20px;">
+                        <h3>📊 매출 상세</h3>
+                        <div id="predSalesBreakdownChart"></div>
+                    </div>
+                    <div class="accounting-card" style="margin-top:10px;">
+                        <h3>📉 지출 상세</h3>
                         <div id="predCostList"></div>
                     </div>
                 </div>

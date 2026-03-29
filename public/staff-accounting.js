@@ -585,6 +585,7 @@ function renderPredictionStats() {
     let salesTotal1 = 0, salesTotal3 = 0;
     let deliverySalesTotal1 = 0, deliverySalesTotal3 = 0;
     let cardSalesTotal1 = 0, cardSalesTotal3 = 0;
+    let cashSalesTotal1 = 0, cashSalesTotal3 = 0;
     let foodTotal = 0, meatTotal = 0, etcTotal = 0;
 
     if (accountingData.daily) {
@@ -596,11 +597,13 @@ function renderPredictionStats() {
                 salesTotal1 += (d.sales1 || 0);
                 deliverySalesTotal1 += (d.delivery1 || 0);
                 cardSalesTotal1 += (d.card1 || 0);
+                cashSalesTotal1 += (d.cash1 || 0);
 
                 // 3루 매출
                 salesTotal3 += (d.sales3 || 0);
                 deliverySalesTotal3 += (d.delivery3 || 0);
                 cardSalesTotal3 += (d.card3 || 0);
+                cashSalesTotal3 += (d.cash3 || 0);
 
                 // 공통 지출 (전체)
                 foodTotal += (d.food || 0);
@@ -617,7 +620,7 @@ function renderPredictionStats() {
     const ratio3 = totalSales > 0 ? (salesTotal3 / totalSales) : 0.5;
 
     // 3. 선택된 매장에 따라 계산
-    let salesTotal, deliverySalesTotal, cardSalesTotal;
+    let salesTotal, deliverySalesTotal, cardSalesTotal, cashSalesTotal;
     let fixedMisc, commission, deliveryFee, cardFee;
     let food, meat, etc;
 
@@ -630,6 +633,7 @@ function renderPredictionStats() {
         salesTotal = salesTotal1;
         deliverySalesTotal = deliverySalesTotal1;
         cardSalesTotal = cardSalesTotal1;
+        cashSalesTotal = cashSalesTotal1;
 
         // 1루 수수료: 아모제(28.5%) + 통빱(2.5%) + 배달(6%)
         commission = Math.floor(salesTotal1 * 0.285) + Math.floor(salesTotal1 * 0.025);
@@ -651,6 +655,7 @@ function renderPredictionStats() {
         salesTotal = salesTotal3;
         deliverySalesTotal = deliverySalesTotal3;
         cardSalesTotal = cardSalesTotal3;
+        cashSalesTotal = cashSalesTotal3;
 
         // 3루 수수료: 아모제(28.5%) + 통빱(2.5%) + 배달(6%)
         commission = Math.floor(salesTotal3 * 0.285) + Math.floor(salesTotal3 * 0.025);
@@ -672,6 +677,7 @@ function renderPredictionStats() {
         salesTotal = salesTotal1 + salesTotal3;
         deliverySalesTotal = deliverySalesTotal1 + deliverySalesTotal3;
         cardSalesTotal = cardSalesTotal1 + cardSalesTotal3;
+        cashSalesTotal = cashSalesTotal1 + cashSalesTotal3;
 
         // 전체 수수료: 아모제(28.5%) + 통빱(2.5%) + 배달(6%)
         commission = Math.floor(salesTotal1 * 0.285) + Math.floor(salesTotal3 * 0.285)
@@ -711,7 +717,21 @@ function renderPredictionStats() {
     profitEl.style.color = netProfit >= 0 ? '#fff' : '#ffab91';
     document.getElementById('predMargin').textContent = `보정 마진율: ${margin}%`;
 
-    // 6. 상세 바 차트 렌더링
+    // 6. 매출 상세 바 차트 렌더링
+    const predSalesEl = document.getElementById('predSalesBreakdownChart');
+    if (predSalesEl) {
+        if (salesTotal === 0) {
+            predSalesEl.innerHTML = '<div style="text-align:center; color:#999;">데이터 없음</div>';
+        } else {
+            const renderBar = (l, v, c) => v > 0 ? `<div class="bar-row"><div class="bar-label">${l}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.max((v/salesTotal)*100,1)}%; background:${c};"></div></div><div class="bar-value">${v.toLocaleString()}</div></div>` : '';
+            predSalesEl.innerHTML = `
+                ${renderBar('💳 카드', cardSalesTotal, '#42a5f5')}
+                ${renderBar('💵 현금', cashSalesTotal, '#66bb6a')}
+                ${renderBar('🛵 배달', deliverySalesTotal, '#ffa726')}`;
+        }
+    }
+
+    // 7. 지출 상세 바 차트 렌더링
     renderCostList('predCostList', mData, staffCost, ratio, salesTotal, totalCurrentCost, monthStr, {
         commission: commission,
         deliveryFee: deliveryFee,
@@ -857,7 +877,15 @@ function renderDashboardStats() {
     if(document.getElementById('dashStaffCost'))
         document.getElementById('dashStaffCost').textContent = staffCost.toLocaleString();
 
-    renderDashboardCharts(sales, totalCost, mData, staffCost, variableCost, monthStr);
+    renderDashboardCharts(sales, totalCost, mData, staffCost, variableCost, monthStr, {
+        commission: commission,
+        deliveryFee: deliveryFee,
+        cardFee: cardFee,
+        fixedMisc: fixedMisc,
+        food: food,
+        meat: meat,
+        etc: etc
+    });
 }
 
 // ==========================================
@@ -941,7 +969,7 @@ function renderCostList(containerId, mData, staffCost, ratio, salesTotal, totalC
     el.innerHTML = html;
 }
 
-function renderDashboardCharts(sales, totalCost, mData, staffCost, variableCostTotal, monthStr) {
+function renderDashboardCharts(sales, totalCost, mData, staffCost, variableCostTotal, monthStr, calculatedCosts = null) {
     const chartEl = document.getElementById('salesBreakdownChart');
     if(chartEl) {
         if(sales.total === 0) chartEl.innerHTML = '<div style="text-align:center; color:#999;">데이터 없음</div>';
@@ -953,8 +981,7 @@ function renderDashboardCharts(sales, totalCost, mData, staffCost, variableCostT
                     ${renderBar('🛵 배달', sales.delivery, '#ffa726')}`;
         }
     }
-    // 월간 분석에서는 ratio 1.0, calculatedCosts 없음(null)으로 호출
-    renderCostList('costBreakdownList', mData, staffCost, 1.0, sales.total, totalCost, monthStr, null);
+    renderCostList('costBreakdownList', mData, staffCost, 1.0, sales.total, totalCost, monthStr, calculatedCosts);
 }
 
 // 상세 항목 차트 렌더링
