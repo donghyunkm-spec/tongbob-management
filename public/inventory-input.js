@@ -16,6 +16,20 @@ function recallLastInput() {
         }
     });
 
+    // 창고 탭: 창고 전용 품목의 1루/3루 값도 불러오기
+    if (currentLocation === '창고') {
+        const warehouseOnlyKeys = getWarehouseOnlyItemKeys();
+        warehouseOnlyKeys.forEach(rawKey => {
+            ['1루', '3루'].forEach(loc => {
+                const key = `${loc}_${rawKey}`;
+                if (lastSavedInventory[key] !== undefined) {
+                    inventory[key] = lastSavedInventory[key];
+                    count++;
+                }
+            });
+        });
+    }
+
     renderUnifiedInventoryForm();
     showAlert(`${count}개 품목 값을 불러왔습니다.`, 'success');
 }
@@ -30,8 +44,33 @@ function resetCurrentInput() {
         }
     });
 
+    // 창고 탭: 창고 전용 품목의 1루/3루 값도 초기화
+    if (currentLocation === '창고') {
+        const warehouseOnlyKeys = getWarehouseOnlyItemKeys();
+        warehouseOnlyKeys.forEach(rawKey => {
+            ['1루', '3루'].forEach(loc => {
+                delete inventory[`${loc}_${rawKey}`];
+            });
+        });
+    }
+
     renderUnifiedInventoryForm();
     showAlert(`${currentLocation} 입력이 초기화되었습니다.`, 'info');
+}
+
+// ==========================================
+// 창고 전용 품목 키 목록 반환
+// ==========================================
+function getWarehouseOnlyItemKeys() {
+    const keys = [];
+    Object.keys(items).forEach(vendor => {
+        items[vendor].forEach(item => {
+            if (item.locations && item.locations.length === 1 && item.locations[0] === '창고') {
+                keys.push(`${vendor}_${item.품목명}`);
+            }
+        });
+    });
+    return keys;
 }
 
 // ==========================================
@@ -215,9 +254,19 @@ function renderUnifiedInventoryForm() {
     regularItems.sort(sortFn);
     internetItems.sort(sortFn);
 
+    // 창고 전용 품목인지 확인 (locations가 ['창고']만 있는 경우)
+    function isWarehouseOnly(item) {
+        return item.locations && item.locations.length === 1 && item.locations[0] === '창고';
+    }
+
     function renderItemRow(item) {
         if (item.locations && item.locations.length > 0) {
-            if (!item.locations.includes(currentLocation)) return '';
+            // 창고 전용 품목은 창고 탭에서 표시 (1루/3루 입력칸 2개로)
+            if (isWarehouseOnly(item)) {
+                if (currentLocation !== '창고') return '';
+            } else {
+                if (!item.locations.includes(currentLocation)) return '';
+            }
         }
         if (item.관리주기 === 'weekly' && !isTuesday && !showWeeklyForced && item.vendor !== '인터넷발주') {
             // 이번 주 화요일 이후에 저장한 적 있으면 숨김, 없으면 계속 표시
@@ -226,6 +275,64 @@ function renderUnifiedInventoryForm() {
         }
 
         const rawItemKey = `${item.vendor}_${item.품목명}`;
+
+        let displayUnit = item.재고단위 || item.발주단위;
+        if (!item.재고단위 && item.vendor === '한강유통(고기)') displayUnit = getMeatVendorInfo(item.품목명).inputUnit;
+
+        const lastDate = lastOrderDates[rawItemKey];
+        const daysSince = lastDate ? getDaysSince(lastDate) : 999;
+        const isAlert = (daysSince >= 7);
+
+        // 창고 전용 품목: 1루/3루 입력칸 2개
+        if (currentLocation === '창고' && isWarehouseOnly(item)) {
+            const key1 = `1루_${rawItemKey}`;
+            const key3 = `3루_${rawItemKey}`;
+            const val1 = inventory[key1];
+            const val3 = inventory[key3];
+            const display1 = (val1 === undefined || val1 === 0) ? '' : val1;
+            const display3 = (val3 === undefined || val3 === 0) ? '' : val3;
+
+            const prev1 = lastSavedInventory[key1] !== undefined ? lastSavedInventory[key1] : '-';
+            const prev3 = lastSavedInventory[key3] !== undefined ? lastSavedInventory[key3] : '-';
+
+            return `
+                <div class="item-row-compact" style="${item.중요도 === '상' ? 'background-color:#fff8e1;' : ''} flex-wrap:wrap;">
+                    <div class="irc-name" style="width:100%; margin-bottom:4px;">
+                        <span>
+                            ${item.품목명}
+                            <span style="font-weight:normal; font-size:11px; color:#888;">(${item.vendor.substr(0,2)})</span>
+                            ${isAlert ? '<span style="color:red; font-size:10px;">⚠️</span>' : ''}
+                            ${item.관리주기 === 'weekly' ? '<span style="color:blue; font-size:10px;">[주간]</span>' : ''}
+                            <span style="font-size:10px; color:#fff; background:#78909c; padding:1px 5px; border-radius:3px; margin-left:4px;">창고전용</span>
+                        </span>
+                        ${item.servings && item.servings.length > 0 ? `<div style="font-size:10px; color:#1565c0; font-weight:normal; margin-top:1px;">📏 ${getServingDisplayText(item)}</div>` : ''}
+                    </div>
+                    <div class="irc-controls" style="width:100%; display:flex; gap:8px; justify-content:space-around;">
+                        <div style="display:flex; align-items:center; gap:4px; flex:1;">
+                            <span style="font-size:11px; font-weight:bold; color:#1976d2; min-width:22px;">1루</span>
+                            <span style="font-size:10px; color:#888; min-width:18px; text-align:right;">${prev1}</span>
+                            <div class="irc-input-wrapper" style="flex:1;">
+                                <input type="number" id="current_${key1}" class="irc-input"
+                                    value="${display1}" placeholder="0" inputmode="decimal"
+                                    onchange="updateInventoryMemory('${key1}', this.value)">
+                            </div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:4px; flex:1;">
+                            <span style="font-size:11px; font-weight:bold; color:#f57c00; min-width:22px;">3루</span>
+                            <span style="font-size:10px; color:#888; min-width:18px; text-align:right;">${prev3}</span>
+                            <div class="irc-input-wrapper" style="flex:1;">
+                                <input type="number" id="current_${key3}" class="irc-input"
+                                    value="${display3}" placeholder="0" inputmode="decimal"
+                                    onchange="updateInventoryMemory('${key3}', this.value)">
+                            </div>
+                        </div>
+                        <span style="font-size:12px; color:#fff; background:#5c6bc0; padding:2px 5px; border-radius:4px; font-weight:bold; min-width:20px; text-align:center; align-self:center;">${displayUnit}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 일반 품목: 기존 로직
         const locItemKey = `${currentLocation}_${rawItemKey}`;
 
         const currentStock = inventory[locItemKey];
@@ -239,13 +346,6 @@ function renderUnifiedInventoryForm() {
         // 마지막 저장 날짜 (03/01 형식)
         const lastSaveDate = lastSavedInventory[`meta_last_save_${currentLocation}`];
         const prevDateLabel = lastSaveDate ? lastSaveDate.substring(5).replace('-', '/') : '-';
-
-        let displayUnit = item.재고단위 || item.발주단위;
-        if (!item.재고단위 && item.vendor === '한강유통(고기)') displayUnit = getMeatVendorInfo(item.품목명).inputUnit;
-
-        const lastDate = lastOrderDates[rawItemKey];
-        const daysSince = lastDate ? getDaysSince(lastDate) : 999;
-        const isAlert = (daysSince >= 7);
 
         return `
             <div class="item-row-compact" style="${item.중요도 === '상' ? 'background-color:#fff8e1;' : ''}">
