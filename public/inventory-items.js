@@ -439,7 +439,7 @@ function openEditItemModal(vendor, index) {
         editDailyUsage.value = usage > 0 ? usage : '';
     }
     const editDailyUsageUnit = document.getElementById('editDailyUsageUnit');
-    if (editDailyUsageUnit) editDailyUsageUnit.textContent = item.발주단위 || '';
+    if (editDailyUsageUnit) editDailyUsageUnit.textContent = item.재고단위 || item.발주단위 || '';
 
     // 단가 설정
     const editUnitCost = document.getElementById('editUnitCost');
@@ -528,7 +528,7 @@ function saveEditItem() {
     const editStockUnit = document.getElementById('editStockUnit');
     const editUnitsPerOrder = document.getElementById('editUnitsPerOrder');
     const newStockUnit = editStockUnit ? editStockUnit.value.trim() : '';
-    const newUnitsPerOrder = editUnitsPerOrder ? (parseInt(editUnitsPerOrder.value) || null) : null;
+    const newUnitsPerOrder = editUnitsPerOrder ? (parseFloat(editUnitsPerOrder.value) || null) : null;
 
     // 단가 수집
     const editUnitCost = document.getElementById('editUnitCost');
