@@ -127,11 +127,7 @@ function switchTab(tabName) {
             initInventoryTab();
         }
     } else if(tabName === 'manual') {
-        // 첫 진입 시 활성 서브탭 렌더링
-        const activeManualSub = document.querySelector('.manual-sub-content[style*="display:block"]');
-        if (!activeManualSub || activeManualSub.id === 'manual-inventory') {
-            if(typeof renderManual === 'function') renderManual();
-        }
+        if(typeof renderManual === 'function') renderManual();
     }
 }
 
