@@ -405,13 +405,15 @@ function openEditItemModal(vendor, index) {
     document.getElementById('editImportance').value = item.중요도 || '중';
     document.getElementById('editCycle').value = item.관리주기 || 'daily';
 
-    // 재고단위 / 박스당수량 설정
+    // 재고단위 / 변환비율 설정
     const editStockUnit = document.getElementById('editStockUnit');
     const editUnitsPerOrder = document.getElementById('editUnitsPerOrder');
     const editStockUnitLabel = document.getElementById('editStockUnitLabel');
+    const editOrderUnitLabel = document.getElementById('editOrderUnitLabel');
     if (editStockUnit) editStockUnit.value = item.재고단위 || '';
     if (editUnitsPerOrder) editUnitsPerOrder.value = item.unitsPerOrder || '';
-    if (editStockUnitLabel) editStockUnitLabel.textContent = item.재고단위 || '';
+    if (editStockUnitLabel) editStockUnitLabel.textContent = item.재고단위 || '재고단위';
+    if (editOrderUnitLabel) editOrderUnitLabel.textContent = item.발주단위 || '발주단위';
 
     // 매장별 최소재고 설정
     document.getElementById('editMinStockPerLocation').value = item.minStockPerLocation || '';

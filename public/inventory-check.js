@@ -465,9 +465,10 @@ function checkOrderConfirmation() {
             let displayQty = 0;
             let displayUnit = item.발주단위;
             if (item.재고단위 && item.unitsPerOrder) {
-                // 재고단위와 발주단위가 다른 경우 (예: 팩→kg, 봉→박스 변환)
+                // 재고단위→발주단위 변환: orderAmountRaw(재고단위) × unitsPerOrder = 발주단위
+                // 예) 삼겹살: 4팩 × 5 = 20kg / 우동: 5봉 × 0.125 = 0.625 → ceil = 1박스
                 displayUnit = item.발주단위;
-                if (orderAmountRaw > 0) displayQty = Math.ceil(orderAmountRaw / item.unitsPerOrder);
+                if (orderAmountRaw > 0) displayQty = Math.ceil(orderAmountRaw * item.unitsPerOrder);
             } else if (vendor === '한강유통(고기)') {
                 const meatInfo = getMeatVendorInfo(item.품목명);
                 displayUnit = meatInfo.unit;

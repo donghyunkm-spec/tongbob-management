@@ -401,12 +401,14 @@
                     <div class="form-row">
                         <label>재고단위 (선택)</label>
                         <div style="display:flex; gap:8px; align-items:center;">
-                            <input type="text" id="editStockUnit" placeholder="예: 봉, 개 (비워두면 발주단위와 동일)" style="flex:1;">
-                            <span style="font-size:12px; white-space:nowrap;">1발주단위 =</span>
-                            <input type="number" id="editUnitsPerOrder" placeholder="예: 8" step="1" min="1" style="width:60px;">
-                            <span id="editStockUnitLabel" style="font-size:12px;"></span>
+                            <input type="text" id="editStockUnit" placeholder="예: 봉, 팩 (비워두면 발주단위와 동일)" style="flex:1;">
                         </div>
-                        <span style="font-size:11px; color:#888;">재고는 재고단위로 파악하고, 발주는 발주단위로 변환</span>
+                        <div style="display:flex; gap:8px; align-items:center; margin-top:5px;">
+                            <span style="font-size:12px; white-space:nowrap;">1 <span id="editStockUnitLabel">재고단위</span> =</span>
+                            <input type="number" id="editUnitsPerOrder" placeholder="예: 5" step="any" min="0" style="width:70px;">
+                            <span style="font-size:12px;" id="editOrderUnitLabel">발주단위</span>
+                        </div>
+                        <span style="font-size:11px; color:#888;">예) 우동: 1박스=8봉 → 재고단위:봉, 값:0.125 / 삼겹살: 1팩=5kg → 재고단위:팩, 값:5</span>
                     </div>
                     <div class="form-row"><label>중요도</label><select id="editImportance"><option value="중">중</option><option value="상">상</option><option value="하">하</option></select></div>
                     <div class="form-row"><label>관리 주기</label><select id="editCycle"><option value="daily">매일</option><option value="weekly">매주 화요일</option></select></div>
