@@ -199,6 +199,8 @@ function renderInventoryCheck() {
             const diffClass = (item.diff >= 0) ? 'diff-plus' : 'diff-minus';
             const diffSign = (item.diff > 0) ? '+' : '';
 
+            const stockUnitTag = item.재고단위 ? `<span style="font-size:10px; color:#666;">${item.재고단위}</span>` : '';
+
             let infoBadge = '';
             if (item.thresholdQty || item.minOrderQty) {
                 infoBadge = `<div style="margin-top:2px; font-size:10px; color:#e65100; display:inline-block; background:#fff3e0; padding:1px 4px; border-radius:3px; border:1px solid #ffe0b2;">
@@ -222,10 +224,10 @@ function renderInventoryCheck() {
                         ${infoBadge}
                         ${servingBadge}
                     </td>
-                    <td>${item.stock1}</td>
-                    <td>${item.stock3}</td>
-                    <td class="check-val" style="background:#e3f2fd;">${item.totalStock}</td>
-                    <td>${item.usage}</td>
+                    <td>${item.stock1}${stockUnitTag}</td>
+                    <td>${item.stock3}${stockUnitTag}</td>
+                    <td class="check-val" style="background:#e3f2fd;">${item.totalStock}${stockUnitTag}</td>
+                    <td>${item.usage}${stockUnitTag}</td>
                     <td class="${diffClass} check-val">${diffSign}${parseFloat(item.diff.toFixed(1))}</td>
                     <td style="text-align:right; font-size:11px; color:#555;">${item.cost > 0 ? Number(item.cost.toFixed(0)).toLocaleString() : '-'}</td>
                 </tr>
@@ -469,6 +471,10 @@ function checkOrderConfirmation() {
                     const packs = Math.ceil(orderAmountRaw / meatInfo.weight);
                     displayQty = (meatInfo.type === 'weight' && meatInfo.unit === 'kg') ? packs * meatInfo.weight : packs;
                 }
+            } else if (item.재고단위 && item.unitsPerOrder) {
+                // 재고단위와 발주단위가 다른 경우 (예: 봉 → 박스 변환)
+                displayUnit = item.발주단위;
+                if (orderAmountRaw > 0) displayQty = Math.ceil(orderAmountRaw / item.unitsPerOrder);
             } else if (vendor === '고센유통') {
                 if (orderAmountRaw > 0) displayQty = Math.ceil(orderAmountRaw);
             } else {
@@ -556,9 +562,10 @@ function showConfirmModal(confirmItems, checkItems, missingInputCount, dangerIte
                 <tbody>`;
             list.forEach((i, idx) => {
                 const itemCost = (i.unitCost || 0) * i.orderAmount;
+                const stockUnitLabel = i.재고단위 ? i.재고단위 : '';
                 html += `<tr>
                     <td style="font-weight:bold;">${i.품목명}</td>
-                    <td>${i.currentStock}</td>
+                    <td>${i.currentStock}${stockUnitLabel ? '<span style="font-size:11px; color:#888;">' + stockUnitLabel + '</span>' : ''}</td>
                     <td>
                         <input type="number" value="${i.orderAmount}"
                                data-vendor="${vendor}" data-index="${idx}"

@@ -46,6 +46,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const day = today.getDay();
     currentWeekStartDate.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
 
+    // 일일입력 날짜 기본값: 오늘
+    const accDateEl = document.getElementById('accDate');
+    if (accDateEl && !accDateEl.value) {
+        accDateEl.value = new Date().toISOString().split('T')[0];
+    }
+
     // 초기 데이터 로드
     loadStaffData();
 

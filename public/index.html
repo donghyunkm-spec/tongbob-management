@@ -397,7 +397,17 @@
                         </select>
                     </div>
                     <div class="form-row"><label>품목명</label><input type="text" id="editName"></div>
-                    <div class="form-row"><label>단위</label><input type="text" id="editUnit"></div>
+                    <div class="form-row"><label>발주단위</label><input type="text" id="editUnit" placeholder="박스, 개, kg 등"></div>
+                    <div class="form-row">
+                        <label>재고단위 (선택)</label>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <input type="text" id="editStockUnit" placeholder="예: 봉, 개 (비워두면 발주단위와 동일)" style="flex:1;">
+                            <span style="font-size:12px; white-space:nowrap;">1발주단위 =</span>
+                            <input type="number" id="editUnitsPerOrder" placeholder="예: 8" step="1" min="1" style="width:60px;">
+                            <span id="editStockUnitLabel" style="font-size:12px;"></span>
+                        </div>
+                        <span style="font-size:11px; color:#888;">재고는 재고단위로 파악하고, 발주는 발주단위로 변환</span>
+                    </div>
                     <div class="form-row"><label>중요도</label><select id="editImportance"><option value="중">중</option><option value="상">상</option><option value="하">하</option></select></div>
                     <div class="form-row"><label>관리 주기</label><select id="editCycle"><option value="daily">매일</option><option value="weekly">매주 화요일</option></select></div>
                     <div class="form-row">

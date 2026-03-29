@@ -405,6 +405,14 @@ function openEditItemModal(vendor, index) {
     document.getElementById('editImportance').value = item.중요도 || '중';
     document.getElementById('editCycle').value = item.관리주기 || 'daily';
 
+    // 재고단위 / 박스당수량 설정
+    const editStockUnit = document.getElementById('editStockUnit');
+    const editUnitsPerOrder = document.getElementById('editUnitsPerOrder');
+    const editStockUnitLabel = document.getElementById('editStockUnitLabel');
+    if (editStockUnit) editStockUnit.value = item.재고단위 || '';
+    if (editUnitsPerOrder) editUnitsPerOrder.value = item.unitsPerOrder || '';
+    if (editStockUnitLabel) editStockUnitLabel.textContent = item.재고단위 || '';
+
     // 매장별 최소재고 설정
     document.getElementById('editMinStockPerLocation').value = item.minStockPerLocation || '';
 
@@ -513,6 +521,12 @@ function saveEditItem() {
     const editDailyUsage = document.getElementById('editDailyUsage');
     const newDailyUsage = editDailyUsage ? parseFloat(editDailyUsage.value) || 0 : 0;
 
+    // 재고단위 / 박스당수량 수집
+    const editStockUnit = document.getElementById('editStockUnit');
+    const editUnitsPerOrder = document.getElementById('editUnitsPerOrder');
+    const newStockUnit = editStockUnit ? editStockUnit.value.trim() : '';
+    const newUnitsPerOrder = editUnitsPerOrder ? (parseInt(editUnitsPerOrder.value) || null) : null;
+
     // 단가 수집
     const editUnitCost = document.getElementById('editUnitCost');
     const newUnitCost = editUnitCost ? (parseFloat(editUnitCost.value) || 0) : 0;
@@ -556,6 +570,8 @@ function saveEditItem() {
         "thresholdQty": newThreshold,
         "minOrderQty": newMinOrder,
         "발주제외": newSkipOrder,
+        "재고단위": newStockUnit || undefined,
+        "unitsPerOrder": newUnitsPerOrder || undefined,
         "servings": newServings.length > 0 ? newServings : undefined,
         "unitCost": newUnitCost || undefined,
         "costHistory": costHistory.length > 0 ? costHistory : undefined
