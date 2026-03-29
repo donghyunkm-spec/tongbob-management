@@ -179,7 +179,7 @@ function renderInventoryHistory(record, vendorFilter) {
                         <tr>
                             <td style="font-weight:bold; color:#555;">${vendorName}</td>
                             <td class="text-left">${item.품목명}</td>
-                            <td>${stock} ${displayUnit}</td>
+                            <td>${stock} <span style="font-size:11px; color:#fff; background:#5c6bc0; padding:1px 4px; border-radius:3px; font-weight:bold;">${displayUnit}</span></td>
                         </tr>
                     `;
                 }

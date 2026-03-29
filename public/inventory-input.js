@@ -262,7 +262,7 @@ function renderUnifiedInventoryForm() {
                             placeholder="0" inputmode="decimal"
                             onchange="updateInventoryMemory('${locItemKey}', this.value)">
                     </div>
-                    <span style="font-size:12px; margin-left:2px; color:#555; width:20px;">${displayUnit}</span>
+                    <span style="font-size:12px; margin-left:3px; color:#fff; background:#5c6bc0; padding:2px 5px; border-radius:4px; font-weight:bold; min-width:20px; text-align:center;">${displayUnit}</span>
                 </div>
             </div>
         `;
@@ -407,7 +407,7 @@ function renderStandardForm() {
                         <input type="number" id="usage_${itemKey}" value="${usage===0?'':usage}"
                             placeholder="0" inputmode="decimal"
                             style="width:70px; padding:8px; text-align:right; border:1px solid #ddd; border-radius:4px; font-size:15px; font-weight:bold;">
-                        <span style="margin-left:5px; font-size:12px; width:30px;">${displayUnit}</span>
+                        <span style="margin-left:5px; font-size:12px; color:#fff; background:#5c6bc0; padding:2px 6px; border-radius:4px; font-weight:bold;">${displayUnit}</span>
                     </div>
                 </div>
             `;

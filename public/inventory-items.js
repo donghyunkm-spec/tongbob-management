@@ -108,6 +108,7 @@ function renderManageItems() {
                 <div class="mrg-info">
                     <span style="font-size:11px; background:#e3f2fd; color:#1565C0; padding:2px 4px; border-radius:3px;">${item.vendor}</span>
                     <span style="font-weight:bold; margin-left:5px;">${item.품목명}</span>
+                    <span style="font-size:10px; color:#fff; background:#5c6bc0; padding:2px 5px; border-radius:3px; margin-left:4px; font-weight:bold;">${item.재고단위 || item.발주단위}${item.재고단위 ? `→${item.발주단위}` : ''}</span>
                     ${!isAllMode ? `<span style="color:#999; font-size:12px;">(현재순서: ${item.sortKey===9999 ? '없음' : item.sortKey})</span>` : ''}
                     ${item.locations && item.locations.length > 0
                         ? `<span style="background:#e8f5e9; color:#2e7d32; font-size:10px; padding:2px 5px; border-radius:3px; margin-left:5px;">📍 ${item.locations.join(', ')}</span>`
@@ -122,7 +123,7 @@ function renderManageItems() {
                             📊 임계:${item.thresholdQty || '-'} / 최소:${item.minOrderQty || '-'}
                            </span>`
                         : ''}
-                    ${(() => { const u = dailyUsage[`${item.vendor}_${item.품목명}`]; return u ? `<span style="background:#f3e5f5; color:#6a1b9a; font-size:10px; padding:2px 5px; border-radius:3px; margin-left:5px;">📦 사용량:${u}/${item.발주단위||'단위'}</span>` : ''; })()}
+                    ${(() => { const u = dailyUsage[`${item.vendor}_${item.품목명}`]; return u ? `<span style="background:#f3e5f5; color:#6a1b9a; font-size:10px; padding:2px 5px; border-radius:3px; margin-left:5px;">📦 사용량:${u}/${item.재고단위||item.발주단위||'단위'}</span>` : ''; })()}
                     ${item.unitCost
                         ? `<span style="background:#e8f5e9; color:#1b5e20; font-size:10px; padding:2px 5px; border-radius:3px; margin-left:5px;">💰 ${Number(item.unitCost).toLocaleString()}원/${item.발주단위||'단위'}</span>`
                         : ''}

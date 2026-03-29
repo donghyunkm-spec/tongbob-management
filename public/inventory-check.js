@@ -199,7 +199,7 @@ function renderInventoryCheck() {
             const diffClass = (item.diff >= 0) ? 'diff-plus' : 'diff-minus';
             const diffSign = (item.diff > 0) ? '+' : '';
 
-            const stockUnitTag = item.재고단위 ? `<span style="font-size:10px; color:#666;">${item.재고단위}</span>` : '';
+            const stockUnitTag = item.재고단위 ? `<span style="font-size:10px; color:#fff; background:#5c6bc0; padding:1px 4px; border-radius:3px; font-weight:bold; margin-left:2px;">${item.재고단위}</span>` : '';
 
             let infoBadge = '';
             if (item.thresholdQty || item.minOrderQty) {
@@ -563,16 +563,16 @@ function showConfirmModal(confirmItems, checkItems, missingInputCount, dangerIte
                 <tbody>`;
             list.forEach((i, idx) => {
                 const itemCost = (i.unitCost || 0) * i.orderAmount;
-                const stockUnitLabel = i.재고단위 ? i.재고단위 : '';
+                const stockUnitLabel = i.재고단위 || '';
                 html += `<tr>
                     <td style="font-weight:bold;">${i.품목명}</td>
-                    <td>${i.currentStock}${stockUnitLabel ? '<span style="font-size:11px; color:#888;">' + stockUnitLabel + '</span>' : ''}</td>
+                    <td>${i.currentStock}${stockUnitLabel ? '<span style="font-size:10px; color:#fff; background:#5c6bc0; padding:1px 4px; border-radius:3px; font-weight:bold; margin-left:2px;">' + stockUnitLabel + '</span>' : ''}</td>
                     <td>
                         <input type="number" value="${i.orderAmount}"
                                data-vendor="${vendor}" data-index="${idx}"
                                onchange="updateOrderAmount('${vendor}', ${idx}, this.value)"
                                style="width:60px; padding:4px; text-align:right; font-weight:bold; border:2px solid #1976D2; border-radius:4px;">
-                        ${i.displayUnit}
+                        <span style="font-size:12px; color:#fff; background:#e65100; padding:2px 5px; border-radius:4px; font-weight:bold;">${i.displayUnit}</span>
                     </td>
                     <td style="text-align:right; font-size:12px;">${itemCost > 0 ? itemCost.toLocaleString() + '원' : '-'}</td>
                 </tr>`;

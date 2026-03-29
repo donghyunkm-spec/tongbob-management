@@ -690,7 +690,7 @@ async function sendToKakao(text) {
             await axios.post('https://kapi.kakao.com/v2/api/talk/memo/default/send', {
                 template_object: JSON.stringify({
                     object_type: 'text', text: text,
-                    link: { web_url: 'https://chogajipreservation-production.up.railway.app', mobile_web_url: 'https://chogajipreservation-production.up.railway.app' }
+                    link: { web_url: 'https://tongbob-management-production.up.railway.app', mobile_web_url: 'https://tongbob-management-production.up.railway.app' }
                 })
             }, { headers: { 'Authorization': `Bearer ${user.access_token}`, 'Content-Type': 'application/x-www-form-urlencoded' } });
         } catch (error) { console.error('전송 실패:', error.message); }
