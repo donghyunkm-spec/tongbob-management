@@ -231,7 +231,7 @@ function renderUnifiedInventoryForm() {
         const lastSaveDate = lastSavedInventory[`meta_last_save_${currentLocation}`];
         const prevDateLabel = lastSaveDate ? lastSaveDate.substring(5).replace('-', '/') : '-';
 
-        let displayUnit = item.발주단위;
+        let displayUnit = item.재고단위 || item.발주단위;
         if (item.vendor === '한강유통(고기)') displayUnit = getMeatVendorInfo(item.품목명).inputUnit;
 
         const lastDate = lastOrderDates[rawItemKey];
@@ -394,7 +394,7 @@ function renderStandardForm() {
         items[vendor].forEach(item => {
             const itemKey = `${vendor}_${item.품목명}`;
             const usage = dailyUsage[itemKey] || 0;
-            let displayUnit = item.발주단위;
+            let displayUnit = item.재고단위 || item.발주단위;
             if (vendor === '한강유통(고기)') displayUnit = getMeatVendorInfo(item.품목명).inputUnit;
 
             listHtml += `
