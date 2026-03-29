@@ -444,7 +444,14 @@ function checkOrderConfirmation() {
             let orderAmountRaw = Math.max(0, neededTotal - totalStock);
 
             if (item.thresholdQty && item.minOrderQty) {
-                if (totalStock <= item.thresholdQty) orderAmountRaw = item.minOrderQty;
+                // 재고단위가 있으면 임계값/최소발주량을 재고단위로 변환해서 비교
+                let thresholdInStock = item.thresholdQty;
+                let minOrderInStock = item.minOrderQty;
+                if (item.재고단위 && item.unitsPerOrder) {
+                    thresholdInStock = item.thresholdQty / item.unitsPerOrder;
+                    minOrderInStock = item.minOrderQty / item.unitsPerOrder;
+                }
+                if (totalStock <= thresholdInStock) orderAmountRaw = minOrderInStock;
                 else orderAmountRaw = 0;
             }
 
