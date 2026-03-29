@@ -71,9 +71,9 @@ function renderInventoryCheck() {
             const rawItemKey = `${vendor}_${item.품목명}`;
             const stock1 = displayInventory[`1루_${rawItemKey}`] || 0;
             const stock3 = displayInventory[`3루_${rawItemKey}`] || 0;
-            const totalStock = stock1 + stock3;
+            const totalStock = parseFloat((stock1 + stock3).toFixed(2));
             const usage = dailyUsage[rawItemKey] || 0;
-            const diff = totalStock - usage;
+            const diff = parseFloat((totalStock - usage).toFixed(2));
 
             const cost = (item.unitCost || 0) * totalStock;
 
@@ -224,10 +224,10 @@ function renderInventoryCheck() {
                         ${infoBadge}
                         ${servingBadge}
                     </td>
-                    <td>${item.stock1}${stockUnitTag}</td>
-                    <td>${item.stock3}${stockUnitTag}</td>
-                    <td class="check-val" style="background:#e3f2fd;">${item.totalStock}${stockUnitTag}</td>
-                    <td>${item.usage}${stockUnitTag}</td>
+                    <td>${parseFloat(item.stock1.toFixed(2))}${stockUnitTag}</td>
+                    <td>${parseFloat(item.stock3.toFixed(2))}${stockUnitTag}</td>
+                    <td class="check-val" style="background:#e3f2fd;">${parseFloat(item.totalStock.toFixed(2))}${stockUnitTag}</td>
+                    <td>${parseFloat(item.usage.toFixed(2))}${stockUnitTag}</td>
                     <td class="${diffClass} check-val">${diffSign}${parseFloat(item.diff.toFixed(1))}</td>
                     <td style="text-align:right; font-size:11px; color:#555;">${item.cost > 0 ? Number(item.cost.toFixed(0)).toLocaleString() : '-'}</td>
                 </tr>

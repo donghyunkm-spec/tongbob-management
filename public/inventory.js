@@ -59,6 +59,12 @@ function isInventoryAuthorized() {
 async function initInventoryTab() {
     if (!isInventoryAuthorized()) return;
 
+    // manager 권한은 원가 탭 숨김
+    const costBtn = document.querySelector("button[onclick=\"showInvTab('costAnalysis')\"]");
+    if (costBtn) {
+        costBtn.style.display = (currentUser && currentUser.role === 'admin') ? '' : 'none';
+    }
+
     await loadInventoryDataAll();
     renderUnifiedInventoryForm();
     loadHolidays();
