@@ -1163,10 +1163,25 @@ function getEstimatedStaffCost(monthStr, targetStaffList = null) {
 // ==========================================
 // 급여 계산
 // ==========================================
+let salaryYear, salaryMonth;
+
+function changeSalaryMonth(delta) {
+    salaryMonth += delta;
+    if (salaryMonth > 11) { salaryMonth = 0; salaryYear++; }
+    if (salaryMonth < 0) { salaryMonth = 11; salaryYear--; }
+    renderSalary();
+}
+
 function calculateMonthlySalary() {
     const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
+    salaryYear = now.getFullYear();
+    salaryMonth = now.getMonth();
+    renderSalary();
+}
+
+function renderSalary() {
+    const year = salaryYear;
+    const month = salaryMonth;
 
     const lastDayObj = new Date(year, month + 1, 0);
     const totalDaysInMonth = lastDayObj.getDate();
@@ -1256,6 +1271,7 @@ function calculateMonthlySalary() {
             </tr>`;
     });
     document.getElementById('totalSalaryAmount').textContent = `총 지출 예상: ${totalAll.toLocaleString()}원`;
+    document.getElementById('salaryMonthDisplay').textContent = `${year}년 ${month + 1}월`;
     document.getElementById('salaryModal').style.display = 'flex';
 }
 

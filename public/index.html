@@ -600,6 +600,11 @@
     <div id="salaryModal" class="modal-overlay">
         <div class="modal-box" style="max-width:500px;">
             <h2>💰 예상 급여 명세</h2>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <button onclick="changeSalaryMonth(-1)" style="background:#673ab7; color:white; border:none; padding:6px 12px; border-radius:5px; font-size:16px; cursor:pointer;">&lt;</button>
+                <span id="salaryMonthDisplay" style="font-size:16px; font-weight:bold;"></span>
+                <button onclick="changeSalaryMonth(1)" style="background:#673ab7; color:white; border:none; padding:6px 12px; border-radius:5px; font-size:16px; cursor:pointer;">&gt;</button>
+            </div>
             <div style="max-height:300px; overflow-y:auto; margin-bottom:15px;">
                 <table class="log-table">
                     <thead><tr><th>이름</th><th>구분</th><th>상세</th><th style="text-align:right;">예상액</th></tr></thead>
