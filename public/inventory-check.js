@@ -805,16 +805,38 @@ function copyToKakao() {
 // ==========================================
 let servingViewMode = 'current'; // 'current' or 'afterOrder'
 
+function fmtServings(v) {
+    if (v === 0) return '0';
+    if (Number.isInteger(v)) return v.toString();
+    const s = v.toFixed(2);
+    return s.replace(/\.?0+$/, '');
+}
+
 function showServingOverview(mode) {
     if (mode) servingViewMode = mode;
     const modal = document.getElementById('servingOverviewModal');
     const content = document.getElementById('servingOverviewContent');
 
     // 현재 재고 데이터 수집
+    // 위치별로: 오늘 저장된 데이터가 있으면 그것을, 아니면 lastSavedInventory(어제 데이터) 사용
     let displayInventory = {};
-    Object.keys(inventory).filter(k => !k.startsWith('meta_')).forEach(k => displayInventory[k] = inventory[k]);
-    Object.keys(lastSavedInventory).filter(k => !k.startsWith('meta_')).forEach(k => {
-        if (displayInventory[k] === undefined) displayInventory[k] = lastSavedInventory[k];
+    ['1루', '3루', '창고'].forEach(loc => {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const lastSaveDate = lastSavedInventory[`meta_last_save_${loc}`];
+        const isTodaySaved = lastSaveDate === todayStr;
+
+        if (isTodaySaved) {
+            // 오늘 저장된 데이터 → inventory에서 가져옴 (입력 중 값 반영)
+            const hasInput = Object.keys(inventory).some(k => k.startsWith(`${loc}_`) && !k.startsWith('meta_'));
+            if (hasInput) {
+                Object.keys(inventory).filter(k => k.startsWith(`${loc}_`) && !k.startsWith('meta_')).forEach(k => displayInventory[k] = inventory[k]);
+            } else {
+                Object.keys(lastSavedInventory).filter(k => k.startsWith(`${loc}_`) && !k.startsWith('meta_')).forEach(k => displayInventory[k] = lastSavedInventory[k]);
+            }
+        } else {
+            // 오늘 미입력 → lastSavedInventory(어제 저장 데이터) 그대로 사용
+            Object.keys(lastSavedInventory).filter(k => k.startsWith(`${loc}_`) && !k.startsWith('meta_')).forEach(k => displayInventory[k] = lastSavedInventory[k]);
+        }
     });
 
     // 발주 데이터 수집
@@ -850,7 +872,8 @@ function showServingOverview(mode) {
 
             item.servings.forEach(s => {
                 const menuName = (s.name || '').trim();
-                const servingCount = Math.floor(useTotal * s.perUnit);
+                const rawServings = useTotal * s.perUnit;
+                const servingCount = Math.round(rawServings * 100) / 100;
                 const entry = {
                     품목명: item.품목명,
                     vendor: vendor,
@@ -921,7 +944,7 @@ function showServingOverview(mode) {
                 <div style="background:${bnBg}; border-bottom:2px solid ${bnColor}; padding:12px 14px; display:flex; justify-content:space-between; align-items:center;">
                     <div style="font-size:17px; font-weight:bold; color:#333;">🍽 ${menuName}</div>
                     <div style="text-align:right;">
-                        <div style="font-size:24px; font-weight:bold; color:${bnColor};">${bottleneck}</div>
+                        <div style="font-size:24px; font-weight:bold; color:${bnColor};">${fmtServings(bottleneck)}</div>
                         <div style="font-size:11px; color:#888;">인분 가능</div>
                     </div>
                 </div>
@@ -936,9 +959,10 @@ function showServingOverview(mode) {
             const ratio = Math.min(100, (ing.servings / maxServings) * 100);
             const isBottleneck = ing.servings === bottleneck;
             const barColor = ing.servings <= 0 ? '#f44336' : ing.servings <= 50 ? '#ff9800' : '#4caf50';
+            const fmtStock = (v) => Number.isInteger(v) ? v : parseFloat(v.toFixed(2));
             const stockInfo = isAfter && ing.orderQty > 0
-                ? `${ing.currentTotal}+${ing.orderQty}=${ing.afterOrderTotal}${ing.발주단위}`
-                : `${isAfter ? ing.afterOrderTotal : ing.currentTotal}${ing.발주단위}`;
+                ? `${fmtStock(ing.currentTotal)}+${fmtStock(ing.orderQty)}=${fmtStock(ing.afterOrderTotal)}${ing.발주단위}`
+                : `${fmtStock(isAfter ? ing.afterOrderTotal : ing.currentTotal)}${ing.발주단위}`;
 
             html += `
                 <div style="margin-bottom:8px;">
@@ -948,7 +972,7 @@ function showServingOverview(mode) {
                             <strong>${ing.품목명}</strong>
                             <span style="font-size:11px; color:#999; margin-left:4px;">(${stockInfo})</span>
                         </div>
-                        <div style="font-size:14px; font-weight:bold; color:${barColor};">${ing.servings}인분</div>
+                        <div style="font-size:14px; font-weight:bold; color:${barColor};">${fmtServings(ing.servings)}인분</div>
                     </div>
                     <div style="background:#f0f0f0; border-radius:4px; height:8px; overflow:hidden;">
                         <div style="background:${barColor}; height:100%; width:${ratio}%; border-radius:4px; transition:width 0.3s;"></div>
@@ -970,9 +994,10 @@ function showServingOverview(mode) {
 
         noNameItems.forEach(ing => {
             const color = ing.servings <= 0 ? '#f44336' : ing.servings <= 50 ? '#ff9800' : '#4caf50';
+            const fmtStock = (v) => Number.isInteger(v) ? v : parseFloat(v.toFixed(2));
             const stockInfo = isAfter && ing.orderQty > 0
-                ? `${ing.currentTotal}+${ing.orderQty}=${ing.afterOrderTotal}${ing.발주단위}`
-                : `${isAfter ? ing.afterOrderTotal : ing.currentTotal}${ing.발주단위}`;
+                ? `${fmtStock(ing.currentTotal)}+${fmtStock(ing.orderQty)}=${fmtStock(ing.afterOrderTotal)}${ing.발주단위}`
+                : `${fmtStock(isAfter ? ing.afterOrderTotal : ing.currentTotal)}${ing.발주단위}`;
 
             html += `
                 <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #f0f0f0;">
@@ -980,7 +1005,7 @@ function showServingOverview(mode) {
                         <strong>${ing.품목명}</strong>
                         <span style="font-size:11px; color:#999; margin-left:4px;">(${stockInfo})</span>
                     </div>
-                    <div style="font-size:15px; font-weight:bold; color:${color};">${ing.servings}인분</div>
+                    <div style="font-size:15px; font-weight:bold; color:${color};">${fmtServings(ing.servings)}인분</div>
                 </div>`;
         });
 

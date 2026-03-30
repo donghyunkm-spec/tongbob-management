@@ -770,8 +770,8 @@ async function sendOrderTelegramSummary(orderRecord, itemsData, currentInventory
                 const menuName = (s.name || '').trim();
                 const entry = {
                     품목명: item.품목명,
-                    currentServings: Math.floor(currentTotal * s.perUnit),
-                    afterServings: Math.floor(afterTotal * s.perUnit),
+                    currentServings: Math.round(currentTotal * s.perUnit * 100) / 100,
+                    afterServings: Math.round(afterTotal * s.perUnit * 100) / 100,
                     orderQty: orderQty,
                     unit: item.발주단위 || ''
                 };

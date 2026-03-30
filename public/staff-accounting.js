@@ -237,11 +237,11 @@ function applyHistoryFilter() {
 
 function loadHistoryTable(filterKey = 'all') {
     const monthStr = getMonthStr(currentDashboardDate);
-    const tbody = document.getElementById('historyTableBody');
+    const container = document.getElementById('historyCardContainer');
     const summaryDiv = document.getElementById('filterResultSummary');
 
-    if(!tbody) return;
-    tbody.innerHTML = '';
+    if(!container) return;
+    container.innerHTML = '';
 
     let filteredSum = 0;
     let filteredCount = 0;
@@ -252,7 +252,6 @@ function loadHistoryTable(filterKey = 'all') {
         'food': '🥬 고센', 'meat': '🥩 고기', 'etc': '🍦 잡비'
     };
 
-    // 위치별 필드 합산 헬퍼 (card1+card3, 또는 구버전 card)
     function sumField(d, field) {
         if (d[field + '1'] !== undefined || d[field + '3'] !== undefined) {
             return (d[field + '1'] || 0) + (d[field + '3'] || 0);
@@ -262,14 +261,11 @@ function loadHistoryTable(filterKey = 'all') {
 
     const rows = [];
 
-    // 1) 일일 데이터 처리
     if (accountingData.daily) {
         Object.keys(accountingData.daily).forEach(date => {
             if (!date.startsWith(monthStr)) return;
-
             const d = accountingData.daily[date];
 
-            // 필터링 - 위치별 합산 지원
             let valToCheck = 0;
             if (filterKey === 'sales') valToCheck = d.sales || 0;
             else if (filterKey !== 'all') valToCheck = sumField(d, filterKey);
@@ -280,60 +276,26 @@ function loadHistoryTable(filterKey = 'all') {
                 filteredCount++;
             }
 
-            const totalSales = (d.sales||0);
-            const totalCost = (d.cost||0);
-
-            let details = [];
-
-            if (filterKey !== 'all') {
-                const label = labelMap[filterKey] || filterKey;
-                details.push(`<span style="background:#fff9c4; font-weight:bold;">${label}: ${valToCheck.toLocaleString()}</span>`);
-            } else {
-                const cardTotal = sumField(d, 'card');
-                const cashTotal = sumField(d, 'cash');
-                const deliveryTotal = sumField(d, 'delivery');
-                const transferTotal = sumField(d, 'transfer');
-
-                if(cardTotal) details.push(`💳${cardTotal.toLocaleString()}`);
-                if(cashTotal) details.push(`💵${cashTotal.toLocaleString()}`);
-                if(deliveryTotal) details.push(`🛵${deliveryTotal.toLocaleString()}`);
-                if(transferTotal) details.push(`(이체:${transferTotal.toLocaleString()})`);
-
-                if(d.food) details.push(`고센:${d.food.toLocaleString()}`);
-                if(d.etc) details.push(`잡비:${d.etc.toLocaleString()}`);
-            }
-
-            const noteText = [d.note1, d.note3, d.note].filter(Boolean).join(' / ');
-            if(noteText) details.push(`📝${noteText}`);
-
-            rows.push({
-                date: date, dayStr: `${date.substring(8)}일`,
-                sales: totalSales, cost: totalCost,
-                desc: details.join(' / '), type: 'daily'
-            });
+            rows.push({ date: date, data: d, type: 'daily' });
         });
     }
 
-    // 2) 월말 고정비 처리
     if (filterKey === 'all' && accountingData.monthly && accountingData.monthly[monthStr]) {
         const m = accountingData.monthly[monthStr];
-
-        const fixedTotal = (m.commission||0) + (m.deliveryFee||0) + (m.cardFee||0) +
+        const fixedTotal = (m.internet1||0) + (m.water1||0) + (m.cleaning1||0) +
+                           (m.operMgmt1||0) + (m.cctv1||0) + (m.bizCard1||0) + (m.etc_fixed1||0) +
+                           (m.internet3||0) + (m.water3||0) + (m.cleaning3||0) +
+                           (m.operMgmt3||0) + (m.cctv3||0) + (m.bizCard3||0) + (m.etc_fixed3||0) +
+                           (m.commission||0) + (m.deliveryFee||0) + (m.cardFee||0) +
                            (m.internet||0) + (m.water||0) + (m.cleaning||0) +
                            (m.operMgmt||0) + (m.cctv||0) + (m.etc_fixed||0);
-
         if (fixedTotal > 0) {
-            rows.push({
-                date: `${monthStr}-99`, dayStr: `월말 고정`,
-                sales: 0, cost: fixedTotal,
-                desc: `<span style="color:#00796b; font-weight:bold;">[고정비/수수료 합계]</span>`,
-                type: 'fixed'
-            });
+            rows.push({ date: `${monthStr}-99`, data: m, type: 'fixed' });
         }
     }
 
     if (rows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">내역이 없습니다.</td></tr>';
+        container.innerHTML = '<div style="text-align:center; padding:20px; color:#999;">내역이 없습니다.</div>';
         if(summaryDiv) summaryDiv.style.display = 'none';
         return;
     }
@@ -346,16 +308,119 @@ function loadHistoryTable(filterKey = 'all') {
 
     rows.sort((a,b) => b.date.localeCompare(a.date));
 
+    const fmt = (v) => v ? v.toLocaleString() : '-';
+    const fmtBlue = (v) => v ? `<span style="color:#1976D2; font-weight:bold;">${v.toLocaleString()}</span>` : '<span style="color:#ccc;">-</span>';
+    const fmtRed = (v) => v ? `<span style="color:#d32f2f; font-weight:bold;">${v.toLocaleString()}</span>` : '<span style="color:#ccc;">-</span>';
+
     rows.forEach(r => {
-        const btn = r.type === 'fixed' ? '' : `<button onclick="editHistoryDate('${r.date}')" style="background:#607d8b; color:white; border:none; border-radius:3px; font-size:11px; padding:4px 8px;">수정</button>`;
-        tbody.innerHTML += `
-            <tr style="border-bottom:1px solid #eee; background:${r.type === 'fixed' ? '#e0f2f1' : 'white'};">
-                <td><strong>${r.dayStr}</strong></td>
-                <td style="color:#1976D2; text-align:right;">${r.sales.toLocaleString()}</td>
-                <td style="color:#d32f2f; text-align:right;">${r.cost.toLocaleString()}</td>
-                <td style="font-size:12px; color:#555;">${r.desc}</td>
-                <td style="text-align:center;">${btn}</td>
-            </tr>`;
+        if (r.type === 'fixed') {
+            container.innerHTML += `
+            <div style="background:#e0f2f1; border-radius:8px; padding:12px; margin-bottom:8px; border:1px solid #b2dfdb;">
+                <div style="font-weight:bold; color:#00796b;">월말 고정비/수수료</div>
+                <div style="font-size:12px; color:#555; margin-top:4px;">[고정비 탭에서 확인]</div>
+            </div>`;
+            return;
+        }
+
+        const d = r.data;
+        const dayNum = r.date.substring(8);
+        const dateObj = new Date(r.date);
+        const dayNames = ['일','월','화','수','목','금','토'];
+        const dayName = dayNames[dateObj.getDay()];
+        const dayColor = dateObj.getDay() === 0 ? '#d32f2f' : (dateObj.getDay() === 6 ? '#1565c0' : '#333');
+
+        const card1 = d.card1 || 0, cash1 = d.cash1 || 0, delivery1 = d.delivery1 || 0, transfer1 = d.transfer1 || 0;
+        const card3 = d.card3 || 0, cash3 = d.cash3 || 0, delivery3 = d.delivery3 || 0, transfer3 = d.transfer3 || 0;
+        const sub1 = d.sales1 || (card1 + cash1 + delivery1);
+        const sub3 = d.sales3 || (card3 + cash3 + delivery3);
+        const totalSales = d.sales || (sub1 + sub3);
+        const food = d.food || 0, meat = d.meat || 0, etc = d.etc || 0;
+        const totalCost = food + meat + etc;
+
+        const noteText = [d.note1, d.note3, d.note].filter(Boolean).join(' / ');
+        const btn = `<button onclick="editHistoryDate('${r.date}')" style="background:#607d8b; color:white; border:none; border-radius:4px; font-size:11px; padding:3px 10px; cursor:pointer;">수정</button>`;
+
+        // 필터 모드
+        if (filterKey !== 'all') {
+            const label = labelMap[filterKey] || filterKey;
+            const val = filterKey === 'sales' ? totalSales : sumField(d, filterKey);
+            container.innerHTML += `
+            <div style="background:white; border-radius:8px; padding:10px 12px; margin-bottom:6px; border:1px solid #e0e0e0; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <strong style="color:${dayColor};">${dayNum}일(${dayName})</strong>
+                    <span style="margin-left:8px; background:#fff9c4; padding:2px 6px; border-radius:4px; font-weight:bold;">${label}: ${val.toLocaleString()}원</span>
+                </div>
+                ${btn}
+            </div>`;
+            return;
+        }
+
+        container.innerHTML += `
+        <div style="background:white; border-radius:8px; margin-bottom:10px; border:1px solid #e0e0e0; overflow:hidden;">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#f5f5f5; border-bottom:1px solid #e0e0e0;">
+                <strong style="font-size:15px; color:${dayColor};">${dayNum}일 (${dayName})</strong>
+                ${btn}
+            </div>
+            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                <thead>
+                    <tr style="background:#fafafa;">
+                        <th style="padding:6px 8px; text-align:left; font-size:12px; color:#888; border-bottom:1px solid #eee; width:25%;">구분</th>
+                        <th style="padding:6px 8px; text-align:right; font-size:12px; color:#1565c0; border-bottom:1px solid #eee; width:25%;">1루</th>
+                        <th style="padding:6px 8px; text-align:right; font-size:12px; color:#00838f; border-bottom:1px solid #eee; width:25%;">3루</th>
+                        <th style="padding:6px 8px; text-align:right; font-size:12px; color:#333; border-bottom:1px solid #eee; width:25%;">합계</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="padding:4px 8px; color:#555;">💳 카드</td>
+                        <td style="padding:4px 8px; text-align:right;">${fmt(card1)}</td>
+                        <td style="padding:4px 8px; text-align:right;">${fmt(card3)}</td>
+                        <td style="padding:4px 8px; text-align:right; font-weight:bold;">${fmt(card1+card3)}</td>
+                    </tr>
+                    <tr style="background:#fafafa;">
+                        <td style="padding:4px 8px; color:#555;">💵 현금</td>
+                        <td style="padding:4px 8px; text-align:right;">${fmt(cash1)}</td>
+                        <td style="padding:4px 8px; text-align:right;">${fmt(cash3)}</td>
+                        <td style="padding:4px 8px; text-align:right; font-weight:bold;">${fmt(cash1+cash3)}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px 8px; color:#555;">🛵 배달</td>
+                        <td style="padding:4px 8px; text-align:right;">${fmt(delivery1)}</td>
+                        <td style="padding:4px 8px; text-align:right;">${fmt(delivery3)}</td>
+                        <td style="padding:4px 8px; text-align:right; font-weight:bold;">${fmt(delivery1+delivery3)}</td>
+                    </tr>
+                    ${(transfer1 || transfer3) ? `<tr style="background:#fafafa;">
+                        <td style="padding:4px 8px; color:#999; font-size:12px;">이체</td>
+                        <td style="padding:4px 8px; text-align:right; color:#999; font-size:12px;">${fmt(transfer1)}</td>
+                        <td style="padding:4px 8px; text-align:right; color:#999; font-size:12px;">${fmt(transfer3)}</td>
+                        <td style="padding:4px 8px; text-align:right; color:#999; font-size:12px;">${fmt(transfer1+transfer3)}</td>
+                    </tr>` : ''}
+                    <tr style="border-top:2px solid #1976D2; background:#e3f2fd;">
+                        <td style="padding:6px 8px; font-weight:bold; color:#1976D2;">매출 소계</td>
+                        <td style="padding:6px 8px; text-align:right; font-weight:bold; color:#1976D2;">${sub1.toLocaleString()}</td>
+                        <td style="padding:6px 8px; text-align:right; font-weight:bold; color:#1976D2;">${sub3.toLocaleString()}</td>
+                        <td style="padding:6px 8px; text-align:right; font-weight:bold; color:#1976D2; font-size:14px;">${totalSales.toLocaleString()}</td>
+                    </tr>
+                    <tr style="border-top:2px solid #d32f2f; background:#ffebee;">
+                        <td colspan="2" style="padding:6px 8px; font-weight:bold; color:#d32f2f;">지출</td>
+                        <td colspan="2" style="padding:6px 8px; text-align:right; font-weight:bold; color:#d32f2f; font-size:14px;">${totalCost.toLocaleString()}</td>
+                    </tr>
+                    ${food ? `<tr>
+                        <td colspan="2" style="padding:3px 8px; color:#795548; font-size:12px; padding-left:16px;">🥬 고센</td>
+                        <td colspan="2" style="padding:3px 8px; text-align:right; color:#795548; font-size:12px;">${food.toLocaleString()}</td>
+                    </tr>` : ''}
+                    ${meat ? `<tr>
+                        <td colspan="2" style="padding:3px 8px; color:#c62828; font-size:12px; padding-left:16px;">🥩 고기</td>
+                        <td colspan="2" style="padding:3px 8px; text-align:right; color:#c62828; font-size:12px;">${meat.toLocaleString()}</td>
+                    </tr>` : ''}
+                    ${etc ? `<tr>
+                        <td colspan="2" style="padding:3px 8px; color:#78909c; font-size:12px; padding-left:16px;">🍦 잡비</td>
+                        <td colspan="2" style="padding:3px 8px; text-align:right; color:#78909c; font-size:12px;">${etc.toLocaleString()}</td>
+                    </tr>` : ''}
+                </tbody>
+            </table>
+            ${noteText ? `<div style="padding:6px 12px; background:#fffde7; font-size:12px; color:#795548; border-top:1px solid #eee;">📝 ${noteText}</div>` : ''}
+        </div>`;
     });
 }
 
