@@ -307,26 +307,27 @@ function renderUnifiedInventoryForm() {
                         </span>
                         ${item.servings && item.servings.length > 0 ? `<div style="font-size:10px; color:#1565c0; font-weight:normal; margin-top:1px;">📏 ${getServingDisplayText(item)}</div>` : ''}
                     </div>
-                    <div class="irc-controls" style="width:100%; display:flex; gap:8px; justify-content:space-around;">
-                        <div style="display:flex; align-items:center; gap:4px; flex:1;">
+                    <div style="width:100%; display:flex; flex-direction:column; gap:4px;">
+                        <div style="display:flex; align-items:center; gap:4px;">
                             <span style="font-size:11px; font-weight:bold; color:#1976d2; min-width:22px;">1루</span>
-                            <span style="font-size:10px; color:#888; min-width:18px; text-align:right;">${prev1}</span>
+                            <span style="font-size:10px; color:#888; min-width:22px; text-align:right;">${prev1}</span>
                             <div class="irc-input-wrapper" style="flex:1;">
                                 <input type="number" id="current_${key1}" class="irc-input"
                                     value="${display1}" placeholder="0" inputmode="decimal"
                                     onchange="updateInventoryMemory('${key1}', this.value)">
                             </div>
+                            <span style="font-size:12px; color:#fff; background:#5c6bc0; padding:2px 5px; border-radius:4px; font-weight:bold; min-width:20px; text-align:center;">${displayUnit}</span>
                         </div>
-                        <div style="display:flex; align-items:center; gap:4px; flex:1;">
+                        <div style="display:flex; align-items:center; gap:4px;">
                             <span style="font-size:11px; font-weight:bold; color:#f57c00; min-width:22px;">3루</span>
-                            <span style="font-size:10px; color:#888; min-width:18px; text-align:right;">${prev3}</span>
+                            <span style="font-size:10px; color:#888; min-width:22px; text-align:right;">${prev3}</span>
                             <div class="irc-input-wrapper" style="flex:1;">
                                 <input type="number" id="current_${key3}" class="irc-input"
                                     value="${display3}" placeholder="0" inputmode="decimal"
                                     onchange="updateInventoryMemory('${key3}', this.value)">
                             </div>
+                            <span style="font-size:12px; color:#fff; background:#5c6bc0; padding:2px 5px; border-radius:4px; font-weight:bold; min-width:20px; text-align:center;">${displayUnit}</span>
                         </div>
-                        <span style="font-size:12px; color:#fff; background:#5c6bc0; padding:2px 5px; border-radius:4px; font-weight:bold; min-width:20px; text-align:center; align-self:center;">${displayUnit}</span>
                     </div>
                 </div>
             `;
