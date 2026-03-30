@@ -571,8 +571,14 @@ async function saveStaffEdit() {
         return;
     }
 
+    const name = document.getElementById('editName').value.trim();
+    if (!name) {
+        alert('이름을 입력해주세요.');
+        return;
+    }
+
     const scheduleChangeDate = document.getElementById('editScheduleChangeDate').value || null;
-    const updates = { workDays, time, dayTimes, startDate, endDate, roles };
+    const updates = { name, workDays, time, dayTimes, startDate, endDate, roles };
 
     if (currentUser && currentUser.role === 'admin') {
         updates.salaryType = salaryType;
