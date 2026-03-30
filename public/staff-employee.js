@@ -461,7 +461,7 @@ function openEditModal(id) {
     if (!target) return;
 
     document.getElementById('editId').value = target.id;
-    document.getElementById('editName').value = target.name;
+    document.getElementById('editStaffName').value = target.name;
     document.getElementById('editTime').value = target.time || '';
 
     // 요일별 체크박스 + 시간 입력 UI 생성
@@ -571,7 +571,7 @@ async function saveStaffEdit() {
         return;
     }
 
-    const name = document.getElementById('editName').value.trim();
+    const name = document.getElementById('editStaffName').value.trim();
     if (!name) {
         alert('이름을 입력해주세요.');
         return;
