@@ -865,12 +865,13 @@ function extractStoreCosts(accData, staffData, monthStr, currentDay) {
     const deliveryFee = Math.floor(deliverySalesTotal * 0.06);
     const cardFee = 0;
 
-    // 고정비 (1루 + 3루 + 공통)
+    // 고정비 (1루 + 3루)
     const fixedMisc = (m.internet1||0) + (m.water1||0) + (m.cleaning1||0) +
                       (m.operMgmt1||0) + (m.cctv1||0) + (m.bizCard1||0) + (m.etc_fixed1||0) +
+                      (m.insurance1||0) + (m.bizIncomeTax1||0) + (m.taxAccountant1||0) +
                       (m.internet3||0) + (m.water3||0) + (m.cleaning3||0) +
                       (m.operMgmt3||0) + (m.cctv3||0) + (m.bizCard3||0) + (m.etc_fixed3||0) +
-                      (m.insurance||0) + (m.bizIncomeTax||0) + (m.taxAccountant||0);
+                      (m.insurance3||0) + (m.bizIncomeTax3||0) + (m.taxAccountant3||0);
 
     const staffTotal = calculateServerStaffCost(staffData, monthStr);
 
