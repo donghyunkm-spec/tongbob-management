@@ -95,7 +95,7 @@ async function loadInventoryDataAll() {
             lastSavedInventory = invData.inventory || {};
 
             // 오늘 날짜 확인
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
 
             // 품목별 관리주기 맵 생성
             const itemCycleMap = {};
