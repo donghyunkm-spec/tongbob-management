@@ -462,6 +462,11 @@ function loadMonthlyForm() {
     setVal('fixBizCard3', mData.bizCard3);
     setVal('fixEtc3', mData.etc_fixed3);
 
+    // 공통 고정비
+    setVal('fixInsurance', mData.insurance);
+    setVal('fixBizIncomeTax', mData.bizIncomeTax);
+    setVal('fixTaxAccountant', mData.taxAccountant);
+
     // 자동 계산 수수료 (매출 기반)
     let sales1Total = 0, delivery1Total = 0;
     let sales3Total = 0, delivery3Total = 0;
@@ -521,7 +526,12 @@ async function saveFixedCost() {
         operMgmt3: getVal('fixOperMgmt3'),
         cctv3: getVal('fixCCTV3'),
         bizCard3: getVal('fixBizCard3'),
-        etc_fixed3: getVal('fixEtc3')
+        etc_fixed3: getVal('fixEtc3'),
+
+        // 공통 고정비
+        insurance: getVal('fixInsurance'),
+        bizIncomeTax: getVal('fixBizIncomeTax'),
+        taxAccountant: getVal('fixTaxAccountant')
     };
 
     try {
@@ -719,9 +729,11 @@ function renderPredictionStats() {
         deliveryFee = Math.floor(deliverySalesTotal1 * 0.06);
         cardFee = 0;
 
-        // 1루 고정비
+        // 1루 고정비 + 공통 고정비 (매출 비율 배분)
+        const commonFixed = (mData.insurance||0) + (mData.bizIncomeTax||0) + (mData.taxAccountant||0);
         fixedMisc = (mData.internet1||0) + (mData.water1||0) + (mData.cleaning1||0) +
-                    (mData.operMgmt1||0) + (mData.cctv1||0) + (mData.bizCard1||0) + (mData.etc_fixed1||0);
+                    (mData.operMgmt1||0) + (mData.cctv1||0) + (mData.bizCard1||0) + (mData.etc_fixed1||0) +
+                    Math.floor(commonFixed * ratio1);
 
         // 매출 비율로 배분
         staffCost = Math.floor(estimatedStaffCost * ratio1);
@@ -741,9 +753,11 @@ function renderPredictionStats() {
         deliveryFee = Math.floor(deliverySalesTotal3 * 0.06);
         cardFee = 0;
 
-        // 3루 고정비
+        // 3루 고정비 + 공통 고정비 (매출 비율 배분)
+        const commonFixed3 = (mData.insurance||0) + (mData.bizIncomeTax||0) + (mData.taxAccountant||0);
         fixedMisc = (mData.internet3||0) + (mData.water3||0) + (mData.cleaning3||0) +
-                    (mData.operMgmt3||0) + (mData.cctv3||0) + (mData.bizCard3||0) + (mData.etc_fixed3||0);
+                    (mData.operMgmt3||0) + (mData.cctv3||0) + (mData.bizCard3||0) + (mData.etc_fixed3||0) +
+                    Math.floor(commonFixed3 * ratio3);
 
         // 매출 비율로 배분
         staffCost = Math.floor(estimatedStaffCost * ratio3);
@@ -764,11 +778,12 @@ function renderPredictionStats() {
         deliveryFee = Math.floor(deliverySalesTotal1 * 0.06) + Math.floor(deliverySalesTotal3 * 0.06);
         cardFee = 0;
 
-        // 전체 고정비
+        // 전체 고정비 (1루 + 3루 + 공통)
         fixedMisc = (mData.internet1||0) + (mData.water1||0) + (mData.cleaning1||0) +
                     (mData.operMgmt1||0) + (mData.cctv1||0) + (mData.bizCard1||0) + (mData.etc_fixed1||0) +
                     (mData.internet3||0) + (mData.water3||0) + (mData.cleaning3||0) +
-                    (mData.operMgmt3||0) + (mData.cctv3||0) + (mData.bizCard3||0) + (mData.etc_fixed3||0);
+                    (mData.operMgmt3||0) + (mData.cctv3||0) + (mData.bizCard3||0) + (mData.etc_fixed3||0) +
+                    (mData.insurance||0) + (mData.bizIncomeTax||0) + (mData.taxAccountant||0);
 
         // 전체 (배분 없음)
         staffCost = estimatedStaffCost;
@@ -881,9 +896,11 @@ function renderDashboardStats() {
         deliveryFee = Math.floor(sales1.delivery * 0.06);
         cardFee = 0;
 
-        // 1루 고정비
+        // 1루 고정비 + 공통 고정비 (매출 비율 배분)
+        const commonFixedD = (mData.insurance||0) + (mData.bizIncomeTax||0) + (mData.taxAccountant||0);
         fixedMisc = (mData.internet1||0) + (mData.water1||0) + (mData.cleaning1||0) +
-                    (mData.operMgmt1||0) + (mData.cctv1||0) + (mData.bizCard1||0) + (mData.etc_fixed1||0);
+                    (mData.operMgmt1||0) + (mData.cctv1||0) + (mData.bizCard1||0) + (mData.etc_fixed1||0) +
+                    Math.floor(commonFixedD * ratio1);
 
         // 매출 비율로 배분
         staffCost = Math.floor(totalStaffCost * ratio1);
@@ -900,9 +917,11 @@ function renderDashboardStats() {
         deliveryFee = Math.floor(sales3.delivery * 0.06);
         cardFee = 0;
 
-        // 3루 고정비
+        // 3루 고정비 + 공통 고정비 (매출 비율 배분)
+        const commonFixedD3 = (mData.insurance||0) + (mData.bizIncomeTax||0) + (mData.taxAccountant||0);
         fixedMisc = (mData.internet3||0) + (mData.water3||0) + (mData.cleaning3||0) +
-                    (mData.operMgmt3||0) + (mData.cctv3||0) + (mData.bizCard3||0) + (mData.etc_fixed3||0);
+                    (mData.operMgmt3||0) + (mData.cctv3||0) + (mData.bizCard3||0) + (mData.etc_fixed3||0) +
+                    Math.floor(commonFixedD3 * ratio3);
 
         // 매출 비율로 배분
         staffCost = Math.floor(totalStaffCost * ratio3);
@@ -925,11 +944,12 @@ function renderDashboardStats() {
         deliveryFee = Math.floor(sales1.delivery * 0.06) + Math.floor(sales3.delivery * 0.06);
         cardFee = 0;
 
-        // 전체 고정비
+        // 전체 고정비 (1루 + 3루 + 공통)
         fixedMisc = (mData.internet1||0) + (mData.water1||0) + (mData.cleaning1||0) +
                     (mData.operMgmt1||0) + (mData.cctv1||0) + (mData.bizCard1||0) + (mData.etc_fixed1||0) +
                     (mData.internet3||0) + (mData.water3||0) + (mData.cleaning3||0) +
-                    (mData.operMgmt3||0) + (mData.cctv3||0) + (mData.bizCard3||0) + (mData.etc_fixed3||0);
+                    (mData.operMgmt3||0) + (mData.cctv3||0) + (mData.bizCard3||0) + (mData.etc_fixed3||0) +
+                    (mData.insurance||0) + (mData.bizIncomeTax||0) + (mData.taxAccountant||0);
 
         // 전체 (배분 없음)
         staffCost = totalStaffCost;
