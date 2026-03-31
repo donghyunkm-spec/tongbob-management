@@ -172,6 +172,11 @@ function renderManageList() {
             scheduleStr = `📅 ${scheduleStr}`;
         }
 
+        const paidUntilInfo = (isAdmin && s.paidUntil) ?
+            `<div style="font-size:12px; color:#1565c0; margin-top:3px;">
+                💳 급여지급: ~${s.paidUntil}
+             </div>` : '';
+
         const salaryInfo = isAdmin ?
             `<div style="font-size:12px; color:#28a745; margin-top:3px;">
                 💰 ${s.salaryType === 'monthly' ? '월급' : '시급'}: ${s.salary ? s.salary.toLocaleString() : '0'}원
@@ -197,6 +202,7 @@ function renderManageList() {
                         <div style="font-size:13px; margin-top:5px;">${rolesBadge}</div>
                         <div style="font-size:12px; margin-top:5px; color:#555;">${scheduleStr}</div>
                         ${salaryInfo}
+                        ${paidUntilInfo}
                     </div>
                     <div>
                         <button class="edit-btn" onclick="openEditModal(${s.id})">수정</button>
@@ -500,6 +506,7 @@ function openEditModal(id) {
         salarySection.style.display = 'block';
         document.getElementById('editSalaryType').value = target.salaryType || 'hourly';
         document.getElementById('editSalary').value = target.salary || 0;
+        document.getElementById('editPaidUntil').value = target.paidUntil || '';
     } else {
         salarySection.style.display = 'none';
     }
@@ -583,6 +590,7 @@ async function saveStaffEdit() {
     if (currentUser && currentUser.role === 'admin') {
         updates.salaryType = salaryType;
         updates.salary = salary;
+        updates.paidUntil = document.getElementById('editPaidUntil').value || null;
     }
 
     try {
