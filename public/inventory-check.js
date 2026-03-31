@@ -571,13 +571,11 @@ function showConfirmModal(confirmItems, checkItems, missingInputCount, dangerIte
         const list = confirmItems[vendor];
         if (list.length > 0) {
             hasOrder = true;
-            const vendorTotal = list.reduce((sum, i) => sum + (i.unitCost || 0) * i.orderAmount, 0);
-            html += `<h4 style="margin:10px 0 5px 0; font-size:14px;">${vendor} ${vendorTotal > 0 ? `<span style="font-size:12px; color:#e65100; font-weight:normal;">예상 ${vendorTotal.toLocaleString()}원</span>` : ''}</h4>
+            html += `<h4 style="margin:10px 0 5px 0; font-size:14px;">${vendor}</h4>
             <table class="confirm-table" style="background:white;">
-                <thead><tr><th>품목</th><th>현재재고</th><th>발주량</th><th>예상원가</th></tr></thead>
+                <thead><tr><th>품목</th><th>현재재고</th><th>발주량</th></tr></thead>
                 <tbody>`;
             list.forEach((i, idx) => {
-                const itemCost = (i.unitCost || 0) * i.orderAmount;
                 const stockUnitLabel = i.재고단위 || '';
                 html += `<tr>
                     <td style="font-weight:bold;">${i.품목명}</td>
@@ -589,7 +587,6 @@ function showConfirmModal(confirmItems, checkItems, missingInputCount, dangerIte
                                style="width:60px; padding:4px; text-align:right; font-weight:bold; border:2px solid #1976D2; border-radius:4px;">
                         <span style="font-size:12px; color:#fff; background:#e65100; padding:2px 5px; border-radius:4px; font-weight:bold;">${i.displayUnit}</span>
                     </td>
-                    <td style="text-align:right; font-size:12px;">${itemCost > 0 ? itemCost.toLocaleString() + '원' : '-'}</td>
                 </tr>`;
             });
             html += `</tbody></table>`;
