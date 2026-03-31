@@ -453,10 +453,10 @@ app.post('/api/inventory/current', (req, res) => {
     setImmediate(() => {
         try {
             let history = readJson(INVENTORY_HISTORY_FILE, []);
-            const now = new Date();
+            const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
             const historyRecord = {
                 date: now.toISOString().split('T')[0],
-                time: now.toTimeString().split(' ')[0].substring(0, 5),
+                time: now.toISOString().split('T')[1].substring(0, 5),
                 inventory: {}
             };
             

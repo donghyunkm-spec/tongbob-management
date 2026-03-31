@@ -52,7 +52,7 @@ function renderInventoryCheck() {
         container.innerHTML = `<div style="padding:50px; text-align:center; color:#999;">미래의 데이터는 볼 수 없습니다.</div>`;
         return;
     } else {
-        const record = recentHistory.find(r => r.date === dateStr);
+        const record = recentHistory.filter(r => r.date === dateStr).pop();
         if (record) {
             Object.values(record.inventory).forEach(vendorObj => Object.assign(displayInventory, vendorObj));
             lastSaveDate1 = dateStr;
