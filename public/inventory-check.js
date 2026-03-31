@@ -537,7 +537,7 @@ function showConfirmModal(confirmItems, checkItems, missingInputCount, dangerIte
         sourceAlertItems.forEach(item => {
             html += `<div style="background:white; border:1px solid #9fa8da; border-radius:6px; padding:10px; margin-bottom:8px;">
                 <div style="font-weight:bold; font-size:14px; color:#283593; margin-bottom:4px;">
-                    📌 ${item.품목명} <span style="font-size:12px; color:#666; font-weight:normal;">(현재 ${item.currentStock} ${item.발주단위})</span>
+                    📌 ${item.품목명} <span style="font-size:12px; color:#666; font-weight:normal;">(현재 ${parseFloat(item.currentStock.toFixed(1))} ${item.발주단위})</span>
                 </div>
                 <div style="font-size:13px; color:#333;">
                     👉 발주 원재료: <strong style="color:#e65100;">${item.sourceItems.join(', ')}</strong>
@@ -581,7 +581,7 @@ function showConfirmModal(confirmItems, checkItems, missingInputCount, dangerIte
                 const stockUnitLabel = i.재고단위 || '';
                 html += `<tr>
                     <td style="font-weight:bold;">${i.품목명}</td>
-                    <td>${i.currentStock}${stockUnitLabel ? '<span style="font-size:10px; color:#fff; background:#5c6bc0; padding:1px 4px; border-radius:3px; font-weight:bold; margin-left:2px;">' + stockUnitLabel + '</span>' : ''}</td>
+                    <td>${parseFloat(i.currentStock.toFixed(1))}${stockUnitLabel ? '<span style="font-size:10px; color:#fff; background:#5c6bc0; padding:1px 4px; border-radius:3px; font-weight:bold; margin-left:2px;">' + stockUnitLabel + '</span>' : ''}</td>
                     <td>
                         <input type="number" value="${i.orderAmount}"
                                data-vendor="${vendor}" data-index="${idx}"
@@ -632,7 +632,7 @@ function showConfirmModal(confirmItems, checkItems, missingInputCount, dangerIte
 
                 html += `<tr style="${stockStyle}">
                     <td>${i.품목명}</td>
-                    <td>${i.currentStock} ${i.displayUnit}</td>
+                    <td>${parseFloat(i.currentStock.toFixed(1))} ${i.displayUnit}</td>
                     <td>${statusIcon}</td>
                 </tr>`;
             });
