@@ -872,7 +872,9 @@ function showServingOverview(mode) {
 
             item.servings.forEach(s => {
                 const menuName = (s.name || '').trim();
-                const rawServings = useTotal * s.perUnit;
+                // 재고단위가 발주단위와 다른 경우 (예: 삼겹살 팩→kg) 변환 적용
+                const convertedTotal = (item.재고단위 && item.unitsPerOrder) ? useTotal * item.unitsPerOrder : useTotal;
+                const rawServings = convertedTotal * s.perUnit;
                 const servingCount = Math.round(rawServings * 100) / 100;
                 const entry = {
                     품목명: item.품목명,
