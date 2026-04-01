@@ -1553,7 +1553,7 @@ input:focus, select:focus {
     .standard-name { font-size: 14px; }
     .standard-input-area { width: 100px; }
     .manage-li { padding: 10px; }
-    .btn-edit, .btn-delete { padding: 5px 8px; font-size: 11px; }
+    .btn-edit, .btn-delete { padding: 8px 12px; font-size: 12px; min-height: 38px; }
 }
 
 /* 활성화된 위치 버튼 스타일 */
@@ -1948,4 +1948,131 @@ input[type="checkbox"] {
     font-size: 11px;
     font-weight: bold;
     vertical-align: middle;
+}
+
+/* =========================================
+   모바일 터치 타겟 최적화
+   최소 44px 터치 영역 확보
+   ========================================= */
+@media (max-width: 768px) {
+    /* 서브 탭 - 터치 영역 확대 */
+    .sub-tabs .tab {
+        padding: 12px 8px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* 필터 버튼 */
+    .filter-btn {
+        padding: 10px 14px;
+        font-size: 13px;
+        min-height: 40px;
+    }
+
+    /* 업체 필터 버튼 */
+    .vendor-btn {
+        padding: 10px 16px;
+        min-height: 40px;
+        font-size: 14px;
+    }
+
+    /* 정렬 버튼 */
+    .sort-btn {
+        height: 40px;
+        padding: 0 12px;
+        font-size: 13px;
+    }
+
+    /* 수정/삭제 버튼 (직원관리 등) */
+    .edit-btn, .delete-btn {
+        padding: 10px 16px;
+        font-size: 13px;
+        min-height: 40px;
+    }
+
+    /* 품목관리 수정/삭제 */
+    .btn-edit, .btn-delete {
+        padding: 10px 14px;
+        font-size: 13px;
+        min-height: 40px;
+    }
+
+    /* 불러오기/초기화 버튼 */
+    .btn-recall, .btn-reset {
+        padding: 10px 14px;
+        font-size: 13px;
+        min-height: 40px;
+    }
+
+    /* 옵션 버튼 (예상재고 등) */
+    .btn-option {
+        padding: 8px 12px;
+        font-size: 12px;
+        min-height: 36px;
+    }
+
+    /* 위/복사 작은 버튼 */
+    .btn-up-copy {
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+    }
+
+    /* 모달 닫기 버튼 */
+    .close-btn {
+        font-size: 28px;
+        padding: 8px;
+        min-width: 44px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* 버튼 그룹 간격 확보 (오터치 방지) */
+    .mrg-actions,
+    .filter-controls {
+        gap: 8px;
+    }
+
+    /* 이동 버튼 */
+    .btn-move {
+        min-height: 40px;
+        min-width: 40px;
+    }
+
+    /* 위치 선택 버튼 */
+    .btn-loc-select {
+        padding: 12px;
+        min-height: 44px;
+        font-size: 14px;
+    }
+
+    /* sticky 액션 버튼 */
+    .btn-sticky-action {
+        padding: 12px 16px;
+        min-height: 44px;
+        font-size: 15px;
+    }
+
+    /* 다운로드/새로고침 버튼 */
+    .download-btn, .refresh-btn {
+        padding: 12px 20px;
+        min-height: 44px;
+        font-size: 15px;
+    }
+
+    /* 카카오/primary 버튼 */
+    .btn-kakao, .btn-primary {
+        padding: 14px;
+        min-height: 48px;
+        font-size: 15px;
+    }
+
+    /* 동일 버튼 */
+    .btn-same {
+        min-height: 40px;
+    }
 }
