@@ -81,14 +81,20 @@ function renderInventoryCheck() {
             expectedOrderDate = latestOrder.date;
 
             // 가장 최근 재고 기록을 사용 (오늘 제외 - 출근 전 마감 재고 기준)
+            // 같은 날짜의 여러 기록을 합침 (위치별 저장으로 인해 분산될 수 있음)
             const todayStr = new Date().toISOString().split('T')[0];
             const pastHistory = recentHistory.filter(r => r.date < todayStr);
             const sortedHist = [...pastHistory].sort((a, b) => b.date.localeCompare(a.date));
-            const latestHist = sortedHist[0];
-            if (latestHist && latestHist.inventory) {
-                expectedStockDate = latestHist.date;
-                Object.values(latestHist.inventory).forEach(vendorObj => {
-                    Object.assign(expectedBaseInventory, vendorObj);
+            if (sortedHist.length > 0) {
+                const latestDate = sortedHist[0].date;
+                expectedStockDate = latestDate;
+                // 해당 날짜의 모든 기록을 합침
+                pastHistory.filter(r => r.date === latestDate).forEach(record => {
+                    if (record.inventory) {
+                        Object.values(record.inventory).forEach(vendorObj => {
+                            Object.assign(expectedBaseInventory, vendorObj);
+                        });
+                    }
                 });
             }
 
@@ -354,25 +360,31 @@ function showExpectedStockModal() {
         byVendor[item.vendor].push(item);
     });
 
+    const stockLabel = data.stockDate ? data.stockDate.slice(5) : '?';
+    const orderLabel = data.orderDate ? data.orderDate.slice(5) : '?';
+
     let html = `
         <div class="modal-overlay" id="expectedStockModal" style="display:flex;" onclick="if(event.target===this)this.style.display='none'">
-            <div class="modal-content" style="width:95%; max-width:600px; max-height:85vh; overflow-y:auto;">
-                <div class="modal-header">
-                    <h2 style="font-size:16px;">📦 예상재고</h2>
-                    <button class="close-btn" onclick="document.getElementById('expectedStockModal').style.display='none'">&times;</button>
+            <div class="modal-content" style="width:95%; max-width:600px; max-height:85vh; overflow-y:auto; padding:0;">
+                <div style="padding:15px; border-bottom:1px solid #eee;">
+                    <div class="modal-header" style="margin-bottom:8px;">
+                        <h2 style="font-size:16px; margin:0;">📦 예상재고</h2>
+                        <button class="close-btn" onclick="document.getElementById('expectedStockModal').style.display='none'">&times;</button>
+                    </div>
+                    <div style="padding:6px 8px; background:#e8f5e9; border-radius:5px; font-size:12px; color:#2e7d32;">
+                        <strong>${data.stockDate}</strong> 마감 재고 + <strong>${data.orderDate}</strong> 발주량
+                    </div>
                 </div>
-                <div style="margin-bottom:10px; padding:8px; background:#e8f5e9; border-radius:5px; font-size:12px; color:#2e7d32;">
-                    <strong>${data.stockDate}</strong> 마감 재고 + <strong>${data.orderDate}</strong> 발주량
-                </div>
-                <table class="confirm-table" style="font-size:13px;">
+                <div style="overflow-y:auto; max-height:calc(85vh - 120px);">
+                <table class="confirm-table" style="font-size:13px; border-collapse:collapse;">
                     <thead>
-                        <tr>
-                            <th>품목명</th>
-                            <th style="text-align:right;">${data.stockDate.slice(5)} 재고</th>
-                            <th style="text-align:right;">발주</th>
-                            <th style="text-align:right; background:#c8e6c9;">예상</th>
-                            <th style="text-align:right;">1일사용</th>
-                            <th style="text-align:right;">차이</th>
+                        <tr style="position:sticky; top:0; z-index:1;">
+                            <th style="background:#f1f3f5; position:sticky; top:0;">품목명</th>
+                            <th style="text-align:right; background:#e3f2fd; position:sticky; top:0;">${stockLabel} 재고</th>
+                            <th style="text-align:right; background:#fff3e0; position:sticky; top:0;">${orderLabel} 발주</th>
+                            <th style="text-align:right; background:#c8e6c9; position:sticky; top:0;">예상</th>
+                            <th style="text-align:right; background:#f1f3f5; position:sticky; top:0;">1일사용</th>
+                            <th style="text-align:right; background:#f1f3f5; position:sticky; top:0;">차이</th>
                         </tr>
                     </thead>
                     <tbody>`;
@@ -382,9 +394,11 @@ function showExpectedStockModal() {
         byVendor[vendor].forEach(item => {
             const diffClass = item.expectedDiff >= 0 ? 'color:#2e7d32' : 'color:#c62828; font-weight:bold';
             const diffSign = item.expectedDiff > 0 ? '+' : '';
+            const unit = item.재고단위 || item.발주단위 || '';
+            const unitTag = unit ? `<span style="font-size:10px; color:#888;">${unit}</span>` : '';
             html += `
                 <tr>
-                    <td>${item.품목명}</td>
+                    <td>${item.품목명} ${unitTag}</td>
                     <td style="text-align:right;">${item.expBase}</td>
                     <td style="text-align:right; color:#2e7d32; font-weight:bold;">${item.orderQty > 0 ? '+' + parseFloat(item.orderQty.toFixed(2)) : '-'}</td>
                     <td style="text-align:right; background:#e8f5e9; font-weight:bold;">${parseFloat(item.expectedTotal.toFixed(2))}</td>
@@ -394,7 +408,7 @@ function showExpectedStockModal() {
         });
     }
 
-    html += `</tbody></table></div></div>`;
+    html += `</tbody></table></div></div></div>`;
 
     // 기존 모달 제거 후 추가
     const old = document.getElementById('expectedStockModal');
