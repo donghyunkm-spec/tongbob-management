@@ -71,10 +71,21 @@ function renderInventoryCheck() {
 
     if (checkDateOffset === 0) {
         // 마지막 저장일 기준으로 해당 날짜의 발주 찾기
+        // "오늘 입력중"인 위치는 제외하고, 실제 저장된 날짜 중 가장 최근 사용
+        // 모든 위치가 "오늘 입력중"이면 가장 최근 발주일 사용
         const saveDates = [lastSaveDate1, lastSaveDate3, lastSaveDateW]
             .filter(d => d && d !== '기록없음' && d !== '오늘 입력중')
             .sort().reverse();
-        const lastDate = saveDates[0];
+        let lastDate = saveDates[0];
+
+        // 모든 위치가 "오늘 입력중"이면 → 최근 발주일에서 찾기
+        if (!lastDate) {
+            const hasAnyInput = [lastSaveDate1, lastSaveDate3, lastSaveDateW].some(d => d === '오늘 입력중');
+            if (hasAnyInput && allOrders.length > 0) {
+                const sorted = [...allOrders].sort((a, b) => b.date.localeCompare(a.date));
+                lastDate = sorted[0].date;
+            }
+        }
 
         if (lastDate) {
             const order = allOrders.find(o => o.date === lastDate);
