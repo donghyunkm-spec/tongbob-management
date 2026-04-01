@@ -112,7 +112,8 @@ function updateDashboardUI() {
 
     if (!activeSubTab) { switchAccSubTab('acc-daily'); return; }
 
-    if (activeSubTab.id === 'acc-history') loadHistoryTable();
+    if (activeSubTab.id === 'acc-daily') loadDailyAccounting();
+    else if (activeSubTab.id === 'acc-history') loadHistoryTable();
     else if (activeSubTab.id === 'acc-prediction') renderPredictionStats();
     else if (activeSubTab.id === 'acc-dashboard') renderDashboardStats();
     else if (activeSubTab.id === 'acc-monthly') loadMonthlyForm();
