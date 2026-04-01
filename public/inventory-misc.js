@@ -301,6 +301,21 @@ async function loadRecentInventory() {
 }
 
 // ==========================================
+// 발주 데이터 로드 (예상재고 계산용)
+// ==========================================
+async function loadAllOrders() {
+    try {
+        const response = await fetch(`${API_BASE}/api/inventory/orders`);
+        const result = await response.json();
+        if (result.success && result.orders) {
+            allOrders = result.orders;
+        }
+    } catch (error) {
+        console.error('발주 데이터 로드 실패:', error);
+    }
+}
+
+// ==========================================
 // 미발주 품목 모달
 // ==========================================
 function showLongTermNoOrder() {

@@ -64,6 +64,39 @@ function renderInventoryCheck() {
         }
     }
 
+    // 3.5. 예상재고 계산 (어제재고 + 발주량)
+    let expectedOrderMap = {}; // rawItemKey → 발주량(재고단위)
+    let expectedOrderDate = null;
+    let hasExpectedData = false;
+
+    if (checkDateOffset === 0) {
+        // 마지막 저장일 기준으로 해당 날짜의 발주 찾기
+        const saveDates = [lastSaveDate1, lastSaveDate3, lastSaveDateW]
+            .filter(d => d && d !== '기록없음' && d !== '오늘 입력중')
+            .sort().reverse();
+        const lastDate = saveDates[0];
+
+        if (lastDate) {
+            const order = allOrders.find(o => o.date === lastDate);
+            if (order && order.orders) {
+                expectedOrderDate = lastDate;
+                for (const vendor in order.orders) {
+                    (order.orders[vendor] || []).forEach(oi => {
+                        const key = `${vendor}_${oi.품목명}`;
+                        let amt = oi.orderAmount || 0;
+                        // 발주단위 → 재고단위 변환
+                        const itemDef = (items[vendor] || []).find(it => it.품목명 === oi.품목명);
+                        if (itemDef && itemDef.재고단위 && itemDef.unitsPerOrder) {
+                            amt = amt / itemDef.unitsPerOrder;
+                        }
+                        expectedOrderMap[key] = (expectedOrderMap[key] || 0) + amt;
+                    });
+                }
+                hasExpectedData = Object.keys(expectedOrderMap).length > 0;
+            }
+        }
+    }
+
     // 4. 데이터 가공
     let allCheckItems = [];
     Object.keys(items).forEach(vendor => {
@@ -78,6 +111,10 @@ function renderInventoryCheck() {
 
             const cost = (item.unitCost || 0) * totalStock;
 
+            const orderQty = expectedOrderMap[rawItemKey] || 0;
+            const expectedTotal = parseFloat((totalStock + orderQty).toFixed(2));
+            const expectedDiff = parseFloat((expectedTotal - usage).toFixed(2));
+
             allCheckItems.push({
                 ...item,
                 vendor,
@@ -88,7 +125,10 @@ function renderInventoryCheck() {
                 totalStock,
                 usage,
                 diff,
-                cost
+                cost,
+                orderQty,
+                expectedTotal,
+                expectedDiff
             });
         });
     });
@@ -167,10 +207,20 @@ function renderInventoryCheck() {
                 <button onclick="updateCheckSort('name')" class="sort-btn ${checkSortKey==='name'?'active':''}" title="이름순">가나다</button>
                 <button onclick="updateCheckSort('diff_asc')" class="sort-btn ${checkSortKey==='diff_asc'?'active':''}" title="부족한 순">🔥부족</button>
             </div>
+            ${hasExpectedData ? `<button onclick="toggleExpectedStock()" class="sort-btn ${showExpectedStock?'active':''}" style="padding:4px 8px; font-size:12px;" title="어제재고+발주량 예상재고">📦예상</button>` : ''}
         </div>
     `;
 
+    if (hasExpectedData && showExpectedStock) {
+        controlHtml += `
+            <div style="margin-bottom:8px; padding:8px 10px; background:#e8f5e9; border-radius:5px; border:1px solid #a5d6a7; font-size:12px; color:#2e7d32;">
+                📦 <strong>예상재고</strong>: ${expectedOrderDate} 재고 + 발주량 (배송 도착 가정)
+            </div>
+        `;
+    }
+
     // 8. 테이블 그리기
+    const showExp = hasExpectedData && showExpectedStock;
     let tableHtml = `
         <table class="check-table">
             <thead>
@@ -180,6 +230,7 @@ function renderInventoryCheck() {
                     <th>3루</th>
                     <th>창고</th>
                     <th style="background:#e3f2fd;">합계</th>
+                    ${showExp ? '<th style="background:#c8e6c9;">발주</th><th style="background:#a5d6a7;">예상</th>' : ''}
                     <th>1일사용</th>
                     <th>차이</th>
                 </tr>
@@ -189,12 +240,14 @@ function renderInventoryCheck() {
 
     let lastVendor = '';
 
+    const colSpan = showExp ? 9 : 7;
+
     if (filteredItems.length === 0) {
-        tableHtml += `<tr><td colspan="7" style="text-align:center; padding:20px; color:#999;">검색 결과가 없습니다.</td></tr>`;
+        tableHtml += `<tr><td colspan="${colSpan}" style="text-align:center; padding:20px; color:#999;">검색 결과가 없습니다.</td></tr>`;
     } else {
         filteredItems.forEach(item => {
             if (checkSortKey === 'vendor' && item.vendor !== lastVendor) {
-                tableHtml += `<tr style="background:#f8f9fa;"><td colspan="7" style="text-align:left; font-size:12px; font-weight:bold; color:#555; padding-left:10px;">📦 ${item.vendor}</td></tr>`;
+                tableHtml += `<tr style="background:#f8f9fa;"><td colspan="${colSpan}" style="text-align:left; font-size:12px; font-weight:bold; color:#555; padding-left:10px;">📦 ${item.vendor}</td></tr>`;
                 lastVendor = item.vendor;
             }
 
@@ -233,8 +286,12 @@ function renderInventoryCheck() {
                     <td>${parseFloat(item.stock3.toFixed(2))}${stockUnitTag}</td>
                     <td>${parseFloat(item.stockW.toFixed(2))}${stockUnitTag}</td>
                     <td class="check-val" style="background:#e3f2fd;">${parseFloat(item.totalStock.toFixed(2))}${stockUnitTag}</td>
+                    ${showExp ? `
+                    <td style="background:#e8f5e9; color:#2e7d32; font-weight:bold;">${item.orderQty > 0 ? '+' + parseFloat(item.orderQty.toFixed(2)) : '-'}</td>
+                    <td style="background:#c8e6c9; font-weight:bold;">${item.orderQty > 0 ? parseFloat(item.expectedTotal.toFixed(2)) : parseFloat(item.totalStock.toFixed(2))}${stockUnitTag}</td>
+                    ` : ''}
                     <td>${parseFloat(item.usage.toFixed(2))}${stockUnitTag}</td>
-                    <td class="${diffClass} check-val">${diffSign}${parseFloat(item.diff.toFixed(1))}</td>
+                    <td class="${showExp && item.orderQty > 0 ? (item.expectedDiff >= 0 ? 'diff-plus' : 'diff-minus') : diffClass} check-val">${showExp && item.orderQty > 0 ? ((item.expectedDiff > 0 ? '+' : '') + parseFloat(item.expectedDiff.toFixed(1))) : (diffSign + parseFloat(item.diff.toFixed(1)))}</td>
                 </tr>
             `;
         });
@@ -264,6 +321,11 @@ function updateCheckSort(key) {
 
 function changeCheckDate(delta) {
     checkDateOffset += delta;
+    renderInventoryCheck();
+}
+
+function toggleExpectedStock() {
+    showExpectedStock = !showExpectedStock;
     renderInventoryCheck();
 }
 

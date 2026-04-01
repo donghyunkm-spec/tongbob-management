@@ -13,6 +13,8 @@ let holidays = {
 };
 let lastOrderDates = {};
 let recentHistory = [];
+let allOrders = [];
+let showExpectedStock = false;
 
 // 화면 상태 변수
 let currentLocation = '1루';
@@ -141,6 +143,7 @@ async function loadInventoryDataAll() {
         if(!holidays['store_open']) holidays['store_open'] = [];
 
         await loadRecentInventory();
+        await loadAllOrders();
     } catch (e) {
         console.error("데이터 로드 실패", e);
     }
