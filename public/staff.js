@@ -221,7 +221,8 @@ function switchAccSubTab(subTabId, btnElement) {
         targetDiv.style.display = 'block';
         targetDiv.classList.add('active');
 
-        if (subTabId === 'acc-history') loadHistoryTable();
+        if (subTabId === 'acc-daily') loadDailyAccounting();
+        else if (subTabId === 'acc-history') loadHistoryTable();
         else if (subTabId === 'acc-prediction') renderPredictionStats();
         else if (subTabId === 'acc-dashboard') renderDashboardStats();
         else if (subTabId === 'acc-monthly') loadMonthlyForm();
