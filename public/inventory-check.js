@@ -69,19 +69,11 @@ function renderInventoryCheck() {
     let expectedOrderDate = null;
     let hasExpectedData = false;
 
-    // 임시 디버그 (화면 표시)
-    const _ordersInfo = allOrders.length > 0 ? [...allOrders].sort((a,b)=>b.date.localeCompare(a.date))[0] : null;
-    const _sampleKeys = Object.keys(displayInventory).filter(k=>!k.startsWith('meta_')).slice(0,3);
-    const _sampleVals = _sampleKeys.map(k => `${k}=${displayInventory[k]}`);
-    const _dbg = [
-        `orders: ${allOrders.length}건`,
-        _ordersInfo ? `최근발주: ${_ordersInfo.date}, 품목수: ${Object.values(_ordersInfo.orders||{}).flat().length}` : '발주없음',
-        `hasExpected: ${hasExpectedData}`,
-        `expMap크기: ${Object.keys(expectedOrderMap).length}`,
-        `displayInv샘플: ${_sampleVals.join(', ')}`,
-        `saveDate: 1루=${lastSaveDate1}, 3루=${lastSaveDate3}, 창고=${lastSaveDateW}`
-    ].join(' | ');
-    container.innerHTML = `<div style="padding:8px;background:#fff3cd;border:1px solid #ffc107;border-radius:5px;margin-bottom:8px;font-size:11px;word-break:break-all;">🔍 ${_dbg}</div>`;
+    // 예상재고 기준 재고: lastSavedInventory (어제 마감 재고)
+    let expectedBaseInventory = {};
+    Object.keys(lastSavedInventory).forEach(k => {
+        if (!k.startsWith('meta_')) expectedBaseInventory[k] = lastSavedInventory[k];
+    });
 
     if (checkDateOffset === 0 && allOrders.length > 0) {
         // 가장 최근 발주를 찾아서 예상재고 계산
@@ -121,7 +113,12 @@ function renderInventoryCheck() {
             const cost = (item.unitCost || 0) * totalStock;
 
             const orderQty = expectedOrderMap[rawItemKey] || 0;
-            const expectedTotal = parseFloat((totalStock + orderQty).toFixed(2));
+            // 예상재고 = 어제 마감 재고(lastSavedInventory) + 발주량
+            const expStock1 = expectedBaseInventory[`1루_${rawItemKey}`] || 0;
+            const expStock3 = expectedBaseInventory[`3루_${rawItemKey}`] || 0;
+            const expStockW = expectedBaseInventory[`창고_${rawItemKey}`] || 0;
+            const expBase = parseFloat((expStock1 + expStock3 + expStockW).toFixed(2));
+            const expectedTotal = parseFloat((expBase + orderQty).toFixed(2));
             const expectedDiff = parseFloat((expectedTotal - usage).toFixed(2));
 
             allCheckItems.push({
@@ -216,7 +213,7 @@ function renderInventoryCheck() {
                 <button onclick="updateCheckSort('name')" class="sort-btn ${checkSortKey==='name'?'active':''}" title="이름순">가나다</button>
                 <button onclick="updateCheckSort('diff_asc')" class="sort-btn ${checkSortKey==='diff_asc'?'active':''}" title="부족한 순">🔥부족</button>
             </div>
-            ${hasExpectedData ? `<button onclick="toggleExpectedStock()" class="sort-btn ${showExpectedStock?'active':''}" style="padding:4px 8px; font-size:12px;" title="어제재고+발주량 예상재고">📦예상</button>` : ''}
+            ${hasExpectedData ? `<button onclick="toggleExpectedStock()" style="padding:8px 14px; font-size:13px; font-weight:bold; border:2px solid ${showExpectedStock ? '#2e7d32' : '#ff9800'}; background:${showExpectedStock ? '#2e7d32' : '#fff3e0'}; color:${showExpectedStock ? 'white' : '#e65100'}; border-radius:20px; cursor:pointer; white-space:nowrap; ${showExpectedStock ? '' : 'animation:pulse 1.5s infinite;'}" title="어제재고+발주량 예상재고">📦 예상재고</button>` : ''}
         </div>
     `;
 
