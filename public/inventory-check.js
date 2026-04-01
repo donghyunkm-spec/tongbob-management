@@ -80,8 +80,10 @@ function renderInventoryCheck() {
         if (latestOrder && latestOrder.orders) {
             expectedOrderDate = latestOrder.date;
 
-            // 가장 최근 재고 기록을 기준으로 사용 (발주일과 무관)
-            const sortedHist = [...recentHistory].sort((a, b) => b.date.localeCompare(a.date));
+            // 가장 최근 재고 기록을 사용 (오늘 제외 - 출근 전 마감 재고 기준)
+            const todayStr = new Date().toISOString().split('T')[0];
+            const pastHistory = recentHistory.filter(r => r.date < todayStr);
+            const sortedHist = [...pastHistory].sort((a, b) => b.date.localeCompare(a.date));
             const latestHist = sortedHist[0];
             if (latestHist && latestHist.inventory) {
                 expectedStockDate = latestHist.date;
@@ -339,7 +341,7 @@ function changeCheckDate(delta) {
 }
 
 // 예상재고 모달용 전역 데이터
-let _expectedStockData = { items: [], date: '' };
+let _expectedStockData = { items: [], stockDate: '', orderDate: '' };
 
 function showExpectedStockModal() {
     const data = _expectedStockData;
@@ -353,11 +355,11 @@ function showExpectedStockModal() {
     });
 
     let html = `
-        <div class="modal-overlay active" id="expectedStockModal" onclick="if(event.target===this)this.classList.remove('active')">
+        <div class="modal-overlay" id="expectedStockModal" style="display:flex;" onclick="if(event.target===this)this.style.display='none'">
             <div class="modal-content" style="width:95%; max-width:600px; max-height:85vh; overflow-y:auto;">
                 <div class="modal-header">
                     <h2 style="font-size:16px;">📦 예상재고</h2>
-                    <button class="close-btn" onclick="document.getElementById('expectedStockModal').classList.remove('active')">&times;</button>
+                    <button class="close-btn" onclick="document.getElementById('expectedStockModal').style.display='none'">&times;</button>
                 </div>
                 <div style="margin-bottom:10px; padding:8px; background:#e8f5e9; border-radius:5px; font-size:12px; color:#2e7d32;">
                     <strong>${data.stockDate}</strong> 마감 재고 + <strong>${data.orderDate}</strong> 발주량
