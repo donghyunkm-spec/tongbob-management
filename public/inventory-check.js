@@ -70,8 +70,18 @@ function renderInventoryCheck() {
     let hasExpectedData = false;
 
     // 임시 디버그 (화면 표시)
-    const _dbg = `allOrders: ${allOrders.length}건, 최근: ${allOrders.length > 0 ? [...allOrders].sort((a,b)=>b.date.localeCompare(a.date))[0].date : '없음'}`;
-    container.innerHTML = `<div style="padding:8px;background:#fff3cd;border:1px solid #ffc107;border-radius:5px;margin-bottom:8px;font-size:12px;">🔍 ${_dbg}</div>`;
+    const _ordersInfo = allOrders.length > 0 ? [...allOrders].sort((a,b)=>b.date.localeCompare(a.date))[0] : null;
+    const _sampleKeys = Object.keys(displayInventory).filter(k=>!k.startsWith('meta_')).slice(0,3);
+    const _sampleVals = _sampleKeys.map(k => `${k}=${displayInventory[k]}`);
+    const _dbg = [
+        `orders: ${allOrders.length}건`,
+        _ordersInfo ? `최근발주: ${_ordersInfo.date}, 품목수: ${Object.values(_ordersInfo.orders||{}).flat().length}` : '발주없음',
+        `hasExpected: ${hasExpectedData}`,
+        `expMap크기: ${Object.keys(expectedOrderMap).length}`,
+        `displayInv샘플: ${_sampleVals.join(', ')}`,
+        `saveDate: 1루=${lastSaveDate1}, 3루=${lastSaveDate3}, 창고=${lastSaveDateW}`
+    ].join(' | ');
+    container.innerHTML = `<div style="padding:8px;background:#fff3cd;border:1px solid #ffc107;border-radius:5px;margin-bottom:8px;font-size:11px;word-break:break-all;">🔍 ${_dbg}</div>`;
 
     if (checkDateOffset === 0 && allOrders.length > 0) {
         // 가장 최근 발주를 찾아서 예상재고 계산
