@@ -69,6 +69,7 @@ function renderInventoryCheck() {
     let expectedOrderDate = null;
     let hasExpectedData = false;
 
+    console.log('[예상재고 디버그] checkDateOffset:', checkDateOffset, 'allOrders.length:', allOrders.length, 'allOrders:', JSON.stringify(allOrders.map(o => ({date: o.date, vendors: Object.keys(o.orders||{})}))));
     if (checkDateOffset === 0 && allOrders.length > 0) {
         // 가장 최근 발주를 찾아서 예상재고 계산
         const sorted = [...allOrders].sort((a, b) => b.date.localeCompare(a.date));
