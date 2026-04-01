@@ -182,7 +182,6 @@ function renderInventoryCheck() {
                     <th style="background:#e3f2fd;">합계</th>
                     <th>1일사용</th>
                     <th>차이</th>
-                    <th>원가</th>
                 </tr>
             </thead>
             <tbody>
@@ -191,11 +190,11 @@ function renderInventoryCheck() {
     let lastVendor = '';
 
     if (filteredItems.length === 0) {
-        tableHtml += `<tr><td colspan="8" style="text-align:center; padding:20px; color:#999;">검색 결과가 없습니다.</td></tr>`;
+        tableHtml += `<tr><td colspan="7" style="text-align:center; padding:20px; color:#999;">검색 결과가 없습니다.</td></tr>`;
     } else {
         filteredItems.forEach(item => {
             if (checkSortKey === 'vendor' && item.vendor !== lastVendor) {
-                tableHtml += `<tr style="background:#f8f9fa;"><td colspan="8" style="text-align:left; font-size:12px; font-weight:bold; color:#555; padding-left:10px;">📦 ${item.vendor}</td></tr>`;
+                tableHtml += `<tr style="background:#f8f9fa;"><td colspan="7" style="text-align:left; font-size:12px; font-weight:bold; color:#555; padding-left:10px;">📦 ${item.vendor}</td></tr>`;
                 lastVendor = item.vendor;
             }
 
@@ -236,19 +235,9 @@ function renderInventoryCheck() {
                     <td class="check-val" style="background:#e3f2fd;">${parseFloat(item.totalStock.toFixed(2))}${stockUnitTag}</td>
                     <td>${parseFloat(item.usage.toFixed(2))}${stockUnitTag}</td>
                     <td class="${diffClass} check-val">${diffSign}${parseFloat(item.diff.toFixed(1))}</td>
-                    <td style="text-align:right; font-size:11px; color:#555;">${item.cost > 0 ? Number(item.cost.toFixed(0)).toLocaleString() : '-'}</td>
                 </tr>
             `;
         });
-    }
-
-    // 원가 합계 행
-    const totalCost = filteredItems.reduce((sum, it) => sum + (it.cost || 0), 0);
-    if (totalCost > 0) {
-        tableHtml += `<tr style="background:#e8f5e9; font-weight:bold;">
-            <td colspan="7" style="text-align:right; font-size:13px;">재고 총 원가</td>
-            <td style="text-align:right; font-size:13px; color:#1b5e20;">${Number(totalCost.toFixed(0)).toLocaleString()}원</td>
-        </tr>`;
     }
 
     tableHtml += `</tbody></table>`;
