@@ -69,42 +69,26 @@ function renderInventoryCheck() {
     let expectedOrderDate = null;
     let hasExpectedData = false;
 
-    if (checkDateOffset === 0) {
-        // 마지막 저장일 기준으로 해당 날짜의 발주 찾기
-        // "오늘 입력중"인 위치는 제외하고, 실제 저장된 날짜 중 가장 최근 사용
-        // 모든 위치가 "오늘 입력중"이면 가장 최근 발주일 사용
-        const saveDates = [lastSaveDate1, lastSaveDate3, lastSaveDateW]
-            .filter(d => d && d !== '기록없음' && d !== '오늘 입력중')
-            .sort().reverse();
-        let lastDate = saveDates[0];
+    if (checkDateOffset === 0 && allOrders.length > 0) {
+        // 가장 최근 발주를 찾아서 예상재고 계산
+        const sorted = [...allOrders].sort((a, b) => b.date.localeCompare(a.date));
+        const latestOrder = sorted[0];
 
-        // 모든 위치가 "오늘 입력중"이면 → 최근 발주일에서 찾기
-        if (!lastDate) {
-            const hasAnyInput = [lastSaveDate1, lastSaveDate3, lastSaveDateW].some(d => d === '오늘 입력중');
-            if (hasAnyInput && allOrders.length > 0) {
-                const sorted = [...allOrders].sort((a, b) => b.date.localeCompare(a.date));
-                lastDate = sorted[0].date;
+        if (latestOrder && latestOrder.orders) {
+            expectedOrderDate = latestOrder.date;
+            for (const vendor in latestOrder.orders) {
+                (latestOrder.orders[vendor] || []).forEach(oi => {
+                    const key = `${vendor}_${oi.품목명}`;
+                    let amt = oi.orderAmount || 0;
+                    // 발주단위 → 재고단위 변환
+                    const itemDef = (items[vendor] || []).find(it => it.품목명 === oi.품목명);
+                    if (itemDef && itemDef.재고단위 && itemDef.unitsPerOrder) {
+                        amt = amt / itemDef.unitsPerOrder;
+                    }
+                    expectedOrderMap[key] = (expectedOrderMap[key] || 0) + amt;
+                });
             }
-        }
-
-        if (lastDate) {
-            const order = allOrders.find(o => o.date === lastDate);
-            if (order && order.orders) {
-                expectedOrderDate = lastDate;
-                for (const vendor in order.orders) {
-                    (order.orders[vendor] || []).forEach(oi => {
-                        const key = `${vendor}_${oi.품목명}`;
-                        let amt = oi.orderAmount || 0;
-                        // 발주단위 → 재고단위 변환
-                        const itemDef = (items[vendor] || []).find(it => it.품목명 === oi.품목명);
-                        if (itemDef && itemDef.재고단위 && itemDef.unitsPerOrder) {
-                            amt = amt / itemDef.unitsPerOrder;
-                        }
-                        expectedOrderMap[key] = (expectedOrderMap[key] || 0) + amt;
-                    });
-                }
-                hasExpectedData = Object.keys(expectedOrderMap).length > 0;
-            }
+            hasExpectedData = Object.keys(expectedOrderMap).length > 0;
         }
     }
 
