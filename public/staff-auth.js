@@ -68,10 +68,21 @@ async function onLoginSuccess(user) {
         userNameSpan.textContent = `${user.name} (${roleNameMap[user.role] || user.role})`;
     }
 
-    // 로그인 성공 시 재고관리 탭 표시
-    const inventoryTab = document.getElementById('tab-inventory');
-    if(inventoryTab) {
-        inventoryTab.style.display = 'block';
+    // 로그인 성공 시 모든 메인 탭 복원 (게스트 모드에서 숨겨진 탭 포함)
+    document.querySelectorAll('.main-tabs > button').forEach(btn => {
+        btn.style.display = '';
+    });
+
+    // 로그인 시 재고 제한 탭 해제
+    document.querySelectorAll('.inv-restricted').forEach(btn => {
+        btn.style.display = '';
+    });
+
+    // 서브탭 그리드 복원 (admin=7, 나머지=6 원가탭 제외)
+    const invSubTabs = document.getElementById('inv-sub-tabs');
+    if (invSubTabs) {
+        const cols = user.role === 'admin' ? 7 : 6;
+        invSubTabs.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
     }
 
     // 재고담당 전용: 재고관리 탭만 표시, 나머지 숨김

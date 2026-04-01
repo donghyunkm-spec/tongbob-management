@@ -47,24 +47,29 @@ const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 // 2. 권한 확인
 // ==========================================
 function isInventoryAuthorized() {
-    if (typeof currentUser === 'undefined' || !currentUser) {
-        alert("로그인이 필요합니다.");
-        openLoginModal();
-        return false;
-    }
+    // 비로그인도 재고입력/확인은 허용
     return true;
+}
+
+function isInventoryFullAccess() {
+    return currentUser && (currentUser.role === 'admin' || currentUser.role === 'inventory' || currentUser.role === 'manager');
 }
 
 // ==========================================
 // 3. 초기화 함수
 // ==========================================
 async function initInventoryTab() {
-    if (!isInventoryAuthorized()) return;
-
-    // manager 권한은 원가 탭 숨김
+    // 원가 탭은 admin만
     const costBtn = document.querySelector("button[onclick=\"showInvTab('costAnalysis')\"]");
     if (costBtn) {
         costBtn.style.display = (currentUser && currentUser.role === 'admin') ? '' : 'none';
+    }
+
+    // 비로그인 시 제한 탭 숨김
+    if (!isInventoryFullAccess()) {
+        document.querySelectorAll('.inv-restricted').forEach(btn => {
+            btn.style.display = 'none';
+        });
     }
 
     await loadInventoryDataAll();
@@ -153,6 +158,14 @@ async function loadInventoryDataAll() {
 // 5. 탭 전환
 // ==========================================
 function showInvTab(tabName) {
+    // 비로그인 시 재고입력/확인만 허용
+    const restrictedTabs = ['standard', 'manageItems', 'holidays', 'orderHistory', 'costAnalysis'];
+    if (restrictedTabs.includes(tabName) && !isInventoryFullAccess()) {
+        alert('로그인이 필요합니다.');
+        openLoginModal();
+        return;
+    }
+
     document.querySelectorAll('.inv-tab-content').forEach(el => el.style.display = 'none');
     document.querySelectorAll('#inventory-content .tab').forEach(el => el.classList.remove('active'));
 

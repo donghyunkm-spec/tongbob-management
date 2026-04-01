@@ -642,7 +642,7 @@
         <div class="tabs main-tabs">
             <button class="tab tab-attendance active" onclick="switchTab('attendance')">👥 직원/근무</button>
             <button class="tab tab-accounting" onclick="switchTab('accounting')">💰 매입/매출</button>
-            <button id="tab-inventory" class="tab tab-inventory" onclick="switchTab('inventory')" style="display:none;">📦 재고관리</button>
+            <button id="tab-inventory" class="tab tab-inventory" onclick="switchTab('inventory')">📦 재고관리</button>
             <button class="tab tab-manual" onclick="switchTab('manual')">📖 설명서</button>
         </div>
 
@@ -994,14 +994,14 @@
         </div>
         <div id="inventory-content" class="tab-content">
             <div class="accounting-card" style="padding: 10px; margin-bottom: 15px;">
-                <div class="tabs sub-tabs" style="grid-template-columns: repeat(7, 1fr); margin-bottom: 0; font-size: 12px;">
+                <div id="inv-sub-tabs" class="tabs sub-tabs" style="grid-template-columns: repeat(7, 1fr); margin-bottom: 0; font-size: 12px;">
                     <button class="tab active" onclick="showInvTab('inventory')">재고입력</button>
                     <button class="tab tab-check" onclick="showInvTab('check')">🔎 재고확인</button>
-                    <button class="tab" onclick="showInvTab('standard')">사용량</button>
-                    <button class="tab" onclick="showInvTab('manageItems')">품목관리</button>
-                    <button class="tab" onclick="showInvTab('holidays')">휴일</button>
-                    <button class="tab" onclick="showInvTab('orderHistory')">발주내역</button>
-                    <button class="tab" onclick="showInvTab('costAnalysis')">💰원가</button>
+                    <button class="tab inv-restricted" onclick="showInvTab('standard')">사용량</button>
+                    <button class="tab inv-restricted" onclick="showInvTab('manageItems')">품목관리</button>
+                    <button class="tab inv-restricted" onclick="showInvTab('holidays')">휴일</button>
+                    <button class="tab inv-restricted" onclick="showInvTab('orderHistory')">발주내역</button>
+                    <button class="tab inv-restricted" onclick="showInvTab('costAnalysis')">💰원가</button>
                 </div>
             </div>
 

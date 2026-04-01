@@ -71,16 +71,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log('⌛ 로그인 세션이 만료되었습니다.');
                 localStorage.removeItem('staffUser');
                 currentUser = null;
-                setTimeout(() => openLoginModal(), 500);
+                applyGuestInventoryMode();
             }
         } catch (e) {
             console.error('로그인 정보 파싱 오류', e);
             localStorage.removeItem('staffUser');
             currentUser = null;
-            setTimeout(() => openLoginModal(), 500);
+            applyGuestInventoryMode();
         }
     } else {
-        setTimeout(() => openLoginModal(), 500);
+        // 비로그인 시 재고 입력/확인만 가능한 기본 모드
+        applyGuestInventoryMode();
     }
 
     // 시간 옵션 초기화
@@ -165,6 +166,35 @@ function switchAttSubTab(subId, btn) {
     else if(subId === 'att-monthly') renderMonthlyView();
     else if(subId === 'att-manage') renderManageList();
     else if(subId === 'att-logs') loadLogs();
+}
+
+// ==========================================
+// 비로그인 게스트 모드 - 재고입력/확인만 가능
+// ==========================================
+function applyGuestInventoryMode() {
+    // 다른 메인 탭 비활성화 (재고관리, 설명서만 남김)
+    document.querySelectorAll('.main-tabs > button').forEach(btn => {
+        const onclick = btn.getAttribute('onclick') || '';
+        if (!onclick.includes("'inventory'") && !onclick.includes("'manual'")) {
+            btn.style.display = 'none';
+        }
+    });
+
+    // 재고 서브탭 중 제한 탭 숨김
+    document.querySelectorAll('.inv-restricted').forEach(btn => {
+        btn.style.display = 'none';
+    });
+
+    // 서브탭 그리드 조정 (2개만 표시)
+    const invSubTabs = document.getElementById('inv-sub-tabs');
+    if (invSubTabs) invSubTabs.style.gridTemplateColumns = 'repeat(2, 1fr)';
+
+    // 로그인 버튼 표시 유지
+    const loginBtn = document.getElementById('loginBtn');
+    if (loginBtn) loginBtn.style.display = '';
+
+    // 재고관리 탭으로 자동 전환
+    switchTab('inventory');
 }
 
 function switchAccSubTab(subTabId, btnElement) {
