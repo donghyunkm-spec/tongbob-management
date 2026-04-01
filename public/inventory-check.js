@@ -66,7 +66,8 @@ function renderInventoryCheck() {
 
     // 3.5. 예상재고 계산 (어제재고 + 발주량)
     let expectedOrderMap = {}; // rawItemKey → 발주량(재고단위)
-    let expectedOrderDate = null;
+    let expectedOrderDate = null;  // 발주일
+    let expectedStockDate = null;  // 재고 기준일
     let hasExpectedData = false;
 
     let expectedBaseInventory = {};
@@ -79,10 +80,12 @@ function renderInventoryCheck() {
         if (latestOrder && latestOrder.orders) {
             expectedOrderDate = latestOrder.date;
 
-            // 발주일의 재고를 recentHistory에서 가져오기
-            const histRecord = recentHistory.filter(r => r.date === expectedOrderDate).pop();
-            if (histRecord && histRecord.inventory) {
-                Object.values(histRecord.inventory).forEach(vendorObj => {
+            // 가장 최근 재고 기록을 기준으로 사용 (발주일과 무관)
+            const sortedHist = [...recentHistory].sort((a, b) => b.date.localeCompare(a.date));
+            const latestHist = sortedHist[0];
+            if (latestHist && latestHist.inventory) {
+                expectedStockDate = latestHist.date;
+                Object.values(latestHist.inventory).forEach(vendorObj => {
                     Object.assign(expectedBaseInventory, vendorObj);
                 });
             }
@@ -222,7 +225,7 @@ function renderInventoryCheck() {
     `;
 
     // 예상재고 전역 데이터 저장 (모달에서 사용)
-    _expectedStockData = { items: allCheckItems, date: expectedOrderDate || '' };
+    _expectedStockData = { items: allCheckItems, stockDate: expectedStockDate || '', orderDate: expectedOrderDate || '' };
 
     // 예상재고 버튼 영역 (테이블 밖 상단에 표시)
     const btnArea = document.getElementById('expectedStockBtnArea');
@@ -230,7 +233,7 @@ function renderInventoryCheck() {
         if (hasExpectedData) {
             btnArea.innerHTML = `
                 <button onclick="showExpectedStockModal()" style="width:100%; padding:12px; font-size:15px; font-weight:bold; border:2px solid #ff9800; background:#fff3e0; color:#e65100; border-radius:8px; cursor:pointer; box-shadow:0 2px 5px rgba(0,0,0,0.1);">
-                    📦 예상재고 보기 <span style="font-size:12px; font-weight:normal;">(${expectedOrderDate} 재고 + 발주량)</span>
+                    📦 예상재고 보기 <span style="font-size:12px; font-weight:normal;">(${expectedStockDate || '?'} 재고 + ${expectedOrderDate || '?'} 발주)</span>
                 </button>`;
         } else {
             btnArea.innerHTML = '';
@@ -353,17 +356,17 @@ function showExpectedStockModal() {
         <div class="modal-overlay active" id="expectedStockModal" onclick="if(event.target===this)this.classList.remove('active')">
             <div class="modal-content" style="width:95%; max-width:600px; max-height:85vh; overflow-y:auto;">
                 <div class="modal-header">
-                    <h2 style="font-size:16px;">📦 예상재고 (${data.date} 재고 + 발주량)</h2>
+                    <h2 style="font-size:16px;">📦 예상재고</h2>
                     <button class="close-btn" onclick="document.getElementById('expectedStockModal').classList.remove('active')">&times;</button>
                 </div>
                 <div style="margin-bottom:10px; padding:8px; background:#e8f5e9; border-radius:5px; font-size:12px; color:#2e7d32;">
-                    ${data.date} 마감 재고에 발주량을 더한 예상 수량입니다.
+                    <strong>${data.stockDate}</strong> 마감 재고 + <strong>${data.orderDate}</strong> 발주량
                 </div>
                 <table class="confirm-table" style="font-size:13px;">
                     <thead>
                         <tr>
                             <th>품목명</th>
-                            <th style="text-align:right;">${data.date.slice(5)} 재고</th>
+                            <th style="text-align:right;">${data.stockDate.slice(5)} 재고</th>
                             <th style="text-align:right;">발주</th>
                             <th style="text-align:right; background:#c8e6c9;">예상</th>
                             <th style="text-align:right;">1일사용</th>
