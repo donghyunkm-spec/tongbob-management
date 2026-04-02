@@ -183,7 +183,8 @@ function showInvTab(tabName) {
         renderUnifiedInventoryForm();
     } else if (tabName === 'check') {
         checkDateOffset = 0;
-        renderInventoryCheck();
+        // 최신 히스토리/발주 데이터 갱신 후 렌더링
+        Promise.all([loadRecentInventory(), loadAllOrders()]).then(() => renderInventoryCheck()).catch(() => renderInventoryCheck());
     } else if (tabName === 'standard') {
         selectStandardVendor('all');
     } else if (tabName === 'manageItems') {

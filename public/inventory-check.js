@@ -86,8 +86,8 @@ function renderInventoryCheck() {
 
             // 가장 최근 재고 기록을 사용 (오늘 제외 - 출근 전 마감 재고 기준)
             // 같은 날짜의 여러 기록을 합침 (위치별 저장으로 인해 분산될 수 있음)
-            const todayStr = new Date().toISOString().split('T')[0];
-            const pastHistory = recentHistory.filter(r => r.date < todayStr);
+            const kstToday = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
+            const pastHistory = recentHistory.filter(r => r.date < kstToday);
             const sortedHist = [...pastHistory].sort((a, b) => b.date.localeCompare(a.date));
             if (sortedHist.length > 0) {
                 const latestDate = sortedHist[0].date;
