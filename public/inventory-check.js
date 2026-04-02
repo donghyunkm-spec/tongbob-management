@@ -32,20 +32,24 @@ function renderInventoryCheck() {
 
     let lastSaveDateW = null;
 
+    const todayStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
+
     if (checkDateOffset === 0) {
         ['1루', '3루', '창고'].forEach(loc => {
             const hasInput = Object.keys(inventory).some(k => k.startsWith(`${loc}_`) && !k.startsWith('meta_'));
+            const meta = lastSavedInventory[`meta_last_save_${loc}`] || inventory[`meta_last_save_${loc}`] || null;
             if (hasInput) {
                 Object.keys(inventory).filter(k => k.startsWith(`${loc}_`)).forEach(k => displayInventory[k] = inventory[k]);
-                if (loc === '1루') lastSaveDate1 = '오늘 입력중';
-                else if (loc === '3루') lastSaveDate3 = '오늘 입력중';
-                else lastSaveDateW = '오늘 입력중';
+                // 오늘 저장된 날짜가 있으면 "오늘 저장완료", 아니면 과거 날짜 표시
+                const label = (meta === todayStr) ? '오늘 저장완료' : (meta || '기록없음');
+                if (loc === '1루') lastSaveDate1 = label;
+                else if (loc === '3루') lastSaveDate3 = label;
+                else lastSaveDateW = label;
             } else {
                 Object.keys(lastSavedInventory).filter(k => k.startsWith(`${loc}_`) && !k.startsWith('meta_')).forEach(k => displayInventory[k] = lastSavedInventory[k]);
-                const meta = lastSavedInventory[`meta_last_save_${loc}`] || '기록없음';
-                if (loc === '1루') lastSaveDate1 = meta;
-                else if (loc === '3루') lastSaveDate3 = meta;
-                else lastSaveDateW = meta;
+                if (loc === '1루') lastSaveDate1 = meta || '기록없음';
+                else if (loc === '3루') lastSaveDate3 = meta || '기록없음';
+                else lastSaveDateW = meta || '기록없음';
             }
         });
     } else if (checkDateOffset > 0) {
@@ -181,7 +185,7 @@ function renderInventoryCheck() {
     // 7. 컨트롤 바 HTML
     const formatDateLabel = (dateStr) => {
         if (!dateStr || dateStr === '기록없음') return '기록없음';
-        if (dateStr === '오늘 입력중') return '오늘 입력중';
+        if (dateStr === '오늘 저장완료') return '오늘 저장완료';
         const d = new Date(dateStr);
         return `${d.getMonth()+1}/${d.getDate()}`;
     };
@@ -191,16 +195,21 @@ function renderInventoryCheck() {
     const dateWLabel = formatDateLabel(lastSaveDateW);
     const allDates = [lastSaveDate1, lastSaveDate3, lastSaveDateW].filter(d => d && d !== '기록없음');
     const isMismatch = checkDateOffset === 0 && allDates.length > 1 &&
-                       !allDates.every(d => d === allDates[0] || d === '오늘 입력중');
+                       !allDates.every(d => d === allDates[0] || d === '오늘 저장완료');
 
     let dateInfoHtml = '';
     if (checkDateOffset === 0) {
+        const getBadgeStyle = (label) => {
+            if (label === '오늘 저장완료') return 'background:#e8f5e9; color:#2e7d32; border:1px solid #c8e6c9;';
+            if (label === '기록없음') return 'background:#ffebee; color:#c62828; border:1px solid #ffcdd2;';
+            return 'background:#fff3e0; color:#e65100; border:1px solid #ffe0b2;';
+        };
         dateInfoHtml = `
-            <div style="margin-bottom:8px; padding:8px 10px; background:#fff; border-radius:5px; border:1px solid #ddd; font-size:12px;">
+            <div class="check-date-info" style="position:sticky; top:0; z-index:3; margin-bottom:8px; padding:8px 10px; background:#fff; border-radius:5px; border:1px solid #ddd; font-size:12px; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
-                    <span><strong>1루</strong>: <span style="color:#1976d2;">${date1Label}</span></span>
-                    <span><strong>3루</strong>: <span style="color:#1976d2;">${date3Label}</span></span>
-                    <span><strong>창고</strong>: <span style="color:#1976d2;">${dateWLabel}</span></span>
+                    <span style="padding:3px 6px; border-radius:4px; ${getBadgeStyle(date1Label)}"><strong>1루</strong>: ${date1Label}</span>
+                    <span style="padding:3px 6px; border-radius:4px; ${getBadgeStyle(date3Label)}"><strong>3루</strong>: ${date3Label}</span>
+                    <span style="padding:3px 6px; border-radius:4px; ${getBadgeStyle(dateWLabel)}"><strong>창고</strong>: ${dateWLabel}</span>
                 </div>
                 ${isMismatch ? `
                 <div style="margin-top:6px; padding:6px 8px; background:#fff3e0; border:1px solid #ffb74d; border-radius:4px; color:#e65100;">
@@ -251,7 +260,7 @@ function renderInventoryCheck() {
     // 8. 테이블 그리기
     let tableHtml = `
         <table class="check-table">
-            <thead>
+            <thead style="position:sticky; top:46px; z-index:2;">
                 <tr>
                     <th style="min-width:110px;">품목명</th>
                     <th>1루</th>

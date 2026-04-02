@@ -446,8 +446,13 @@ app.get('/api/inventory/current', (req, res) => {
 });
 app.post('/api/inventory/current', (req, res) => {
     const { inventory } = req.body;
-    writeJson(INVENTORY_CURRENT_FILE, inventory);
-    
+    const writeResult = writeJson(INVENTORY_CURRENT_FILE, inventory);
+
+    if (!writeResult) {
+        console.error('재고 저장 실패: 파일 쓰기 오류');
+        return res.status(500).json({ success: false, error: '파일 저장 실패' });
+    }
+
     // 즉시 응답 전송 (사용자 경험 개선)
     res.json({ success: true, inventory: inventory });
     

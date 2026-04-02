@@ -118,6 +118,11 @@ async function loadInventoryDataAll() {
                 const lastSaveDate = lastSavedInventory[`meta_last_save_${loc}`];
                 const prefix = `${loc}_`;
 
+                // meta 키는 항상 보존 (다른 위치 저장 시 유실 방지)
+                if (lastSaveDate) {
+                    inventory[`meta_last_save_${loc}`] = lastSaveDate;
+                }
+
                 if (lastSaveDate === todayStr) {
                     // 오늘 저장된 데이터면 모든 품목 로드
                     Object.keys(lastSavedInventory).forEach(key => {
@@ -125,7 +130,6 @@ async function loadInventoryDataAll() {
                             inventory[key] = lastSavedInventory[key];
                         }
                     });
-                    inventory[`meta_last_save_${loc}`] = lastSaveDate;
                 } else {
                     // 다른 날짜면 weekly 품목만 로드 (daily는 0으로 초기화)
                     Object.keys(lastSavedInventory).forEach(key => {
