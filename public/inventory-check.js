@@ -10,8 +10,8 @@ function renderInventoryCheck() {
 
     if (!container) return;
 
-    // 1. 날짜 계산 및 표시
-    const targetDate = new Date();
+    // 1. 날짜 계산 및 표시 (KST 기준)
+    const targetDate = getKSTDate();
     targetDate.setDate(targetDate.getDate() + checkDateOffset);
     const dateStr = targetDate.toISOString().split('T')[0];
 
@@ -32,7 +32,7 @@ function renderInventoryCheck() {
 
     let lastSaveDateW = null;
 
-    const todayStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const todayStr = getKSTDateStr();
 
     if (checkDateOffset === 0) {
         ['1루', '3루', '창고'].forEach(loc => {
@@ -86,7 +86,7 @@ function renderInventoryCheck() {
 
             // 가장 최근 재고 기록을 사용 (오늘 제외 - 출근 전 마감 재고 기준)
             // 같은 날짜의 여러 기록을 합침 (위치별 저장으로 인해 분산될 수 있음)
-            const kstToday = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
+            const kstToday = getKSTDateStr();
             const pastHistory = recentHistory.filter(r => r.date < kstToday);
             const sortedHist = [...pastHistory].sort((a, b) => b.date.localeCompare(a.date));
             if (sortedHist.length > 0) {
@@ -436,7 +436,7 @@ function scrollToVendor(vendor) {
 // 배송일 계산
 // ==========================================
 function getDaysUntilNextDelivery(vendor) {
-    const today = new Date();
+    const today = getKSTDate();
     let daysCount = 0;
     let checkDate = new Date(today);
     checkDate.setDate(checkDate.getDate() + 1);
@@ -474,7 +474,7 @@ function getDaysUntilNextDelivery(vendor) {
 }
 
 function getDeliveryInfo(vendor) {
-    const today = new Date();
+    const today = getKSTDate();
     const daysNeeded = getDaysUntilNextDelivery(vendor);
 
     let deliveryDate = new Date(today);
@@ -553,7 +553,7 @@ function checkOrderConfirmation() {
     const sourceAlertItems = []; // 원재료 연결 품목 중 부족한 것
 
     let missingInputCount = 0;
-    const today = new Date();
+    const today = getKSTDate();
     const isTuesday = today.getDay() === 2;
 
     for (const vendor in items) {
@@ -826,10 +826,10 @@ async function proceedToOrder() {
         });
     }
 
-    const today = new Date();
+    const kstNow = getKSTDate();
     const orderRecord = {
-        date: today.toISOString().split('T')[0],
-        time: today.toTimeString().split(' ')[0].substring(0, 5),
+        date: kstNow.toISOString().split('T')[0],
+        time: kstNow.toISOString().split('T')[1].substring(0, 5),
         orders: orderData,
         inventory: currentInventoryCopy,
         warnings: currentWarnings
@@ -907,7 +907,7 @@ function closeOrderModal() {
 }
 
 function copyToKakao() {
-    const today = new Date();
+    const today = getKSTDate();
     const month = today.getMonth() + 1;
     const date = today.getDate();
     const time = `${today.getHours()}:${String(today.getMinutes()).padStart(2, '0')}`;
@@ -965,7 +965,7 @@ function showServingOverview(mode) {
     // 위치별로: 오늘 저장된 데이터가 있으면 그것을, 아니면 lastSavedInventory(어제 데이터) 사용
     let displayInventory = {};
     ['1루', '3루', '창고'].forEach(loc => {
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = getKSTDateStr();
         const lastSaveDate = lastSavedInventory[`meta_last_save_${loc}`];
         const isTodaySaved = lastSaveDate === todayStr;
 

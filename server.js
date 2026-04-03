@@ -445,8 +445,45 @@ app.get('/api/inventory/current', (req, res) => {
     res.json({ success: true, inventory: readJson(INVENTORY_CURRENT_FILE, {}) });
 });
 app.post('/api/inventory/current', (req, res) => {
-    const { inventory } = req.body;
-    const writeResult = writeJson(INVENTORY_CURRENT_FILE, inventory);
+    const { inventory: incomingData, location } = req.body;
+
+    // 위치별 머지 저장: 기존 데이터를 읽고 해당 위치 키만 덮어쓰기
+    const existing = readJson(INVENTORY_CURRENT_FILE, {});
+    let merged;
+
+    if (location) {
+        // 위치 지정 저장: 해당 위치 키만 교체, 나머지 보존
+        const prefix = `${location}_`;
+        merged = { ...existing };
+
+        // 기존 데이터에서 해당 위치 키 제거
+        Object.keys(merged).forEach(key => {
+            if (key.startsWith(prefix) && !key.startsWith('meta_')) {
+                delete merged[key];
+            }
+        });
+
+        // 새 데이터에서 해당 위치 키와 meta 키 추가
+        Object.keys(incomingData).forEach(key => {
+            if (key.startsWith(prefix) || key === `meta_last_save_${location}`) {
+                merged[key] = incomingData[key];
+            }
+        });
+
+        // 창고 전용 품목: 창고 탭에서 1루/3루 값도 저장
+        if (location === '창고') {
+            Object.keys(incomingData).forEach(key => {
+                if ((key.startsWith('1루_') || key.startsWith('3루_')) && !key.startsWith('meta_')) {
+                    merged[key] = incomingData[key];
+                }
+            });
+        }
+    } else {
+        // 하위 호환: location 없으면 기존처럼 통째로 저장
+        merged = incomingData;
+    }
+
+    const writeResult = writeJson(INVENTORY_CURRENT_FILE, merged);
 
     if (!writeResult) {
         console.error('재고 저장 실패: 파일 쓰기 오류');
@@ -454,8 +491,8 @@ app.post('/api/inventory/current', (req, res) => {
     }
 
     // 즉시 응답 전송 (사용자 경험 개선)
-    res.json({ success: true, inventory: inventory });
-    
+    res.json({ success: true, inventory: merged });
+
     // 히스토리 저장은 비동기로 처리 (응답 후 백그라운드 작업)
     setImmediate(() => {
         try {
@@ -466,24 +503,23 @@ app.post('/api/inventory/current', (req, res) => {
                 time: now.toISOString().split('T')[1].substring(0, 5),
                 inventory: {}
             };
-            
-            // itemKey 예: "1루_고센유통_양파" 또는 "고센유통_양파"
-            for (const itemKey in inventory) {
+
+            // itemKey 예: "1루_고센유통_양파"
+            for (const itemKey in merged) {
+                if (itemKey.startsWith('meta_')) continue; // meta 키는 히스토리에서 제외
                 const parts = itemKey.split('_');
                 let vendor;
-                
-                // "1루_고센유통_양파" 형식인 경우
+
                 if (parts[0] === '1루' || parts[0] === '3루' || parts[0] === '창고') {
-                    vendor = parts[1]; // "고센유통"
+                    vendor = parts[1];
                 } else {
-                    // "고센유통_양파" 형식인 경우 (하위 호환성)
                     vendor = parts[0];
                 }
-                
+
                 if (!historyRecord.inventory[vendor]) historyRecord.inventory[vendor] = {};
-                historyRecord.inventory[vendor][itemKey] = inventory[itemKey];
+                historyRecord.inventory[vendor][itemKey] = merged[itemKey];
             }
-            
+
             history.push(historyRecord);
             if (history.length > 100) history = history.slice(-100);
             writeJson(INVENTORY_HISTORY_FILE, history);

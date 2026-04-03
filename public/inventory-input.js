@@ -145,7 +145,7 @@ function renderUnifiedInventoryForm() {
     const formContainer = document.getElementById('inventoryForm');
     if (!formContainer) return;
 
-    const todayStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const todayStr = getKSTDateStr();
 
     // 위치별 마지막 저장일 확인 헬퍼
     function getLocSaveInfo(loc) {
@@ -423,7 +423,7 @@ function renderUnifiedInventoryForm() {
 async function saveInventory() {
     saveCurrentInputToMemory();
 
-    const todayStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const todayStr = getKSTDateStr();
     inventory[`meta_last_save_${currentLocation}`] = todayStr;
 
     const saveBtn = document.querySelector('.btn-sticky-action');
@@ -436,7 +436,7 @@ async function saveInventory() {
         const response = await fetch(`${API_BASE}/api/inventory/current`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ inventory: inventory })
+            body: JSON.stringify({ inventory: inventory, location: currentLocation })
         });
         const result = await response.json();
 

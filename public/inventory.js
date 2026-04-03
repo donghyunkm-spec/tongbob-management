@@ -43,6 +43,16 @@ const vendorIdMap = {
 const API_BASE = '';
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
+// KST 기준 현재 Date 객체 반환 (UTC+9 보정)
+function getKSTDate() {
+    return new Date(Date.now() + 9 * 60 * 60 * 1000);
+}
+
+// KST 기준 오늘 날짜 문자열 (YYYY-MM-DD)
+function getKSTDateStr() {
+    return getKSTDate().toISOString().split('T')[0];
+}
+
 // ==========================================
 // 2. 권한 확인
 // ==========================================
@@ -102,7 +112,7 @@ async function loadInventoryDataAll() {
             lastSavedInventory = invData.inventory || {};
 
             // 오늘 날짜 확인
-            const todayStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
+            const todayStr = getKSTDateStr();
 
             // 품목별 관리주기 맵 생성
             const itemCycleMap = {};
