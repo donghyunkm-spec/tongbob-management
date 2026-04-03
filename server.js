@@ -470,11 +470,25 @@ app.post('/api/inventory/current', (req, res) => {
             }
         });
 
-        // 창고 전용 품목: 창고 탭에서 1루/3루 값도 저장
+        // 창고 전용 품목: 창고 탭에서 해당 품목의 1루/3루 값만 저장
         if (location === '창고') {
+            const itemsData = readJson(INVENTORY_ITEMS_FILE, {});
+            const warehouseOnlyKeys = new Set();
+            Object.keys(itemsData).forEach(vendor => {
+                (itemsData[vendor] || []).forEach(item => {
+                    if (item.locations && item.locations.length === 1 && item.locations[0] === '창고') {
+                        warehouseOnlyKeys.add(`${vendor}_${item.품목명}`);
+                    }
+                });
+            });
+
             Object.keys(incomingData).forEach(key => {
                 if ((key.startsWith('1루_') || key.startsWith('3루_')) && !key.startsWith('meta_')) {
-                    merged[key] = incomingData[key];
+                    const loc = key.startsWith('1루_') ? '1루' : '3루';
+                    const rawKey = key.substring(loc.length + 1);
+                    if (warehouseOnlyKeys.has(rawKey)) {
+                        merged[key] = incomingData[key];
+                    }
                 }
             });
         }

@@ -132,6 +132,9 @@ function toggleSortOrder() {
 function setLocation(loc) {
     if (currentLocation === loc) return;
 
+    // 전환 전에 현재 입력값을 메모리에 저장 (모바일 터치 시 onchange 누락 방지)
+    saveCurrentInputToMemory();
+
     if (!confirm(`${loc}(으)로 전환하시겠습니까?`)) return;
 
     currentLocation = loc;
@@ -224,7 +227,7 @@ function renderUnifiedInventoryForm() {
         </div>
     `;
 
-    const today = new Date();
+    const today = getKSTDate();
     const isTuesday = today.getDay() === 2;
 
     let regularItems = [];
@@ -424,7 +427,9 @@ async function saveInventory() {
     saveCurrentInputToMemory();
 
     const todayStr = getKSTDateStr();
-    inventory[`meta_last_save_${currentLocation}`] = todayStr;
+    const metaKey = `meta_last_save_${currentLocation}`;
+    const prevMeta = inventory[metaKey];
+    inventory[metaKey] = todayStr;
 
     const saveBtn = document.querySelector('.btn-sticky-action');
     if(saveBtn) {
@@ -441,21 +446,31 @@ async function saveInventory() {
         const result = await response.json();
 
         if (result.success) {
+            // lastSavedInventory는 서버 전체 상태로 갱신 (이전값 표시용)
             lastSavedInventory = { ...result.inventory };
-            inventory = result.inventory;
+
+            // inventory는 저장한 위치 + meta만 서버 응답으로 갱신
+            // 다른 위치의 로컬 입력값은 보존
+            const savedPrefix = `${currentLocation}_`;
+            Object.keys(result.inventory).forEach(key => {
+                if (key.startsWith(savedPrefix) || key.startsWith('meta_')) {
+                    inventory[key] = result.inventory[key];
+                }
+            });
 
             renderUnifiedInventoryForm();
-
             showAlert('저장되었습니다.', 'success');
         } else {
+            inventory[metaKey] = prevMeta; // 롤백
             showAlert('저장 실패: 서버 오류', 'error');
         }
     } catch (e) {
         console.error(e);
+        inventory[metaKey] = prevMeta; // 롤백
         showAlert('저장 실패 (네트워크 오류)', 'error');
     } finally {
         if(saveBtn) {
-            saveBtn.textContent = '💾 저장';
+            saveBtn.textContent = `💾 ${currentLocation} 저장`;
             saveBtn.disabled = false;
         }
     }

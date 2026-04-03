@@ -218,12 +218,12 @@ function showAlert(msg, type) {
 
 function getDaysSince(dateString) {
     if (!dateString) return 999;
-    const diff = Math.abs(new Date() - new Date(dateString));
+    const diff = Math.abs(getKSTDate() - new Date(dateString));
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
 function getThisWeekTuesday() {
-    const now = new Date();
+    const now = getKSTDate();
     const day = now.getDay(); // 0=일, 1=월, 2=화, ...
     const diff = day >= 2 ? day - 2 : day + 5; // 이번 주 화요일까지의 차이
     const tue = new Date(now);
