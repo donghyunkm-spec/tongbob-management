@@ -109,12 +109,13 @@
 
         /* [수정] 재고확인 테이블 스타일 개선 */
         .check-table-container {
-            overflow-x: auto;
+            overflow: auto;
             white-space: nowrap;
             margin-top: 10px;
             border: 1px solid #ddd;
-            position: relative; /* 스티키 헤더를 위해 필요 */
-            max-height: 70vh; /* 세로 스크롤도 생기도록 */
+            position: relative;
+            max-height: 70vh;
+            -webkit-overflow-scrolling: touch;
         }
 
         .check-table {

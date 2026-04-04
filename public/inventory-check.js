@@ -260,7 +260,7 @@ function renderInventoryCheck() {
     // 8. 테이블 그리기
     let tableHtml = `
         <table class="check-table">
-            <thead style="position:sticky; top:46px; z-index:2;">
+            <thead>
                 <tr>
                     <th style="min-width:110px;">품목명</th>
                     <th>1루</th>
