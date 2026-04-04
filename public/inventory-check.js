@@ -282,7 +282,7 @@ function renderInventoryCheck() {
     } else {
         filteredItems.forEach(item => {
             if (checkSortKey === 'vendor' && item.vendor !== lastVendor) {
-                tableHtml += `<tr style="background:#f8f9fa;"><td colspan="${colSpan}" style="text-align:left; font-size:12px; font-weight:bold; color:#555; padding-left:10px;">📦 ${item.vendor}</td></tr>`;
+                tableHtml += `<tr class="vendor-row"><td colspan="${colSpan}" style="text-align:left; font-size:12px; font-weight:bold; color:#555; padding-left:10px;">📦 ${item.vendor}</td></tr>`;
                 lastVendor = item.vendor;
             }
 
