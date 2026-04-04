@@ -837,6 +837,29 @@ function renderPredictionStats() {
         meat: meat,
         etc: etc
     });
+
+    // 8. 입금예상 렌더링
+    let depositDeductions = {};
+    if (selectedPredStore === '1') {
+        depositDeductions = {
+            internet: mData.internet1||0, water: mData.water1||0, cleaning: mData.cleaning1||0,
+            cctv: mData.cctv1||0, operMgmt: mData.operMgmt1||0
+        };
+    } else if (selectedPredStore === '3') {
+        depositDeductions = {
+            internet: mData.internet3||0, water: mData.water3||0, cleaning: mData.cleaning3||0,
+            cctv: mData.cctv3||0, operMgmt: mData.operMgmt3||0
+        };
+    } else {
+        depositDeductions = {
+            internet: (mData.internet1||0)+(mData.internet3||0),
+            water: (mData.water1||0)+(mData.water3||0),
+            cleaning: (mData.cleaning1||0)+(mData.cleaning3||0),
+            cctv: (mData.cctv1||0)+(mData.cctv3||0),
+            operMgmt: (mData.operMgmt1||0)+(mData.operMgmt3||0)
+        };
+    }
+    renderDepositEstimate('predDepositEstimate', salesTotal, commission, deliveryFee, depositDeductions, monthStr);
 }
 
 // ==========================================
@@ -986,6 +1009,88 @@ function renderDashboardStats() {
         meat: meat,
         etc: etc
     });
+
+    // 입금예상 렌더링
+    let dashDepositDeductions = {};
+    if (selectedDashStore === '1') {
+        dashDepositDeductions = {
+            internet: mData.internet1||0, water: mData.water1||0, cleaning: mData.cleaning1||0,
+            cctv: mData.cctv1||0, operMgmt: mData.operMgmt1||0
+        };
+    } else if (selectedDashStore === '3') {
+        dashDepositDeductions = {
+            internet: mData.internet3||0, water: mData.water3||0, cleaning: mData.cleaning3||0,
+            cctv: mData.cctv3||0, operMgmt: mData.operMgmt3||0
+        };
+    } else {
+        dashDepositDeductions = {
+            internet: (mData.internet1||0)+(mData.internet3||0),
+            water: (mData.water1||0)+(mData.water3||0),
+            cleaning: (mData.cleaning1||0)+(mData.cleaning3||0),
+            cctv: (mData.cctv1||0)+(mData.cctv3||0),
+            operMgmt: (mData.operMgmt1||0)+(mData.operMgmt3||0)
+        };
+    }
+    renderDepositEstimate('dashDepositEstimate', sales.total, commission, deliveryFee, dashDepositDeductions, monthStr);
+}
+
+// ==========================================
+// 입금예상 렌더링
+// ==========================================
+function renderDepositEstimate(containerId, salesTotal, commission, deliveryFee, deductions, monthStr) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+
+    if (salesTotal === 0) {
+        el.innerHTML = '<div style="text-align:center; padding:10px; color:#999;">데이터 없음</div>';
+        return;
+    }
+
+    // 익월 15일 계산
+    const [y, m] = monthStr.split('-');
+    const depositDate = `${parseInt(m) === 12 ? parseInt(y)+1 : y}-${String(parseInt(m) === 12 ? 1 : parseInt(m)+1).padStart(2,'0')}-15`;
+
+    // 공제 항목
+    const deductionItems = [
+        { label: '수수료(31%)', val: commission },
+        { label: '배달수수료(6%)', val: deliveryFee },
+        { label: '인터넷', val: deductions.internet },
+        { label: '상하수도', val: deductions.water },
+        { label: '청소용역비', val: deductions.cleaning },
+        { label: 'CCTV', val: deductions.cctv },
+        { label: '운영관리', val: deductions.operMgmt }
+    ];
+
+    const totalDeduction = deductionItems.reduce((sum, d) => sum + d.val, 0);
+    const depositAmount = salesTotal - totalDeduction;
+
+    let html = `<div style="font-size:13px;">`;
+    html += `<div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee;">
+        <span style="color:#555;">총 매출</span>
+        <span style="font-weight:bold;">${salesTotal.toLocaleString()}원</span>
+    </div>`;
+
+    deductionItems.forEach(item => {
+        if (item.val > 0) {
+            html += `<div style="display:flex; justify-content:space-between; padding:5px 0; padding-left:10px; color:#e53935; font-size:12px;">
+                <span>- ${item.label}</span>
+                <span>-${item.val.toLocaleString()}원</span>
+            </div>`;
+        }
+    });
+
+    html += `<div style="display:flex; justify-content:space-between; padding:5px 0; border-top:1px solid #ccc; color:#e53935; font-weight:bold; font-size:12px;">
+        <span>공제 합계</span>
+        <span>-${totalDeduction.toLocaleString()}원</span>
+    </div>`;
+
+    html += `<div style="display:flex; justify-content:space-between; padding:10px 0; border-top:2px solid #333; margin-top:5px;">
+        <span style="font-weight:bold; color:#1565c0;">입금예상 (${depositDate})</span>
+        <span style="font-weight:bold; font-size:16px; color:${depositAmount >= 0 ? '#1565c0' : '#e53935'};">${depositAmount.toLocaleString()}원</span>
+    </div>`;
+
+    html += `</div>`;
+    el.innerHTML = html;
 }
 
 // ==========================================
