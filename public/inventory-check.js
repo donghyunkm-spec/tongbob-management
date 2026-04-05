@@ -102,18 +102,23 @@ function renderInventoryCheck() {
                 });
             }
 
-            for (const vendor in latestOrder.orders) {
-                (latestOrder.orders[vendor] || []).forEach(oi => {
-                    const key = `${vendor}_${oi.품목명}`;
-                    let amt = oi.orderAmount || 0;
-                    const itemDef = (items[vendor] || []).find(it => it.품목명 === oi.품목명);
-                    if (itemDef && itemDef.재고단위 && itemDef.unitsPerOrder) {
-                        amt = amt / itemDef.unitsPerOrder;
-                    }
-                    expectedOrderMap[key] = (expectedOrderMap[key] || 0) + amt;
-                });
+            // 발주일이 재고기준일보다 이후인 경우만 발주량 추가
+            // (재고기준일 이전 발주는 이미 재고에 반영되어 있으므로 더하면 안 됨)
+            const shouldAddOrder = expectedStockDate && expectedOrderDate >= expectedStockDate;
+            if (shouldAddOrder) {
+                for (const vendor in latestOrder.orders) {
+                    (latestOrder.orders[vendor] || []).forEach(oi => {
+                        const key = `${vendor}_${oi.품목명}`;
+                        let amt = oi.orderAmount || 0;
+                        const itemDef = (items[vendor] || []).find(it => it.품목명 === oi.품목명);
+                        if (itemDef && itemDef.재고단위 && itemDef.unitsPerOrder) {
+                            amt = amt / itemDef.unitsPerOrder;
+                        }
+                        expectedOrderMap[key] = (expectedOrderMap[key] || 0) + amt;
+                    });
+                }
             }
-            hasExpectedData = Object.keys(expectedOrderMap).length > 0;
+            hasExpectedData = !!expectedStockDate;
         }
     }
 
@@ -242,15 +247,19 @@ function renderInventoryCheck() {
     `;
 
     // 예상재고 전역 데이터 저장 (모달에서 사용)
-    _expectedStockData = { items: allCheckItems, stockDate: expectedStockDate || '', orderDate: expectedOrderDate || '' };
+    const shouldAddOrderLabel = expectedStockDate && expectedOrderDate >= expectedStockDate;
+    _expectedStockData = { items: allCheckItems, stockDate: expectedStockDate || '', orderDate: shouldAddOrderLabel ? expectedOrderDate : '' };
 
     // 예상재고 버튼 영역 (테이블 밖 상단에 표시)
     const btnArea = document.getElementById('expectedStockBtnArea');
     if (btnArea) {
         if (hasExpectedData) {
+            const btnLabel = shouldAddOrderLabel
+                ? `📦 예상재고 보기 <span style="font-size:13px; font-weight:normal;">(${expectedStockDate} 재고 + ${expectedOrderDate} 발주)</span>`
+                : `📦 예상재고 보기 <span style="font-size:13px; font-weight:normal;">(${expectedStockDate} 재고 기준)</span>`;
             btnArea.innerHTML = `
-                <button onclick="showExpectedStockModal()" style="width:100%; padding:12px; font-size:15px; font-weight:bold; border:2px solid #ff9800; background:#fff3e0; color:#e65100; border-radius:8px; cursor:pointer; box-shadow:0 2px 5px rgba(0,0,0,0.1);">
-                    📦 예상재고 보기 <span style="font-size:12px; font-weight:normal;">(${expectedStockDate || '?'} 재고 + ${expectedOrderDate || '?'} 발주)</span>
+                <button onclick="showExpectedStockModal()" style="width:100%; padding:14px 16px; font-size:17px; font-weight:bold; border:2px solid #ff9800; background:linear-gradient(135deg, #fff3e0, #ffe0b2); color:#e65100; border-radius:10px; cursor:pointer; box-shadow:0 3px 8px rgba(0,0,0,0.15); transition:all 0.2s;" onmousedown="this.style.transform='scale(0.98)'" onmouseup="this.style.transform='scale(1)'" ontouchstart="this.style.transform='scale(0.98)'" ontouchend="this.style.transform='scale(1)'">
+                    ${btnLabel}
                 </button>`;
         } else {
             btnArea.innerHTML = '';
@@ -370,7 +379,8 @@ function showExpectedStockModal() {
     });
 
     const stockLabel = data.stockDate ? data.stockDate.slice(5) : '?';
-    const orderLabel = data.orderDate ? data.orderDate.slice(5) : '?';
+    const orderLabel = data.orderDate ? data.orderDate.slice(5) : '';
+    const hasOrder = !!data.orderDate;
 
     let html = `
         <div class="modal-overlay" id="expectedStockModal" style="display:flex;" onclick="if(event.target===this)this.style.display='none'">
@@ -381,7 +391,9 @@ function showExpectedStockModal() {
                         <button class="close-btn" onclick="document.getElementById('expectedStockModal').style.display='none'">&times;</button>
                     </div>
                     <div style="padding:6px 8px; background:#e8f5e9; border-radius:5px; font-size:12px; color:#2e7d32;">
-                        <strong>${data.stockDate}</strong> 마감 재고 + <strong>${data.orderDate}</strong> 발주량
+                        ${hasOrder
+                            ? `<strong>${data.stockDate}</strong> 마감 재고 + <strong>${data.orderDate}</strong> 발주량`
+                            : `<strong>${data.stockDate}</strong> 마감 재고 기준 (발주 미반영)`}
                     </div>
                 </div>
                 <div style="overflow-y:auto; max-height:calc(85vh - 120px);">
@@ -390,7 +402,7 @@ function showExpectedStockModal() {
                         <tr style="position:sticky; top:0; z-index:1;">
                             <th style="background:#f1f3f5; position:sticky; top:0;">품목명</th>
                             <th style="text-align:right; background:#e3f2fd; position:sticky; top:0;">${stockLabel} 재고</th>
-                            <th style="text-align:right; background:#fff3e0; position:sticky; top:0;">${orderLabel} 발주</th>
+                            ${hasOrder ? `<th style="text-align:right; background:#fff3e0; position:sticky; top:0;">${orderLabel} 발주</th>` : ''}
                             <th style="text-align:right; background:#c8e6c9; position:sticky; top:0;">예상</th>
                             <th style="text-align:right; background:#f1f3f5; position:sticky; top:0;">1일사용</th>
                             <th style="text-align:right; background:#f1f3f5; position:sticky; top:0;">차이</th>
@@ -398,8 +410,9 @@ function showExpectedStockModal() {
                     </thead>
                     <tbody>`;
 
+    const colSpan = hasOrder ? 6 : 5;
     for (const vendor in byVendor) {
-        html += `<tr style="background:#f8f9fa;"><td colspan="6" style="font-weight:bold; font-size:12px; color:#555;">📦 ${vendor}</td></tr>`;
+        html += `<tr style="background:#f8f9fa;"><td colspan="${colSpan}" style="font-weight:bold; font-size:12px; color:#555;">📦 ${vendor}</td></tr>`;
         byVendor[vendor].forEach(item => {
             const diffClass = item.expectedDiff >= 0 ? 'color:#2e7d32' : 'color:#c62828; font-weight:bold';
             const diffSign = item.expectedDiff > 0 ? '+' : '';
@@ -409,7 +422,7 @@ function showExpectedStockModal() {
                 <tr>
                     <td>${item.품목명} ${unitTag}</td>
                     <td style="text-align:right;">${item.expBase}</td>
-                    <td style="text-align:right; color:#2e7d32; font-weight:bold;">${item.orderQty > 0 ? '+' + parseFloat(item.orderQty.toFixed(2)) : '-'}</td>
+                    ${hasOrder ? `<td style="text-align:right; color:#2e7d32; font-weight:bold;">${item.orderQty > 0 ? '+' + parseFloat(item.orderQty.toFixed(2)) : '-'}</td>` : ''}
                     <td style="text-align:right; background:#e8f5e9; font-weight:bold;">${parseFloat(item.expectedTotal.toFixed(2))}</td>
                     <td style="text-align:right;">${parseFloat(item.usage.toFixed(2))}</td>
                     <td style="text-align:right; ${diffClass}">${diffSign}${parseFloat(item.expectedDiff.toFixed(1))}</td>
