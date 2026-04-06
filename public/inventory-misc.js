@@ -329,13 +329,13 @@ function closeNoOrderModal() {
     document.getElementById('noOrderModal').classList.remove('active');
 }
 
-function filterNoOrderPeriod(days) {
+function filterNoOrderPeriod(days, btn) {
     currentNoOrderPeriod = days;
 
-    document.querySelectorAll('.period-btn').forEach(btn => {
-        btn.classList.remove('active');
+    document.querySelectorAll('.period-btn').forEach(b => {
+        b.classList.remove('active');
     });
-    event.target.classList.add('active');
+    if (btn) btn.classList.add('active');
 
     const content = document.getElementById('noOrderContent');
     const today = new Date();

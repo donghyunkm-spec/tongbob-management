@@ -503,8 +503,8 @@
             <div class="modal-header"><h2>⚠️ 장기 미발주</h2><button class="close-btn" onclick="closeNoOrderModal()">×</button></div>
             <div class="modal-body">
                 <div class="period-selector">
-                    <button class="period-btn active" onclick="filterNoOrderPeriod(5)">5일 이상</button>
-                    <button class="period-btn" onclick="filterNoOrderPeriod(7)">7일 이상</button>
+                    <button class="period-btn active" onclick="filterNoOrderPeriod(5, this)">5일 이상</button>
+                    <button class="period-btn" onclick="filterNoOrderPeriod(7, this)">7일 이상</button>
                 </div>
                 <div id="noOrderContent" class="no-order-list"></div>
             </div>
@@ -640,7 +640,7 @@
                 <button id="loginBtn" onclick="openLoginModal()" style="background: #333; color:white; border:none; padding:6px 12px; border-radius:15px; font-size:12px;">
                     🔒 로그인
                 </button>
-                <div id="userInfo" style="display:none; font-size: 12px; background: #eee; padding: 5px 10px; border-radius: 15px; display:flex; align-items:center; gap:10px;">
+                <div id="userInfo" style="display:none; font-size: 12px; background: #eee; padding: 5px 10px; border-radius: 15px; align-items:center; gap:10px;">
                     <span id="userName"></span>
                     <button onclick="logout()" style="background:#d32f2f; color:white; border:none; padding:4px 10px; border-radius:10px; font-size:11px; cursor:pointer; font-weight:bold;">
                         🚪 로그아웃

@@ -932,7 +932,8 @@ function extractStoreCosts(accData, staffData, monthStr, currentDay) {
 
     const staffTotal = calculateServerStaffCost(staffData, monthStr);
 
-    const lastDay = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+    const [y, m] = monthStr.split('-').map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
     const ratio = currentDay / lastDay;
 
     const itemsPred = {
