@@ -5,6 +5,7 @@ const path = require('path');
 const cors = require('cors');
 const cron = require('node-cron');
 const axios = require('axios');
+const FormData = require('form-data');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -933,8 +934,8 @@ function extractStoreCosts(accData, staffData, monthStr, currentDay) {
 
     const staffTotal = calculateServerStaffCost(staffData, monthStr);
 
-    const [y, m] = monthStr.split('-').map(Number);
-    const lastDay = new Date(y, m, 0).getDate();
+    const [yr, mo] = monthStr.split('-').map(Number);
+    const lastDay = new Date(yr, mo, 0).getDate();
     const ratio = currentDay / lastDay;
 
     const itemsPred = {
@@ -1275,7 +1276,6 @@ async function sendBackupToTelegram(backupData, dateStr) {
     try {
         const jsonStr = JSON.stringify(backupData);
         const buffer = Buffer.from(jsonStr, 'utf-8');
-        const FormData = (await import('form-data')).default;
         const form = new FormData();
         form.append('chat_id', TELEGRAM_CHAT_ID);
         form.append('document', buffer, { filename: `backup_${dateStr}.json`, contentType: 'application/json' });
