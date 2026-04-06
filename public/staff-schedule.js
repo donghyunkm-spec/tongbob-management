@@ -1211,3 +1211,49 @@ async function downloadAllData() {
         alert('백업 중 오류가 발생했습니다: ' + e.message);
     }
 }
+
+async function restoreFromFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    input.value = '';
+
+    if (!confirm('⚠️ 데이터 복원을 진행하시겠습니까?\n\n현재 데이터가 백업 파일의 데이터로 교체됩니다.\n(복원 전 현재 데이터는 서버에 자동 백업됩니다)')) {
+        return;
+    }
+
+    try {
+        const text = await file.text();
+        let backupData;
+        try {
+            backupData = JSON.parse(text);
+        } catch (e) {
+            alert('유효하지 않은 JSON 파일입니다.');
+            return;
+        }
+
+        if (!backupData.timestamp) {
+            alert('유효하지 않은 백업 파일입니다. (timestamp 없음)');
+            return;
+        }
+
+        const session = JSON.parse(localStorage.getItem('staffUser') || '{}');
+        backupData._actor = session.name || 'admin';
+
+        const res = await fetch('/api/backup/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(backupData)
+        });
+        const result = await res.json();
+
+        if (result.success) {
+            alert(`복원 완료!\n\n백업 시점: ${backupData.timestamp}\n복원 항목: ${result.restored.length}개\n\n페이지를 새로고침합니다.`);
+            location.reload();
+        } else {
+            alert('복원 실패: ' + (result.message || '알 수 없는 오류'));
+        }
+    } catch (e) {
+        console.error('복원 실패:', e);
+        alert('복원 중 오류가 발생했습니다: ' + e.message);
+    }
+}

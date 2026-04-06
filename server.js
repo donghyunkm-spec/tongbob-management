@@ -129,6 +129,7 @@ function initializeInventoryData() {
 initializeInventoryData();
 
 app.use(cors());
+app.use('/api/backup/restore', express.json({ limit: '50mb' }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public'))); // index.html, staff.js, inventory.js 등이 여기 있어야 함
 
@@ -1269,6 +1270,26 @@ function collectBackupData() {
     };
 }
 
+async function sendBackupToTelegram(backupData, dateStr) {
+    if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT_ID) return;
+    try {
+        const jsonStr = JSON.stringify(backupData);
+        const buffer = Buffer.from(jsonStr, 'utf-8');
+        const FormData = (await import('form-data')).default;
+        const form = new FormData();
+        form.append('chat_id', TELEGRAM_CHAT_ID);
+        form.append('document', buffer, { filename: `backup_${dateStr}.json`, contentType: 'application/json' });
+        form.append('caption', `📦 자동 백업 완료 (${dateStr})\n📊 직원: ${(backupData.staff || []).length}명 | 품목: ${Object.values(backupData.inventory_items || {}).reduce((sum, v) => sum + (Array.isArray(v) ? v.length : 0), 0)}개`);
+        await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument`, form, {
+            headers: form.getHeaders(),
+            maxContentLength: 50 * 1024 * 1024
+        });
+        console.log('✅ 텔레그램 백업 전송 완료');
+    } catch (e) {
+        console.error('텔레그램 백업 전송 실패:', e.message);
+    }
+}
+
 function runAutoBackup() {
     try {
         if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
@@ -1280,6 +1301,9 @@ function runAutoBackup() {
         const backupData = collectBackupData();
         fs.writeFileSync(backupFile, JSON.stringify(backupData, null, 2));
         console.log(`✅ 자동 백업 완료: ${backupFile}`);
+
+        // 텔레그램으로 백업 파일 전송
+        sendBackupToTelegram(backupData, dateStr);
 
         // 오래된 백업 삭제 (MAX_BACKUPS 초과분)
         const files = fs.readdirSync(BACKUP_DIR)
@@ -1351,6 +1375,52 @@ app.get('/api/backup/download/:date', (req, res) => {
         res.sendFile(filePath);
     } catch(e) {
         res.status(500).json({ error: e.message });
+    }
+});
+
+// 백업 데이터로 복원
+app.post('/api/backup/restore', (req, res) => {
+    try {
+        const data = req.body;
+        if (!data || !data.timestamp) {
+            return res.status(400).json({ success: false, message: '유효하지 않은 백업 데이터' });
+        }
+
+        // 복원 전 현재 데이터를 안전 백업
+        const kstDate = new Date(Date.now() + 9 * 60 * 60 * 1000);
+        const safetyStr = kstDate.toISOString().replace(/[:.]/g, '-');
+        if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+        const currentData = collectBackupData();
+        fs.writeFileSync(path.join(BACKUP_DIR, `pre_restore_${safetyStr}.json`), JSON.stringify(currentData, null, 2));
+
+        // 각 데이터 파일 복원
+        const restored = [];
+        const fileMap = {
+            staff: STAFF_FILE,
+            logs: LOG_FILE,
+            accounting: ACCOUNTING_FILE,
+            inventory_items: INVENTORY_ITEMS_FILE,
+            inventory_current: INVENTORY_CURRENT_FILE,
+            inventory_usage: INVENTORY_USAGE_FILE,
+            inventory_orders: INVENTORY_ORDERS_FILE,
+            inventory_holidays: INVENTORY_HOLIDAYS_FILE,
+            inventory_last_orders: INVENTORY_LAST_ORDERS_FILE,
+            inventory_history: INVENTORY_HISTORY_FILE
+        };
+
+        for (const [key, filePath] of Object.entries(fileMap)) {
+            if (data[key] !== undefined) {
+                writeJson(filePath, data[key]);
+                restored.push(key);
+            }
+        }
+
+        addLog({ actor: req.body._actor || 'admin', action: '데이터복원', target: '전체', details: `백업시점: ${data.timestamp}, 복원항목: ${restored.length}개` });
+
+        res.json({ success: true, message: `${restored.length}개 항목 복원 완료`, restored });
+    } catch(e) {
+        console.error('복원 실패:', e);
+        res.status(500).json({ success: false, message: '복원 실패: ' + e.message });
     }
 });
 

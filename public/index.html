@@ -754,6 +754,10 @@
                                 <button onclick="downloadBackup()" style="background:#ff9800; color:white; border:none; padding:8px 15px; border-radius:5px; font-weight:bold; cursor:pointer;">
                                     💾 데이터 백업
                                 </button>
+                                <button onclick="document.getElementById('restoreFileInput').click()" style="background:#d32f2f; color:white; border:none; padding:8px 15px; border-radius:5px; font-weight:bold; cursor:pointer; margin-left:8px;">
+                                    🔄 데이터 복원
+                                </button>
+                                <input type="file" id="restoreFileInput" accept=".json" style="display:none;" onchange="restoreFromFile(this)">
                             </div>
                         </div>
                     </div>
