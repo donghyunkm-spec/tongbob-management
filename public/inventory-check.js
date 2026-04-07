@@ -11,7 +11,7 @@ function renderInventoryCheck() {
     if (!container) return;
 
     // 1. 날짜 계산 및 표시 (KST 기준)
-    const targetDate = getKSTDate();
+    const targetDate = getKSTToday();
     targetDate.setDate(targetDate.getDate() + checkDateOffset);
     const dateStr = targetDate.toISOString().split('T')[0];
 
@@ -449,7 +449,7 @@ function scrollToVendor(vendor) {
 // 배송일 계산
 // ==========================================
 function getDaysUntilNextDelivery(vendor) {
-    const today = getKSTDate();
+    const today = getKSTToday();
     let daysCount = 0;
     let checkDate = new Date(today);
     checkDate.setDate(checkDate.getDate() + 1);
@@ -487,7 +487,7 @@ function getDaysUntilNextDelivery(vendor) {
 }
 
 function getDeliveryInfo(vendor) {
-    const today = getKSTDate();
+    const today = getKSTToday();
     const daysNeeded = getDaysUntilNextDelivery(vendor);
 
     let deliveryDate = new Date(today);
@@ -566,7 +566,7 @@ function checkOrderConfirmation() {
     const sourceAlertItems = []; // 원재료 연결 품목 중 부족한 것
 
     let missingInputCount = 0;
-    const today = getKSTDate();
+    const today = getKSTToday();
     const isTuesday = today.getDay() === 2;
 
     for (const vendor in items) {

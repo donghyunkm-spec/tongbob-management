@@ -53,6 +53,13 @@ function getKSTDateStr() {
     return getKSTDate().toISOString().split('T')[0];
 }
 
+// KST 오늘 날짜를 UTC 자정 기준 Date로 반환 (날짜 연산용)
+// getKSTDate()는 +9h 보정된 Date라 getDay()/setDate() 등이 오후 3시 이후 하루 밀리는 문제가 있음
+function getKSTToday() {
+    const dateStr = getKSTDateStr();
+    return new Date(dateStr + 'T00:00:00Z');
+}
+
 // ==========================================
 // 2. 권한 확인
 // ==========================================
