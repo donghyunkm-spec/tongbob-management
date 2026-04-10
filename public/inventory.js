@@ -225,16 +225,18 @@ function showAlert(msg, type) {
 
 function getDaysSince(dateString) {
     if (!dateString) return 999;
-    const diff = Math.abs(getKSTDate() - new Date(dateString));
+    const today = getKSTToday();
+    const target = new Date(dateString + 'T00:00:00Z');
+    const diff = Math.abs(today - target);
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
 function getThisWeekTuesday() {
-    const now = getKSTDate();
-    const day = now.getDay(); // 0=일, 1=월, 2=화, ...
+    const now = getKSTToday();
+    const day = now.getUTCDay(); // 0=일, 1=월, 2=화, ...
     const diff = day >= 2 ? day - 2 : day + 5; // 이번 주 화요일까지의 차이
     const tue = new Date(now);
-    tue.setDate(now.getDate() - diff);
+    tue.setUTCDate(now.getUTCDate() - diff);
     return tue.toISOString().split('T')[0];
 }
 

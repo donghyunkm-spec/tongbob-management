@@ -227,8 +227,8 @@ function renderUnifiedInventoryForm() {
         </div>
     `;
 
-    const today = getKSTDate();
-    const isTuesday = today.getDay() === 2;
+    const today = getKSTToday();
+    const isTuesday = today.getUTCDay() === 2;
 
     let regularItems = [];
     let internetItems = [];

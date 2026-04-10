@@ -12,10 +12,10 @@ function renderInventoryCheck() {
 
     // 1. 날짜 계산 및 표시 (KST 기준)
     const targetDate = getKSTToday();
-    targetDate.setDate(targetDate.getDate() + checkDateOffset);
+    targetDate.setUTCDate(targetDate.getUTCDate() + checkDateOffset);
     const dateStr = targetDate.toISOString().split('T')[0];
 
-    let dayLabel = `${targetDate.getMonth()+1}/${targetDate.getDate()}`;
+    let dayLabel = `${targetDate.getUTCMonth()+1}/${targetDate.getUTCDate()}`;
     if (checkDateOffset === 0) dayLabel += " (오늘)";
     else if (checkDateOffset === -1) dayLabel += " (어제)";
     else if (checkDateOffset === 1) dayLabel += " (내일)";
@@ -191,8 +191,8 @@ function renderInventoryCheck() {
     const formatDateLabel = (dateStr) => {
         if (!dateStr || dateStr === '기록없음') return '기록없음';
         if (dateStr === '오늘 저장완료') return '오늘 저장완료';
-        const d = new Date(dateStr);
-        return `${d.getMonth()+1}/${d.getDate()}`;
+        const d = new Date(dateStr + 'T00:00:00Z');
+        return `${d.getUTCMonth()+1}/${d.getUTCDate()}`;
     };
 
     const date1Label = formatDateLabel(lastSaveDate1);
@@ -452,11 +452,11 @@ function getDaysUntilNextDelivery(vendor) {
     const today = getKSTToday();
     let daysCount = 0;
     let checkDate = new Date(today);
-    checkDate.setDate(checkDate.getDate() + 1);
+    checkDate.setUTCDate(checkDate.getUTCDate() + 1);
 
     for (let i = 0; i < 7; i++) {
         const dateStr = checkDate.toISOString().split('T')[0];
-        const dow = checkDate.getDay();
+        const dow = checkDate.getUTCDay();
 
         const isStoreRegularHoliday = (dow === 1);
         const isStoreTempHoliday = holidays['store'] && holidays['store'].includes(dateStr);
@@ -480,7 +480,7 @@ function getDaysUntilNextDelivery(vendor) {
             }
         }
 
-        checkDate.setDate(checkDate.getDate() + 1);
+        checkDate.setUTCDate(checkDate.getUTCDate() + 1);
     }
 
     return Math.max(1, daysCount);
@@ -491,10 +491,10 @@ function getDeliveryInfo(vendor) {
     const daysNeeded = getDaysUntilNextDelivery(vendor);
 
     let deliveryDate = new Date(today);
-    deliveryDate.setDate(deliveryDate.getDate() + 1);
+    deliveryDate.setUTCDate(deliveryDate.getUTCDate() + 1);
 
     for (let i = 0; i < 7; i++) {
-        const dow = deliveryDate.getDay();
+        const dow = deliveryDate.getUTCDay();
         const dateStr = deliveryDate.toISOString().split('T')[0];
 
         const isStoreRegularHoliday = (dow === 1);
@@ -509,13 +509,13 @@ function getDeliveryInfo(vendor) {
         if (isDeliveryPossible && isStoreOpen) {
             break;
         }
-        deliveryDate.setDate(deliveryDate.getDate() + 1);
+        deliveryDate.setUTCDate(deliveryDate.getUTCDate() + 1);
     }
 
-    const year = deliveryDate.getFullYear();
-    const month = deliveryDate.getMonth() + 1;
-    const date = deliveryDate.getDate();
-    const dayOfWeek = WEEKDAYS[deliveryDate.getDay()];
+    const year = deliveryDate.getUTCFullYear();
+    const month = deliveryDate.getUTCMonth() + 1;
+    const date = deliveryDate.getUTCDate();
+    const dayOfWeek = WEEKDAYS[deliveryDate.getUTCDay()];
 
     return {
         deliveryDate: deliveryDate,
@@ -567,7 +567,7 @@ function checkOrderConfirmation() {
 
     let missingInputCount = 0;
     const today = getKSTToday();
-    const isTuesday = today.getDay() === 2;
+    const isTuesday = today.getUTCDay() === 2;
 
     for (const vendor in items) {
         const vendorItems = items[vendor];
@@ -839,10 +839,11 @@ async function proceedToOrder() {
         });
     }
 
-    const kstNow = getKSTDate();
+    const kstNow = getKSTDateStr();
+    const kstTimeParts = getKSTDate().toISOString().split('T');
     const orderRecord = {
-        date: kstNow.toISOString().split('T')[0],
-        time: kstNow.toISOString().split('T')[1].substring(0, 5),
+        date: kstNow,
+        time: kstTimeParts[1].substring(0, 5),
         orders: orderData,
         inventory: currentInventoryCopy,
         warnings: currentWarnings
@@ -920,10 +921,12 @@ function closeOrderModal() {
 }
 
 function copyToKakao() {
-    const today = getKSTDate();
-    const month = today.getMonth() + 1;
-    const date = today.getDate();
-    const time = `${today.getHours()}:${String(today.getMinutes()).padStart(2, '0')}`;
+    const todayStr = getKSTDateStr();
+    const [y, m, d] = todayStr.split('-').map(Number);
+    const month = m;
+    const date = d;
+    const kstTime = getKSTDate().toISOString().split('T')[1].substring(0, 5);
+    const time = kstTime;
 
     let copyText = `📦 [발주 리스트]\n📅 ${month}/${date} (${time}) 작성\n----------------------------\n`;
 
