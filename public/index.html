@@ -970,14 +970,20 @@
                     <h4 style="color:#00796b; margin-bottom:10px;">🗓️ <span id="fixCostTitle"></span> 고정 지출 설정</h4>
                     <p style="font-size:12px; color:#666; margin-bottom:15px;">* 회색 칸은 자동 계산됩니다. 수수료는 일일 매출 기준 자동 계산됩니다.</p>
     
-                    <h4 style="background:#e3f2fd; padding:8px; border-radius:5px; margin-bottom:10px;">🏪 1루 고정비</h4>
+                    <div style="display:flex; justify-content:space-between; align-items:center; background:#e3f2fd; padding:8px; border-radius:5px; margin-bottom:10px;">
+                        <h4 style="margin:0;">🏪 1루 고정비</h4>
+                        <button type="button" onclick="loadLastMonthFixed('1')" style="background:#1976d2; color:white; border:none; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer;">📥 저번달 값 불러오기 (인터넷/청소/운영관리/CCTV)</button>
+                    </div>
                     <div class="input-grid">
                         <div><span class="category-label">🌐 인터넷</span><input type="number" id="fixInternet1" class="money-input"></div>
                         <div><span class="category-label">💧 상하수도</span><input type="number" id="fixWater1" class="money-input"></div>
+                        <div><span class="category-label">⚡ 전기료</span><input type="number" id="fixElectricity1" class="money-input"></div>
                         <div><span class="category-label">🧹 청소용역비</span><input type="number" id="fixCleaning1" class="money-input"></div>
                         <div><span class="category-label">🏢 운영관리비</span><input type="number" id="fixOperMgmt1" class="money-input"></div>
                         <div><span class="category-label">📹 CCTV</span><input type="number" id="fixCCTV1" class="money-input"></div>
                         <div><span class="category-label">💳 사업자카드</span><input type="number" id="fixBizCard1" class="money-input"></div>
+                        <div><span class="category-label">💳 카드수수료</span><input type="number" id="fixCardFee1" class="money-input"></div>
+                        <div><span class="category-label">🏦 대출상환</span><input type="number" id="fixLoanRepay1" class="money-input"></div>
                         <div><span class="category-label">🔧 기타잡비</span><input type="number" id="fixEtc1" class="money-input"></div>
                         <div><span class="category-label">🛡️ 4대보험료</span><input type="number" id="fixInsurance1" class="money-input"></div>
                         <div><span class="category-label">💰 사업소득세</span><input type="number" id="fixBizIncomeTax1" class="money-input"></div>
@@ -990,14 +996,20 @@
                         <div><span class="category-label">🛵 배달수수료(6%)</span><input type="text" id="fixDeliveryFee1" class="money-input" readonly style="background:#e0e0e0; color:#555;"></div>
                     </div>
 
-                    <h4 style="background:#e1f5fe; padding:8px; border-radius:5px; margin-top:20px; margin-bottom:10px;">🏪 3루 고정비</h4>
+                    <div style="display:flex; justify-content:space-between; align-items:center; background:#e1f5fe; padding:8px; border-radius:5px; margin-top:20px; margin-bottom:10px;">
+                        <h4 style="margin:0;">🏪 3루 고정비</h4>
+                        <button type="button" onclick="loadLastMonthFixed('3')" style="background:#0277bd; color:white; border:none; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer;">📥 저번달 값 불러오기 (인터넷/청소/운영관리/CCTV)</button>
+                    </div>
                     <div class="input-grid">
                         <div><span class="category-label">🌐 인터넷</span><input type="number" id="fixInternet3" class="money-input"></div>
                         <div><span class="category-label">💧 상하수도</span><input type="number" id="fixWater3" class="money-input"></div>
+                        <div><span class="category-label">⚡ 전기료</span><input type="number" id="fixElectricity3" class="money-input"></div>
                         <div><span class="category-label">🧹 청소용역비</span><input type="number" id="fixCleaning3" class="money-input"></div>
                         <div><span class="category-label">🏢 운영관리비</span><input type="number" id="fixOperMgmt3" class="money-input"></div>
                         <div><span class="category-label">📹 CCTV</span><input type="number" id="fixCCTV3" class="money-input"></div>
                         <div><span class="category-label">💳 사업자카드</span><input type="number" id="fixBizCard3" class="money-input"></div>
+                        <div><span class="category-label">💳 카드수수료</span><input type="number" id="fixCardFee3" class="money-input"></div>
+                        <div><span class="category-label">🏦 대출상환</span><input type="number" id="fixLoanRepay3" class="money-input"></div>
                         <div><span class="category-label">🔧 기타잡비</span><input type="number" id="fixEtc3" class="money-input"></div>
                         <div><span class="category-label">🛡️ 4대보험료</span><input type="number" id="fixInsurance3" class="money-input"></div>
                         <div><span class="category-label">💰 사업소득세</span><input type="number" id="fixBizIncomeTax3" class="money-input"></div>

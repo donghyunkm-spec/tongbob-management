@@ -448,10 +448,13 @@ function loadMonthlyForm() {
     // 1루 고정비
     setVal('fixInternet1', mData.internet1);
     setVal('fixWater1', mData.water1);
+    setVal('fixElectricity1', mData.electricity1);
     setVal('fixCleaning1', mData.cleaning1);
     setVal('fixOperMgmt1', mData.operMgmt1);
     setVal('fixCCTV1', mData.cctv1);
     setVal('fixBizCard1', mData.bizCard1);
+    setVal('fixCardFee1', mData.cardFee1);
+    setVal('fixLoanRepay1', mData.loanRepay1);
     setVal('fixEtc1', mData.etc_fixed1);
     setVal('fixInsurance1', mData.insurance1);
     setVal('fixBizIncomeTax1', mData.bizIncomeTax1);
@@ -460,10 +463,13 @@ function loadMonthlyForm() {
     // 3루 고정비
     setVal('fixInternet3', mData.internet3);
     setVal('fixWater3', mData.water3);
+    setVal('fixElectricity3', mData.electricity3);
     setVal('fixCleaning3', mData.cleaning3);
     setVal('fixOperMgmt3', mData.operMgmt3);
     setVal('fixCCTV3', mData.cctv3);
     setVal('fixBizCard3', mData.bizCard3);
+    setVal('fixCardFee3', mData.cardFee3);
+    setVal('fixLoanRepay3', mData.loanRepay3);
     setVal('fixEtc3', mData.etc_fixed3);
     setVal('fixInsurance3', mData.insurance3);
     setVal('fixBizIncomeTax3', mData.bizIncomeTax3);
@@ -515,10 +521,13 @@ async function saveFixedCost() {
         // 1루 고정비
         internet1: getVal('fixInternet1'),
         water1: getVal('fixWater1'),
+        electricity1: getVal('fixElectricity1'),
         cleaning1: getVal('fixCleaning1'),
         operMgmt1: getVal('fixOperMgmt1'),
         cctv1: getVal('fixCCTV1'),
         bizCard1: getVal('fixBizCard1'),
+        cardFee1: getVal('fixCardFee1'),
+        loanRepay1: getVal('fixLoanRepay1'),
         etc_fixed1: getVal('fixEtc1'),
         insurance1: getVal('fixInsurance1'),
         bizIncomeTax1: getVal('fixBizIncomeTax1'),
@@ -527,10 +536,13 @@ async function saveFixedCost() {
         // 3루 고정비
         internet3: getVal('fixInternet3'),
         water3: getVal('fixWater3'),
+        electricity3: getVal('fixElectricity3'),
         cleaning3: getVal('fixCleaning3'),
         operMgmt3: getVal('fixOperMgmt3'),
         cctv3: getVal('fixCCTV3'),
         bizCard3: getVal('fixBizCard3'),
+        cardFee3: getVal('fixCardFee3'),
+        loanRepay3: getVal('fixLoanRepay3'),
         etc_fixed3: getVal('fixEtc3'),
         insurance3: getVal('fixInsurance3'),
         bizIncomeTax3: getVal('fixBizIncomeTax3'),
@@ -555,6 +567,44 @@ async function saveFixedCost() {
     } catch(e) {
         console.error(e);
         alert('저장 실패 (네트워크 오류)');
+    }
+}
+
+// ==========================================
+// 저번달 고정비 불러오기 (인터넷/청소용역비/운영관리비/CCTV)
+// ==========================================
+function loadLastMonthFixed(store) {
+    const prev = new Date(currentDashboardDate);
+    prev.setMonth(prev.getMonth() - 1);
+    const prevMonthStr = getMonthStr(prev);
+    const pData = (accountingData.monthly && accountingData.monthly[prevMonthStr]) ? accountingData.monthly[prevMonthStr] : null;
+
+    if (!pData) {
+        alert(`저번달(${prevMonthStr}) 데이터가 없습니다.`);
+        return;
+    }
+
+    const suffix = store;
+    const fields = [
+        { id: `fixInternet${suffix}`, key: `internet${suffix}`, label: '인터넷' },
+        { id: `fixCleaning${suffix}`, key: `cleaning${suffix}`, label: '청소용역비' },
+        { id: `fixOperMgmt${suffix}`, key: `operMgmt${suffix}`, label: '운영관리비' },
+        { id: `fixCCTV${suffix}`, key: `cctv${suffix}`, label: 'CCTV' }
+    ];
+
+    let applied = 0;
+    fields.forEach(f => {
+        const val = pData[f.key];
+        if (val !== undefined && val !== null && val !== 0) {
+            const el = document.getElementById(f.id);
+            if (el) { el.value = val; applied++; }
+        }
+    });
+
+    if (applied === 0) {
+        alert(`저번달(${prevMonthStr}) ${store}루에 저장된 해당 항목 값이 없습니다.`);
+    } else {
+        alert(`저번달(${prevMonthStr}) ${store}루 값 ${applied}개를 불러왔습니다.\n[설정 저장]을 눌러 확정하세요.`);
     }
 }
 
@@ -733,8 +783,9 @@ function renderPredictionStats() {
         cardFee = 0;
 
         // 1루 고정비
-        fixedMisc = (mData.internet1||0) + (mData.water1||0) + (mData.cleaning1||0) +
-                    (mData.operMgmt1||0) + (mData.cctv1||0) + (mData.bizCard1||0) + (mData.etc_fixed1||0) +
+        fixedMisc = (mData.internet1||0) + (mData.water1||0) + (mData.electricity1||0) + (mData.cleaning1||0) +
+                    (mData.operMgmt1||0) + (mData.cctv1||0) + (mData.bizCard1||0) + (mData.cardFee1||0) +
+                    (mData.loanRepay1||0) + (mData.etc_fixed1||0) +
                     (mData.insurance1||0) + (mData.bizIncomeTax1||0) + (mData.taxAccountant1||0);
 
         // 매출 비율로 배분
@@ -756,8 +807,9 @@ function renderPredictionStats() {
         cardFee = 0;
 
         // 3루 고정비
-        fixedMisc = (mData.internet3||0) + (mData.water3||0) + (mData.cleaning3||0) +
-                    (mData.operMgmt3||0) + (mData.cctv3||0) + (mData.bizCard3||0) + (mData.etc_fixed3||0) +
+        fixedMisc = (mData.internet3||0) + (mData.water3||0) + (mData.electricity3||0) + (mData.cleaning3||0) +
+                    (mData.operMgmt3||0) + (mData.cctv3||0) + (mData.bizCard3||0) + (mData.cardFee3||0) +
+                    (mData.loanRepay3||0) + (mData.etc_fixed3||0) +
                     (mData.insurance3||0) + (mData.bizIncomeTax3||0) + (mData.taxAccountant3||0);
 
         // 매출 비율로 배분
@@ -780,11 +832,13 @@ function renderPredictionStats() {
         cardFee = 0;
 
         // 전체 고정비 (1루 + 3루)
-        fixedMisc = (mData.internet1||0) + (mData.water1||0) + (mData.cleaning1||0) +
-                    (mData.operMgmt1||0) + (mData.cctv1||0) + (mData.bizCard1||0) + (mData.etc_fixed1||0) +
+        fixedMisc = (mData.internet1||0) + (mData.water1||0) + (mData.electricity1||0) + (mData.cleaning1||0) +
+                    (mData.operMgmt1||0) + (mData.cctv1||0) + (mData.bizCard1||0) + (mData.cardFee1||0) +
+                    (mData.loanRepay1||0) + (mData.etc_fixed1||0) +
                     (mData.insurance1||0) + (mData.bizIncomeTax1||0) + (mData.taxAccountant1||0) +
-                    (mData.internet3||0) + (mData.water3||0) + (mData.cleaning3||0) +
-                    (mData.operMgmt3||0) + (mData.cctv3||0) + (mData.bizCard3||0) + (mData.etc_fixed3||0) +
+                    (mData.internet3||0) + (mData.water3||0) + (mData.electricity3||0) + (mData.cleaning3||0) +
+                    (mData.operMgmt3||0) + (mData.cctv3||0) + (mData.bizCard3||0) + (mData.cardFee3||0) +
+                    (mData.loanRepay3||0) + (mData.etc_fixed3||0) +
                     (mData.insurance3||0) + (mData.bizIncomeTax3||0) + (mData.taxAccountant3||0);
 
         // 전체 (배분 없음)
@@ -922,8 +976,9 @@ function renderDashboardStats() {
         cardFee = 0;
 
         // 1루 고정비
-        fixedMisc = (mData.internet1||0) + (mData.water1||0) + (mData.cleaning1||0) +
-                    (mData.operMgmt1||0) + (mData.cctv1||0) + (mData.bizCard1||0) + (mData.etc_fixed1||0) +
+        fixedMisc = (mData.internet1||0) + (mData.water1||0) + (mData.electricity1||0) + (mData.cleaning1||0) +
+                    (mData.operMgmt1||0) + (mData.cctv1||0) + (mData.bizCard1||0) + (mData.cardFee1||0) +
+                    (mData.loanRepay1||0) + (mData.etc_fixed1||0) +
                     (mData.insurance1||0) + (mData.bizIncomeTax1||0) + (mData.taxAccountant1||0);
 
         // 매출 비율로 배분
@@ -942,8 +997,9 @@ function renderDashboardStats() {
         cardFee = 0;
 
         // 3루 고정비
-        fixedMisc = (mData.internet3||0) + (mData.water3||0) + (mData.cleaning3||0) +
-                    (mData.operMgmt3||0) + (mData.cctv3||0) + (mData.bizCard3||0) + (mData.etc_fixed3||0) +
+        fixedMisc = (mData.internet3||0) + (mData.water3||0) + (mData.electricity3||0) + (mData.cleaning3||0) +
+                    (mData.operMgmt3||0) + (mData.cctv3||0) + (mData.bizCard3||0) + (mData.cardFee3||0) +
+                    (mData.loanRepay3||0) + (mData.etc_fixed3||0) +
                     (mData.insurance3||0) + (mData.bizIncomeTax3||0) + (mData.taxAccountant3||0);
 
         // 매출 비율로 배분
@@ -968,11 +1024,13 @@ function renderDashboardStats() {
         cardFee = 0;
 
         // 전체 고정비 (1루 + 3루)
-        fixedMisc = (mData.internet1||0) + (mData.water1||0) + (mData.cleaning1||0) +
-                    (mData.operMgmt1||0) + (mData.cctv1||0) + (mData.bizCard1||0) + (mData.etc_fixed1||0) +
+        fixedMisc = (mData.internet1||0) + (mData.water1||0) + (mData.electricity1||0) + (mData.cleaning1||0) +
+                    (mData.operMgmt1||0) + (mData.cctv1||0) + (mData.bizCard1||0) + (mData.cardFee1||0) +
+                    (mData.loanRepay1||0) + (mData.etc_fixed1||0) +
                     (mData.insurance1||0) + (mData.bizIncomeTax1||0) + (mData.taxAccountant1||0) +
-                    (mData.internet3||0) + (mData.water3||0) + (mData.cleaning3||0) +
-                    (mData.operMgmt3||0) + (mData.cctv3||0) + (mData.bizCard3||0) + (mData.etc_fixed3||0) +
+                    (mData.internet3||0) + (mData.water3||0) + (mData.electricity3||0) + (mData.cleaning3||0) +
+                    (mData.operMgmt3||0) + (mData.cctv3||0) + (mData.bizCard3||0) + (mData.cardFee3||0) +
+                    (mData.loanRepay3||0) + (mData.etc_fixed3||0) +
                     (mData.insurance3||0) + (mData.bizIncomeTax3||0) + (mData.taxAccountant3||0);
 
         // 전체 (배분 없음)

@@ -925,11 +925,13 @@ function extractStoreCosts(accData, staffData, monthStr, currentDay) {
     const cardFee = 0;
 
     // 고정비 (1루 + 3루)
-    const fixedMisc = (m.internet1||0) + (m.water1||0) + (m.cleaning1||0) +
-                      (m.operMgmt1||0) + (m.cctv1||0) + (m.bizCard1||0) + (m.etc_fixed1||0) +
+    const fixedMisc = (m.internet1||0) + (m.water1||0) + (m.electricity1||0) + (m.cleaning1||0) +
+                      (m.operMgmt1||0) + (m.cctv1||0) + (m.bizCard1||0) + (m.cardFee1||0) +
+                      (m.loanRepay1||0) + (m.etc_fixed1||0) +
                       (m.insurance1||0) + (m.bizIncomeTax1||0) + (m.taxAccountant1||0) +
-                      (m.internet3||0) + (m.water3||0) + (m.cleaning3||0) +
-                      (m.operMgmt3||0) + (m.cctv3||0) + (m.bizCard3||0) + (m.etc_fixed3||0) +
+                      (m.internet3||0) + (m.water3||0) + (m.electricity3||0) + (m.cleaning3||0) +
+                      (m.operMgmt3||0) + (m.cctv3||0) + (m.bizCard3||0) + (m.cardFee3||0) +
+                      (m.loanRepay3||0) + (m.etc_fixed3||0) +
                       (m.insurance3||0) + (m.bizIncomeTax3||0) + (m.taxAccountant3||0);
 
     const staffTotal = calculateServerStaffCost(staffData, monthStr);
