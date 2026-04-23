@@ -246,6 +246,8 @@ app.put('/api/staff/:id', (req, res) => {
             changed.push(`퇴사일: ${old.endDate||'없음'}→${updates.endDate||'없음'}`);
         if (updates.paidUntil !== undefined && updates.paidUntil !== old.paidUntil)
             changed.push(`급여지급일: ${old.paidUntil||'없음'}→${updates.paidUntil||'없음'}`);
+        if (updates.memo !== undefined && (updates.memo || '') !== (old.memo || ''))
+            changed.push(`메모 변경`);
         if (updates.roles !== undefined && JSON.stringify((updates.roles||[]).slice().sort()) !== JSON.stringify((old.roles||[]).slice().sort()))
             changed.push(`역할: ${(old.roles||[]).join(',')||'없음'}→${(updates.roles||[]).join(',')||'없음'}`);
         if (updates.dayTimes !== undefined && JSON.stringify(updates.dayTimes) !== JSON.stringify(old.dayTimes||{}))

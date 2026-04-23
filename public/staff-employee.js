@@ -507,6 +507,7 @@ function openEditModal(id) {
         document.getElementById('editSalaryType').value = target.salaryType || 'hourly';
         document.getElementById('editSalary').value = target.salary || 0;
         document.getElementById('editPaidUntil').value = target.paidUntil || '';
+        document.getElementById('editMemo').value = target.memo || '';
     } else {
         salarySection.style.display = 'none';
     }
@@ -591,6 +592,7 @@ async function saveStaffEdit() {
         updates.salaryType = salaryType;
         updates.salary = salary;
         updates.paidUntil = document.getElementById('editPaidUntil').value || null;
+        updates.memo = document.getElementById('editMemo').value || '';
     }
 
     try {
