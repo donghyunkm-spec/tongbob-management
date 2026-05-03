@@ -209,11 +209,21 @@ async function saveDailyAccounting() {
     };
 
     try {
-        await fetch('/api/accounting/daily', {
+        const res = await fetch('/api/accounting/daily', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ date: dateStr, data: data, actor: currentUser.name })
         });
+
+        if (!res.ok) {
+            alert(`저장 실패 (서버 오류 ${res.status}). 다시 시도해주세요.`);
+            return;
+        }
+        const result = await res.json().catch(() => ({}));
+        if (!result.success) {
+            alert(`저장 실패: ${result.error || '알 수 없는 오류'}. 다시 시도해주세요.`);
+            return;
+        }
 
         if(!accountingData.daily) accountingData.daily = {};
         accountingData.daily[dateStr] = data;
@@ -224,7 +234,8 @@ async function saveDailyAccounting() {
             switchAccSubTab('acc-history');
         }
     } catch(e) {
-        alert('저장 실패: 서버 오류');
+        console.error(e);
+        alert('저장 실패 (네트워크 오류). 인터넷 연결을 확인하고 다시 시도해주세요.');
     }
 }
 

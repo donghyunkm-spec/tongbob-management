@@ -443,9 +443,9 @@ async function saveInventory() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ inventory: inventory, location: currentLocation })
         });
-        const result = await response.json();
+        const result = await response.json().catch(() => ({}));
 
-        if (result.success) {
+        if (response.ok && result.success) {
             // lastSavedInventory는 서버 전체 상태로 갱신 (이전값 표시용)
             lastSavedInventory = { ...result.inventory };
 
@@ -458,11 +458,25 @@ async function saveInventory() {
                 }
             });
 
+            // 창고 저장 시: warehouse-only 품목의 1루_/3루_ 값도 서버 응답으로 동기화
+            if (currentLocation === '창고') {
+                const warehouseOnlyKeys = getWarehouseOnlyItemKeys();
+                warehouseOnlyKeys.forEach(rawKey => {
+                    ['1루', '3루'].forEach(loc => {
+                        const k = `${loc}_${rawKey}`;
+                        if (result.inventory[k] !== undefined) {
+                            inventory[k] = result.inventory[k];
+                        }
+                    });
+                });
+            }
+
             renderUnifiedInventoryForm();
             showAlert('저장되었습니다.', 'success');
         } else {
             inventory[metaKey] = prevMeta; // 롤백
-            showAlert('저장 실패: 서버 오류', 'error');
+            const errMsg = (result && result.error) ? `: ${result.error}` : '';
+            showAlert(`저장 실패 (HTTP ${response.status}${errMsg})`, 'error');
         }
     } catch (e) {
         console.error(e);
@@ -550,8 +564,15 @@ async function saveStandard() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ usage: dailyUsage })
         });
-        const result = await response.json();
-        if (result.success) showAlert('사용량이 저장되었습니다.', 'success');
-        else showAlert('사용량 저장 실패', 'error');
-    } catch (e) { console.error(e); }
+        const result = await response.json().catch(() => ({}));
+        if (response.ok && result.success) {
+            showAlert('사용량이 저장되었습니다.', 'success');
+        } else {
+            const errMsg = (result && result.error) ? `: ${result.error}` : '';
+            showAlert(`사용량 저장 실패 (HTTP ${response.status}${errMsg})`, 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        showAlert('사용량 저장 실패 (네트워크 오류)', 'error');
+    }
 }

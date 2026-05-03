@@ -75,13 +75,16 @@ function readJson(file, defaultVal = []) {
 }
 
 function writeJson(file, data) {
+    const tmp = file + '.tmp';
     try {
         const dir = path.dirname(file);
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(file, JSON.stringify(data, null, 2));
+        fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+        fs.renameSync(tmp, file);
         return true;
     } catch (e) {
         console.error(`Write Error (${file}):`, e.message);
+        try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch (_) {}
         return false;
     }
 }
@@ -256,7 +259,9 @@ app.put('/api/staff/:id', (req, res) => {
         const detail = changed.length > 0 ? changed.join(' / ') : '정보수정 (변경사항 없음)';
 
         staff[idx] = { ...old, ...updates };
-        writeJson(STAFF_FILE, staff);
+        if (!writeJson(STAFF_FILE, staff)) {
+            return res.status(500).json({ success: false, error: '파일 저장 실패' });
+        }
         addLog(actor, '직원수정', staff[idx].name, detail);
         res.json({ success: true });
     } else res.status(404).json({ success: false });
@@ -328,8 +333,10 @@ app.post('/api/staff/exception', async (req, res) => {
         if (!target.exceptions) target.exceptions = {};
         if (type === 'delete') delete target.exceptions[date];
         else target.exceptions[date] = { type, time };
-        
-        writeJson(STAFF_FILE, staff);
+
+        if (!writeJson(STAFF_FILE, staff)) {
+            return res.status(500).json({ success: false, error: '파일 저장 실패' });
+        }
         const exceptionLabel = type === 'off'
             ? `임시 휴무 (${date})`
             : type === 'work'
@@ -408,11 +415,13 @@ app.get('/api/accounting', (req, res) => {
 app.post('/api/accounting/daily', (req, res) => {
     const { date, data: dayData, actor } = req.body; // staff.js 변수명에 맞게 수정
     let accData = readJson(ACCOUNTING_FILE, { monthly: {}, daily: {} });
-    
+
     if (!accData.daily) accData.daily = {};
     accData.daily[date] = dayData;
-    
-    writeJson(ACCOUNTING_FILE, accData);
+
+    if (!writeJson(ACCOUNTING_FILE, accData)) {
+        return res.status(500).json({ success: false, error: '파일 저장 실패' });
+    }
     addLog(actor, '일매출', date, '저장됨');
     res.json({ success: true });
 });
@@ -421,11 +430,13 @@ app.post('/api/accounting/daily', (req, res) => {
 app.put('/api/accounting/monthly', (req, res) => {
     const { month, data: monthData, actor } = req.body; // staff.js 변수명에 맞게 수정
     let accData = readJson(ACCOUNTING_FILE, { monthly: {}, daily: {} });
-    
+
     if (!accData.monthly) accData.monthly = {};
     accData.monthly[month] = monthData;
-    
-    writeJson(ACCOUNTING_FILE, accData);
+
+    if (!writeJson(ACCOUNTING_FILE, accData)) {
+        return res.status(500).json({ success: false, error: '파일 저장 실패' });
+    }
     addLog(actor, '월고정비', month, '저장됨');
     res.json({ success: true });
 });
@@ -440,7 +451,9 @@ app.get('/api/inventory/items', (req, res) => {
 });
 app.post('/api/inventory/items', (req, res) => {
     const { items } = req.body;
-    writeJson(INVENTORY_ITEMS_FILE, items);
+    if (!writeJson(INVENTORY_ITEMS_FILE, items)) {
+        return res.status(500).json({ success: false, error: '파일 저장 실패' });
+    }
     res.json({ success: true });
 });
 
@@ -553,7 +566,9 @@ app.get('/api/inventory/daily-usage', (req, res) => {
 });
 app.post('/api/inventory/daily-usage', (req, res) => {
     const { usage } = req.body;
-    writeJson(INVENTORY_USAGE_FILE, usage);
+    if (!writeJson(INVENTORY_USAGE_FILE, usage)) {
+        return res.status(500).json({ success: false, error: '파일 저장 실패' });
+    }
     res.json({ success: true });
 });
 
@@ -566,13 +581,15 @@ app.get('/api/inventory/last-orders', (req, res) => {
 app.post('/api/inventory/orders', (req, res) => {
     const orderRecord = req.body;
     let orders = readJson(INVENTORY_ORDERS_FILE, []);
-    
+
     const existingIndex = orders.findIndex(o => o.date === orderRecord.date);
     if (existingIndex !== -1) orders[existingIndex] = orderRecord;
     else orders.push(orderRecord);
-    
-    writeJson(INVENTORY_ORDERS_FILE, orders);
-    
+
+    if (!writeJson(INVENTORY_ORDERS_FILE, orders)) {
+        return res.status(500).json({ success: false, error: '발주 저장 실패' });
+    }
+
     // 마지막 발주일 업데이트
     let lastOrders = readJson(INVENTORY_LAST_ORDERS_FILE, {});
     const today = orderRecord.date;
@@ -582,7 +599,9 @@ app.post('/api/inventory/orders', (req, res) => {
             lastOrders[itemKey] = today;
         });
     }
-    writeJson(INVENTORY_LAST_ORDERS_FILE, lastOrders);
+    if (!writeJson(INVENTORY_LAST_ORDERS_FILE, lastOrders)) {
+        return res.status(500).json({ success: false, error: '발주일 저장 실패' });
+    }
 
     res.json({ success: true });
 
@@ -614,7 +633,9 @@ app.get('/api/inventory/holidays', (req, res) => {
 });
 app.post('/api/inventory/holidays', (req, res) => {
     const { holidays } = req.body;
-    writeJson(INVENTORY_HOLIDAYS_FILE, holidays);
+    if (!writeJson(INVENTORY_HOLIDAYS_FILE, holidays)) {
+        return res.status(500).json({ success: false, error: '파일 저장 실패' });
+    }
     res.json({ success: true });
 });
 

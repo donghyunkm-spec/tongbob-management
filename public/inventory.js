@@ -130,6 +130,18 @@ async function loadInventoryDataAll() {
                 });
             });
 
+            // 창고 전용 품목 키 집합 (locations === ['창고']인 품목들)
+            // 이 품목들은 창고 탭에서 입력하지만 저장은 1루_/3루_ 키로 됨.
+            // → 1루/3루의 meta_last_save 가 아닌 창고의 meta_last_save 로 로드 여부 결정해야 함.
+            const warehouseOnlyKeys = new Set();
+            Object.keys(items).forEach(vendor => {
+                (items[vendor] || []).forEach(item => {
+                    if (item.locations && item.locations.length === 1 && item.locations[0] === '창고') {
+                        warehouseOnlyKeys.add(`${vendor}_${item.품목명}`);
+                    }
+                });
+            });
+
             // 각 위치별로 inventory에 로드
             ['1루', '3루', '창고'].forEach(loc => {
                 const lastSaveDate = lastSavedInventory[`meta_last_save_${loc}`];
@@ -161,6 +173,22 @@ async function loadInventoryDataAll() {
                     });
                 }
             });
+
+            // [추가] 창고 전용 품목의 1루_/3루_ 값 보강 로드
+            // 창고 저장 시 함께 기록되는 1루_/3루_ 값이, 1루/3루의 meta_last_save 가
+            // 오늘이 아니라는 이유로 누락되어 입력칸이 비는 버그 방지.
+            const warehouseLastSave = lastSavedInventory['meta_last_save_창고'];
+            if (warehouseLastSave === todayStr) {
+                ['1루', '3루'].forEach(loc => {
+                    const prefix = `${loc}_`;
+                    warehouseOnlyKeys.forEach(rawKey => {
+                        const fullKey = `${prefix}${rawKey}`;
+                        if (lastSavedInventory[fullKey] !== undefined) {
+                            inventory[fullKey] = lastSavedInventory[fullKey];
+                        }
+                    });
+                });
+            }
         }
 
         if(usageData.success) dailyUsage = usageData.usage;
