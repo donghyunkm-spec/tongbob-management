@@ -128,8 +128,13 @@ function renderManageList() {
 
     const isAdmin = currentUser && currentUser.role === 'admin';
 
+    // 퇴사일이 지난 직원은 관리 목록에서 제외 (당일까지는 표시, 다음날부터 숨김)
+    const kstToday = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
+
     // 정렬: 1. 월급 직원 먼저(금액 많은 순), 2. 전문분야 있는 직원
-    const sortedStaff = [...staffList].sort((a, b) => {
+    const sortedStaff = [...staffList]
+        .filter(s => !s.endDate || s.endDate >= kstToday)
+        .sort((a, b) => {
         // 1순위: 월급 직원 먼저
         const aIsMonthly = a.salaryType === 'monthly' ? 1 : 0;
         const bIsMonthly = b.salaryType === 'monthly' ? 1 : 0;
@@ -226,7 +231,9 @@ async function loadDeletedStaff() {
         const res = await fetch(`/api/staff?includeDeleted=true&role=${currentUser?.role || 'viewer'}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
-        const deletedStaff = json.data.filter(s => s.deleted);
+        // 소프트 삭제된 직원 + 퇴사일이 지난 직원 모두 포함
+        const kstToday = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const deletedStaff = json.data.filter(s => s.deleted || (s.endDate && s.endDate < kstToday));
         renderDeletedStaffList(deletedStaff);
     } catch(e) {
         console.error('삭제된 직원 로드 실패:', e);
@@ -248,17 +255,29 @@ function renderDeletedStaffList(deletedStaff) {
     }
 
     deletedStaff.forEach(s => {
-        const deletedDate = new Date(s.deletedAt);
         const now = new Date();
-        const daysPassed = Math.floor((now - deletedDate) / (1000 * 60 * 60 * 24));
-        const canPermanentDelete = daysPassed >= 30;
+        let deletedInfo;
 
-        const deletedInfo = `
-            <div style="font-size:12px; color:#999; margin-top:5px;">
-                🗑️ 삭제일: ${deletedDate.toLocaleDateString('ko-KR')} (${daysPassed}일 경과)
-                <br/>👤 삭제자: ${s.deletedBy || '알 수 없음'}
-            </div>
-        `;
+        if (s.deleted) {
+            // 소프트 삭제된 직원
+            const deletedDate = new Date(s.deletedAt);
+            const daysPassed = Math.floor((now - deletedDate) / (1000 * 60 * 60 * 24));
+            deletedInfo = `
+                <div style="font-size:12px; color:#999; margin-top:5px;">
+                    🗑️ 삭제일: ${deletedDate.toLocaleDateString('ko-KR')} (${daysPassed}일 경과)
+                    <br/>👤 삭제자: ${s.deletedBy || '알 수 없음'}
+                </div>
+            `;
+        } else {
+            // 퇴사일이 지나서 자동 분류된 직원
+            const endDateObj = new Date(s.endDate + 'T00:00:00');
+            const daysPassed = Math.floor((now - endDateObj) / (1000 * 60 * 60 * 24));
+            deletedInfo = `
+                <div style="font-size:12px; color:#999; margin-top:5px;">
+                    🏃 퇴사일: ${s.endDate} (${daysPassed}일 경과)
+                </div>
+            `;
+        }
 
         const roles = s.roles || ['일반'];
         const rolesBadge = roles.map(r => {

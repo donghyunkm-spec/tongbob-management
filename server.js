@@ -302,8 +302,15 @@ app.post('/api/staff/:id/restore', (req, res) => {
     let staff = readJson(STAFF_FILE, []);
     const target = staff.find(s => s.id == req.params.id);
     
-    if (target && target.deleted) {
-        // 복구 처리
+    if (!target) {
+        return res.status(404).json({ success: false, message: '복구할 직원을 찾을 수 없습니다.' });
+    }
+
+    const kstToday = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const isExpiredEndDate = !target.deleted && target.endDate && target.endDate < kstToday;
+
+    if (target.deleted) {
+        // 소프트 삭제된 직원 복구
         target.deleted = false;
         delete target.deletedAt;
         delete target.deletedBy;
@@ -312,15 +319,27 @@ app.post('/api/staff/:id/restore', (req, res) => {
             delete target.endDate;
             delete target.autoEndDate;
         }
-        
+
         if (writeJson(STAFF_FILE, staff)) {
             addLog(actor || 'Unknown', '직원복구', target.name, '복직 처리');
             res.json({ success: true });
         } else {
             res.status(500).json({ success: false });
         }
+    } else if (isExpiredEndDate) {
+        // 퇴사일이 지나서 자동 분류된 직원 → 퇴사일 비우고 복귀
+        const prevEndDate = target.endDate;
+        delete target.endDate;
+        delete target.autoEndDate;
+
+        if (writeJson(STAFF_FILE, staff)) {
+            addLog(actor || 'Unknown', '직원복구', target.name, `퇴사일(${prevEndDate}) 해제`);
+            res.json({ success: true });
+        } else {
+            res.status(500).json({ success: false });
+        }
     } else {
-        res.status(404).json({ success: false, message: '복구할 직원을 찾을 수 없습니다.' });
+        res.status(400).json({ success: false, message: '복구 대상이 아닙니다.' });
     }
 });
 
