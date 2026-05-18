@@ -199,11 +199,14 @@ function renderManageList() {
             return `<span style="background:${roleColors[r] || '#999'}; color:white; padding:2px 6px; border-radius:3px; font-size:11px; margin-right:3px;">${r}</span>`;
         }).join('');
 
+        const idCardBadge = (s.idCardIssued === false) ?
+            `<span style="background:#ff7043; color:white; padding:2px 6px; border-radius:3px; font-size:11px; margin-left:6px;">🪪 ID 미발급</span>` : '';
+
         list.innerHTML += `
             <div class="reservation-item">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <div>
-                        <strong style="font-size:16px;">${s.name}</strong>
+                        <strong style="font-size:16px;">${s.name}</strong>${idCardBadge}
                         <div style="font-size:13px; margin-top:5px;">${rolesBadge}</div>
                         <div style="font-size:12px; margin-top:5px; color:#555;">${scheduleStr}</div>
                         ${salaryInfo}
@@ -375,6 +378,10 @@ function openAddModal() {
     document.getElementById('role-삼겹살').checked = false;
     document.getElementById('role-국수').checked = false;
 
+    // ID 카드 발급 기본값: 발급 완료
+    const idCardAdd = document.getElementById('staffIdCardIssued');
+    if (idCardAdd) idCardAdd.checked = true;
+
     // 자동 복사 이벤트 설정
     setupDayTimeAutoFill();
 
@@ -434,8 +441,10 @@ async function saveStaff() {
         return;
     }
 
+    const idCardIssued = document.getElementById('staffIdCardIssued')?.checked !== false;
+
     const staffData = {
-        name, position, salaryType, salary, workDays, time, dayTimes, startDate, endDate, roles
+        name, position, salaryType, salary, workDays, time, dayTimes, startDate, endDate, roles, idCardIssued
     };
 
     try {
@@ -538,6 +547,10 @@ function openEditModal(id) {
     document.getElementById('edit-role-삼겹살').checked = roles.includes('삼겹살');
     document.getElementById('edit-role-국수').checked = roles.includes('국수');
 
+    // ID 카드 발급 여부 (기존 직원은 필드가 없으면 발급된 것으로 간주)
+    const idCardEdit = document.getElementById('editIdCardIssued');
+    if (idCardEdit) idCardEdit.checked = target.idCardIssued !== false;
+
     document.getElementById('editModalOverlay').style.display = 'flex';
 }
 
@@ -605,7 +618,8 @@ async function saveStaffEdit() {
     }
 
     const scheduleChangeDate = document.getElementById('editScheduleChangeDate').value || null;
-    const updates = { name, workDays, time, dayTimes, startDate, endDate, roles };
+    const idCardIssued = document.getElementById('editIdCardIssued')?.checked !== false;
+    const updates = { name, workDays, time, dayTimes, startDate, endDate, roles, idCardIssued };
 
     if (currentUser && currentUser.role === 'admin') {
         updates.salaryType = salaryType;

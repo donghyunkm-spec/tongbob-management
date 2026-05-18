@@ -281,6 +281,13 @@
                 <label>퇴사일 (선택)</label>
                 <input type="date" id="staffEndDate" style="width:100%; padding:8px;">
             </div>
+            <div class="modal-field">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="checkbox" id="staffIdCardIssued" checked style="width:18px; height:18px;">
+                    <span>🪪 ID 카드 발급 완료</span>
+                </label>
+                <p style="font-size:11px; color:#666; margin-top:3px;">* 단기 알바 등 ID 카드 미발급 시 체크 해제</p>
+            </div>
             <div class="modal-actions">
                 <button class="btn" onclick="saveStaff()" style="flex:1; background:#2196F3;">저장</button>
                 <button class="btn" onclick="closeStaffModal()" style="flex:1; background:#666;">취소</button>
@@ -541,6 +548,13 @@
                         <label style="font-size:12px;">퇴사일</label>
                         <input type="date" id="editEndDate" style="width:100%; padding:5px;">
                     </div>
+                </div>
+                <div style="margin-top:10px; padding-top:10px; border-top:1px dashed #ffb74d;">
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px;">
+                        <input type="checkbox" id="editIdCardIssued" style="width:18px; height:18px;">
+                        <span>🪪 ID 카드 발급 완료</span>
+                    </label>
+                    <p style="font-size:10px; color:#666; margin:3px 0 0 26px;">* 단기 알바 등 ID 카드 미발급 시 체크 해제</p>
                 </div>
             </div>
             <div class="modal-field">

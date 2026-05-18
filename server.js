@@ -251,6 +251,8 @@ app.put('/api/staff/:id', (req, res) => {
             changed.push(`급여지급일: ${old.paidUntil||'없음'}→${updates.paidUntil||'없음'}`);
         if (updates.memo !== undefined && (updates.memo || '') !== (old.memo || ''))
             changed.push(`메모 변경`);
+        if (updates.idCardIssued !== undefined && (updates.idCardIssued !== false) !== (old.idCardIssued !== false))
+            changed.push(`ID카드: ${old.idCardIssued === false ? '미발급' : '발급'}→${updates.idCardIssued === false ? '미발급' : '발급'}`);
         if (updates.roles !== undefined && JSON.stringify((updates.roles||[]).slice().sort()) !== JSON.stringify((old.roles||[]).slice().sort()))
             changed.push(`역할: ${(old.roles||[]).join(',')||'없음'}→${(updates.roles||[]).join(',')||'없음'}`);
         if (updates.dayTimes !== undefined && JSON.stringify(updates.dayTimes) !== JSON.stringify(old.dayTimes||{}))
