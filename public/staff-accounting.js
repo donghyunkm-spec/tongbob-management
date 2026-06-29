@@ -1329,12 +1329,12 @@ function renderTrendAnalysis() {
     }
 
     // 1. 매출 추이
-    document.getElementById('trendSalesChart').innerHTML = buildLineChart(labels, [
+    document.getElementById('trendSalesChart').innerHTML = buildLineChart('trendSalesChart', labels, [
         { name: '매출', color: '#1565c0', data: rows.map(r => r.sales) }
     ], { yFormat: 'won' });
 
     // 2. 주요 비용 추이 (금액)
-    document.getElementById('trendCostChart').innerHTML = buildLineChart(labels, [
+    document.getElementById('trendCostChart').innerHTML = buildLineChart('trendCostChart', labels, [
         { name: '고센유통',  color: '#8d6e63', data: rows.map(r => r.food) },
         { name: '고기',      color: '#ef5350', data: rows.map(r => r.meat) },
         { name: '인건비',    color: '#7e57c2', data: rows.map(r => r.staff) },
@@ -1343,7 +1343,7 @@ function renderTrendAnalysis() {
 
     // 3. 매출 대비 비율 추이 (%)
     const pct = (v, s) => s > 0 ? (v / s * 100) : 0;
-    document.getElementById('trendRatioChart').innerHTML = buildLineChart(labels, [
+    document.getElementById('trendRatioChart').innerHTML = buildLineChart('trendRatioChart', labels, [
         { name: '고센유통',  color: '#8d6e63', data: rows.map(r => pct(r.food, r.sales)) },
         { name: '고기',      color: '#ef5350', data: rows.map(r => pct(r.meat, r.sales)) },
         { name: '인건비',    color: '#7e57c2', data: rows.map(r => pct(r.staff, r.sales)) },
@@ -1376,8 +1376,11 @@ function niceCeil(v) {
     return nf * base;
 }
 
-// SVG 선형 차트 생성 (다중 시리즈)
-function buildLineChart(labels, series, opts) {
+// 차트별 데이터 저장소 (호버 툴팁용)
+let trendCharts = {};
+
+// SVG 선형 차트 생성 (다중 시리즈, 호버 툴팁 포함)
+function buildLineChart(chartId, labels, series, opts) {
     opts = opts || {};
     const n = labels.length;
     const W = Math.max(560, n * 56 + 90);
@@ -1395,6 +1398,20 @@ function buildLineChart(labels, series, opts) {
     const xOf = i => n <= 1 ? padL + plotW / 2 : padL + plotW * i / (n - 1);
     const yOf = v => padT + plotH - plotH * (v / niceMax);
     const fmtY = v => opts.yFormat === 'pct' ? (Math.round(v * 10) / 10) + '%' : formatWonShort(v);
+
+    // 호버용 좌표/데이터 저장
+    const xs = labels.map((_, i) => xOf(i));
+    trendCharts[chartId] = {
+        labels: labels,
+        yFormat: opts.yFormat,
+        xs: xs,
+        series: series.map(s => ({
+            name: s.name, color: s.color,
+            vals: s.data.slice(),
+            ys: s.data.map(v => yOf(v))
+        })),
+        plotTop: padT, plotBottom: padT + plotH
+    };
 
     const steps = 4;
     let grid = '';
@@ -1419,13 +1436,100 @@ function buildLineChart(labels, series, opts) {
         });
     });
 
-    let legend = '<div style="display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin-top:6px; font-size:12px;">';
+    // 호버 하이라이트 요소 (가이드 선 + 시리즈별 포커스 점)
+    let focus = `<line id="${chartId}-guide" x1="0" y1="${padT}" x2="0" y2="${(padT + plotH).toFixed(1)}" stroke="#bbb" stroke-width="1" stroke-dasharray="4 3" style="visibility:hidden; pointer-events:none;"/>`;
+    series.forEach((s, si) => {
+        focus += `<circle id="${chartId}-f${si}" r="5" fill="${s.color}" stroke="#fff" stroke-width="2" style="visibility:hidden; pointer-events:none;"/>`;
+    });
+
+    // 호버 감지용 투명 영역 (월별 세로 밴드)
+    let hit = '';
+    labels.forEach((_, i) => {
+        const left = i === 0 ? padL : (xs[i - 1] + xs[i]) / 2;
+        const right = i === n - 1 ? (W - padR) : (xs[i] + xs[i + 1]) / 2;
+        hit += `<rect x="${left.toFixed(1)}" y="${padT}" width="${(right - left).toFixed(1)}" height="${plotH}" fill="transparent" `
+             + `onmousemove="trendHover(event,'${chartId}',${i})" onmouseleave="trendHoverOut('${chartId}')"`
+             + ` ontouchstart="trendHover(event,'${chartId}',${i})"/>`;
+    });
+
+    // 범례 (세로축 근처, 상단 좌측 정렬)
+    let legend = `<div style="display:flex; flex-wrap:wrap; gap:10px 14px; padding-left:${padL - 8}px; margin-bottom:2px; font-size:12px;">`;
     series.forEach(s => {
         legend += `<span style="display:inline-flex; align-items:center; gap:4px;"><span style="width:14px; height:3px; background:${s.color}; display:inline-block; border-radius:2px;"></span>${s.name}</span>`;
     });
     legend += '</div>';
 
-    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:${W}px; max-width:100%; height:auto;" preserveAspectRatio="xMidYMid meet">${grid}${lines}${xlabels}</svg>${legend}`;
+    const svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:${W}px; max-width:100%; height:auto;" preserveAspectRatio="xMidYMid meet">${grid}${lines}${focus}${xlabels}${hit}</svg>`;
+    const tip = `<div id="${chartId}-tip" style="position:absolute; display:none; pointer-events:none; background:rgba(33,33,33,0.92); color:#fff; padding:7px 9px; border-radius:6px; font-size:11px; line-height:1.5; white-space:nowrap; box-shadow:0 2px 8px rgba(0,0,0,0.25); z-index:50;"></div>`;
+
+    return `<div id="${chartId}-wrap" style="position:relative;">${legend}${svg}${tip}</div>`;
+}
+
+// 호버 시 툴팁 표시 + 가이드/포커스 점 강조
+function trendHover(event, chartId, i) {
+    const c = trendCharts[chartId];
+    if (!c) return;
+    const x = c.xs[i];
+
+    // 가이드 세로선
+    const guide = document.getElementById(chartId + '-guide');
+    if (guide) {
+        guide.setAttribute('x1', x);
+        guide.setAttribute('x2', x);
+        guide.style.visibility = 'visible';
+    }
+
+    // 시리즈별 포커스 점
+    c.series.forEach((s, si) => {
+        const dot = document.getElementById(chartId + '-f' + si);
+        if (dot) {
+            dot.setAttribute('cx', x);
+            dot.setAttribute('cy', s.ys[i]);
+            dot.style.visibility = 'visible';
+        }
+    });
+
+    // 툴팁 내용
+    const fmt = c.yFormat === 'pct'
+        ? (v => (Math.round(v * 10) / 10).toFixed(1) + '%')
+        : (v => Math.round(v).toLocaleString() + '원');
+    let html = `<div style="font-weight:bold; margin-bottom:3px;">${c.labels[i]}</div>`;
+    c.series.forEach(s => {
+        html += `<div style="display:flex; align-items:center; gap:5px;">`
+              + `<span style="width:9px; height:9px; border-radius:50%; background:${s.color}; display:inline-block;"></span>`
+              + `<span>${s.name}</span><span style="margin-left:auto; font-weight:bold; padding-left:10px;">${fmt(s.vals[i])}</span></div>`;
+    });
+
+    const tip = document.getElementById(chartId + '-tip');
+    const wrap = document.getElementById(chartId + '-wrap');
+    if (!tip || !wrap) return;
+    tip.innerHTML = html;
+    tip.style.display = 'block';
+
+    // 커서 기준 위치 (wrap 좌표계)
+    const rect = wrap.getBoundingClientRect();
+    const px = (event.touches ? event.touches[0].clientX : event.clientX) - rect.left;
+    const py = (event.touches ? event.touches[0].clientY : event.clientY) - rect.top;
+    let left = px + 14;
+    if (left + tip.offsetWidth > wrap.clientWidth) left = px - tip.offsetWidth - 14;
+    if (left < 0) left = 4;
+    let top = py - tip.offsetHeight - 12;
+    if (top < 0) top = py + 16;
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+}
+
+function trendHoverOut(chartId) {
+    const c = trendCharts[chartId];
+    if (!c) return;
+    const guide = document.getElementById(chartId + '-guide');
+    if (guide) guide.style.visibility = 'hidden';
+    c.series.forEach((s, si) => {
+        const dot = document.getElementById(chartId + '-f' + si);
+        if (dot) dot.style.visibility = 'hidden';
+    });
+    const tip = document.getElementById(chartId + '-tip');
+    if (tip) tip.style.display = 'none';
 }
 
 function renderTrendTable(rows) {
