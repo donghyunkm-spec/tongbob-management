@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>통빱 매장 관리 시스템</title>
-    <link rel="stylesheet" href="style.css?v=20260401f">
+    <link rel="stylesheet" href="style.css?v=20260629a">
     <style>
         /* [공통] 기본 스타일 */
         body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; margin: 0; padding: 10px; }
@@ -844,11 +844,12 @@
                 <button onclick="changeAccMonth(1)" class="nav-btn" style="border:1px solid #ddd; padding:5px 10px; background:white; border-radius:5px;">익월 ▶</button>
             </div>
     
-            <div class="tabs sub-tabs" style="grid-template-columns: repeat(6, 1fr); margin-bottom: 15px;">
+            <div class="tabs sub-tabs" style="grid-template-columns: repeat(7, 1fr); margin-bottom: 15px;">
                 <button class="tab active" onclick="switchAccSubTab('acc-daily', this)">일일입력</button>
                 <button class="tab" id="tab-history" onclick="switchAccSubTab('acc-history', this)">입력내역</button>
                 <button class="tab tab-prediction" id="tab-prediction" onclick="switchAccSubTab('acc-prediction', this)">예상순익</button>
                 <button class="tab" id="tab-dashboard" onclick="switchAccSubTab('acc-dashboard', this)">월간분석</button>
+                <button class="tab tab-trend" id="tab-trend" onclick="switchAccSubTab('acc-trend', this)">추이분석</button>
                 <button class="tab" id="tab-monthly" onclick="switchAccSubTab('acc-monthly', this)">고정비</button>
                 <button class="tab tab-logs" id="tab-logs" onclick="switchAccSubTab('acc-logs', this)">변경이력</button>
             </div>
@@ -983,7 +984,38 @@
                     <div id="dashDepositEstimate"></div>
                 </div>
             </div>
-    
+
+            <div id="acc-trend" class="acc-sub-content">
+                <div class="accounting-card" style="background:#f8f9fa;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                        <h3 style="margin:0;">📈 월별 추이분석</h3>
+                        <div style="display:flex; gap:5px;">
+                            <button onclick="setTrendRange(6)" id="trendRange6" class="store-select-btn" style="padding:6px 12px; border:2px solid #00796b; background:white; color:#00796b; border-radius:5px; font-weight:bold; cursor:pointer; font-size:12px;">최근 6개월</button>
+                            <button onclick="setTrendRange(12)" id="trendRange12" class="store-select-btn active" style="padding:6px 12px; border:2px solid #00796b; background:#00796b; color:white; border-radius:5px; font-weight:bold; cursor:pointer; font-size:12px;">최근 12개월</button>
+                        </div>
+                    </div>
+                    <p style="font-size:12px; color:#666; margin:8px 0 0 0;">* 전체(1루+3루) 기준. 수수료는 매출 비례로 일정하여 제외했습니다.</p>
+                </div>
+                <div class="accounting-card">
+                    <h4 style="margin:0 0 5px 0; color:#1565c0;">💰 매출 추이</h4>
+                    <div id="trendSalesChart" style="overflow-x:auto;"></div>
+                </div>
+                <div class="accounting-card">
+                    <h4 style="margin:0 0 5px 0; color:#c62828;">📦 주요 비용 추이</h4>
+                    <div style="font-size:11px; color:#888; margin-bottom:5px;">고센유통 · 고기 · 인건비 · 고정비총계 (금액)</div>
+                    <div id="trendCostChart" style="overflow-x:auto;"></div>
+                </div>
+                <div class="accounting-card">
+                    <h4 style="margin:0 0 5px 0; color:#00796b;">📊 매출 대비 비율 추이 (%)</h4>
+                    <div style="font-size:11px; color:#888; margin-bottom:5px;">매출 대비 각 비용 비중 — 인건비/매입이 적절한지 확인</div>
+                    <div id="trendRatioChart" style="overflow-x:auto;"></div>
+                </div>
+                <div class="accounting-card">
+                    <h4 style="margin:0 0 10px 0;">📋 월별 상세</h4>
+                    <div id="trendTable" style="overflow-x:auto;"></div>
+                </div>
+            </div>
+
             <div id="acc-monthly" class="acc-sub-content">
                 <div class="accounting-card">
                     <h4 style="color:#00796b; margin-bottom:10px;">🗓️ <span id="fixCostTitle"></span> 고정 지출 설정</h4>
@@ -1294,16 +1326,16 @@
     </script>
 
     <!-- 순서 중요: 전역변수 → 인증 → 직원관리 → 가계부 → 근무표 -->
-    <script src="staff.js?v=20260401f"></script>
-    <script src="staff-auth.js?v=20260401f"></script>
-    <script src="staff-employee.js?v=20260401f"></script>
-    <script src="staff-accounting.js?v=20260401f"></script>
-    <script src="staff-schedule.js?v=20260401f"></script>
+    <script src="staff.js?v=20260629a"></script>
+    <script src="staff-auth.js?v=20260629a"></script>
+    <script src="staff-employee.js?v=20260629a"></script>
+    <script src="staff-accounting.js?v=20260629a"></script>
+    <script src="staff-schedule.js?v=20260629a"></script>
     <!-- 재고관리: 전역변수/초기화 → 입력 → 확인/발주 → 품목관리 → 기타 -->
-    <script src="inventory.js?v=20260401f"></script>
-    <script src="inventory-input.js?v=20260401f"></script>
-    <script src="inventory-check.js?v=20260401f"></script>
-    <script src="inventory-items.js?v=20260401f"></script>
-    <script src="inventory-misc.js?v=20260401f"></script>
+    <script src="inventory.js?v=20260629a"></script>
+    <script src="inventory-input.js?v=20260629a"></script>
+    <script src="inventory-check.js?v=20260629a"></script>
+    <script src="inventory-items.js?v=20260629a"></script>
+    <script src="inventory-misc.js?v=20260629a"></script>
 </body>
 </html>

@@ -116,6 +116,7 @@ function updateDashboardUI() {
     else if (activeSubTab.id === 'acc-history') loadHistoryTable();
     else if (activeSubTab.id === 'acc-prediction') renderPredictionStats();
     else if (activeSubTab.id === 'acc-dashboard') renderDashboardStats();
+    else if (activeSubTab.id === 'acc-trend') renderTrendAnalysis();
     else if (activeSubTab.id === 'acc-monthly') loadMonthlyForm();
 }
 
@@ -1256,6 +1257,210 @@ function renderDashboardCharts(sales, totalCost, mData, staffCost, variableCostT
         }
     }
     renderCostList('costBreakdownList', mData, staffCost, 1.0, sales.total, totalCost, monthStr, calculatedCosts);
+}
+
+// ==========================================
+// 추이분석 (월별 매출/비용 추세)
+// ==========================================
+let trendRangeMonths = 12;
+
+function setTrendRange(n) {
+    trendRangeMonths = n;
+    [6, 12].forEach(r => {
+        const btn = document.getElementById('trendRange' + r);
+        if (!btn) return;
+        const active = (r === n);
+        btn.classList.toggle('active', active);
+        btn.style.background = active ? '#00796b' : 'white';
+        btn.style.color = active ? 'white' : '#00796b';
+    });
+    renderTrendAnalysis();
+}
+
+// 고정비총계 (1루+3루+레거시 합산, 수수료 제외)
+function computeFixedTotal(m) {
+    if (!m) return 0;
+    const fields = ['internet','water','electricity','cleaning','operMgmt','cctv',
+                    'bizCard','cardFee','loanRepay','etc_fixed','insurance','bizIncomeTax','taxAccountant'];
+    let sum = 0;
+    fields.forEach(k => { sum += (m[k+'1']||0) + (m[k+'3']||0) + (m[k]||0); });
+    return sum;
+}
+
+// 데이터가 존재하는 월 목록 (최근 trendRangeMonths개)
+function getTrendMonths() {
+    const set = new Set();
+    if (accountingData.daily) Object.keys(accountingData.daily).forEach(d => { if (d.length >= 7) set.add(d.slice(0,7)); });
+    if (accountingData.monthly) Object.keys(accountingData.monthly).forEach(m => set.add(m));
+    const months = Array.from(set).filter(x => /^\d{4}-\d{2}$/.test(x)).sort();
+    return months.slice(-trendRangeMonths);
+}
+
+function renderTrendAnalysis() {
+    const months = getTrendMonths();
+
+    const rows = months.map(monthStr => {
+        let sales = 0, food = 0, meat = 0;
+        if (accountingData.daily) {
+            Object.keys(accountingData.daily).forEach(date => {
+                if (!date.startsWith(monthStr)) return;
+                const d = accountingData.daily[date];
+                sales += (d.sales || 0);
+                food  += (d.food || 0);
+                meat  += (d.meat || 0);
+            });
+        }
+        const staff = getEstimatedStaffCost(monthStr);
+        const mData = (accountingData.monthly && accountingData.monthly[monthStr]) ? accountingData.monthly[monthStr] : {};
+        const fixed = computeFixedTotal(mData);
+        return { monthStr, sales, food, meat, staff, fixed };
+    });
+
+    const labels = months.map(m => parseInt(m.slice(5,7), 10) + '월');
+
+    const noData = rows.length === 0 ||
+        rows.every(r => !r.sales && !r.food && !r.meat && !r.staff && !r.fixed);
+    if (noData) {
+        ['trendSalesChart','trendCostChart','trendRatioChart','trendTable'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = '<div style="text-align:center; color:#999; padding:20px;">데이터가 없습니다.</div>';
+        });
+        return;
+    }
+
+    // 1. 매출 추이
+    document.getElementById('trendSalesChart').innerHTML = buildLineChart(labels, [
+        { name: '매출', color: '#1565c0', data: rows.map(r => r.sales) }
+    ], { yFormat: 'won' });
+
+    // 2. 주요 비용 추이 (금액)
+    document.getElementById('trendCostChart').innerHTML = buildLineChart(labels, [
+        { name: '고센유통',  color: '#8d6e63', data: rows.map(r => r.food) },
+        { name: '고기',      color: '#ef5350', data: rows.map(r => r.meat) },
+        { name: '인건비',    color: '#7e57c2', data: rows.map(r => r.staff) },
+        { name: '고정비총계', color: '#26a69a', data: rows.map(r => r.fixed) }
+    ], { yFormat: 'won' });
+
+    // 3. 매출 대비 비율 추이 (%)
+    const pct = (v, s) => s > 0 ? (v / s * 100) : 0;
+    document.getElementById('trendRatioChart').innerHTML = buildLineChart(labels, [
+        { name: '고센유통',  color: '#8d6e63', data: rows.map(r => pct(r.food, r.sales)) },
+        { name: '고기',      color: '#ef5350', data: rows.map(r => pct(r.meat, r.sales)) },
+        { name: '인건비',    color: '#7e57c2', data: rows.map(r => pct(r.staff, r.sales)) },
+        { name: '고정비총계', color: '#26a69a', data: rows.map(r => pct(r.fixed, r.sales)) }
+    ], { yFormat: 'pct' });
+
+    // 4. 월별 상세 표
+    renderTrendTable(rows);
+}
+
+// 금액 축약 표기 (만/억)
+function formatWonShort(v) {
+    if (v >= 100000000) return (v / 100000000).toFixed(v % 100000000 === 0 ? 0 : 1) + '억';
+    if (v >= 10000) return Math.round(v / 10000).toLocaleString() + '만';
+    return Math.round(v).toLocaleString();
+}
+
+// 축 눈금용 올림값
+function niceCeil(v) {
+    if (v <= 0) return 1;
+    const exp = Math.floor(Math.log10(v));
+    const base = Math.pow(10, exp);
+    const f = v / base;
+    let nf;
+    if (f <= 1) nf = 1;
+    else if (f <= 2) nf = 2;
+    else if (f <= 2.5) nf = 2.5;
+    else if (f <= 5) nf = 5;
+    else nf = 10;
+    return nf * base;
+}
+
+// SVG 선형 차트 생성 (다중 시리즈)
+function buildLineChart(labels, series, opts) {
+    opts = opts || {};
+    const n = labels.length;
+    const W = Math.max(560, n * 56 + 90);
+    const H = 280;
+    const padL = 56, padR = 16, padT = 16, padB = 34;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+
+    let maxV = 0;
+    series.forEach(s => s.data.forEach(v => { if (v > maxV) maxV = v; }));
+    if (opts.yFormat === 'pct') maxV = Math.max(maxV, 10);
+    if (maxV <= 0) maxV = 1;
+    const niceMax = niceCeil(maxV);
+
+    const xOf = i => n <= 1 ? padL + plotW / 2 : padL + plotW * i / (n - 1);
+    const yOf = v => padT + plotH - plotH * (v / niceMax);
+    const fmtY = v => opts.yFormat === 'pct' ? (Math.round(v * 10) / 10) + '%' : formatWonShort(v);
+
+    const steps = 4;
+    let grid = '';
+    for (let i = 0; i <= steps; i++) {
+        const val = niceMax * i / steps;
+        const y = yOf(val);
+        grid += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="#eee" stroke-width="1"/>`;
+        grid += `<text x="${padL - 6}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-size="10" fill="#999">${fmtY(val)}</text>`;
+    }
+
+    let xlabels = '';
+    labels.forEach((lb, i) => {
+        xlabels += `<text x="${xOf(i).toFixed(1)}" y="${H - padB + 16}" text-anchor="middle" font-size="10" fill="#666">${lb}</text>`;
+    });
+
+    let lines = '';
+    series.forEach(s => {
+        const pts = s.data.map((v, i) => `${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`).join(' ');
+        lines += `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+        s.data.forEach((v, i) => {
+            lines += `<circle cx="${xOf(i).toFixed(1)}" cy="${yOf(v).toFixed(1)}" r="3" fill="#fff" stroke="${s.color}" stroke-width="2"/>`;
+        });
+    });
+
+    let legend = '<div style="display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin-top:6px; font-size:12px;">';
+    series.forEach(s => {
+        legend += `<span style="display:inline-flex; align-items:center; gap:4px;"><span style="width:14px; height:3px; background:${s.color}; display:inline-block; border-radius:2px;"></span>${s.name}</span>`;
+    });
+    legend += '</div>';
+
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:${W}px; max-width:100%; height:auto;" preserveAspectRatio="xMidYMid meet">${grid}${lines}${xlabels}</svg>${legend}`;
+}
+
+function renderTrendTable(rows) {
+    const el = document.getElementById('trendTable');
+    if (!el) return;
+    const fmt = v => v ? v.toLocaleString() : '-';
+    const pct = (v, s) => s > 0 ? (v / s * 100).toFixed(1) + '%' : '-';
+
+    let html = `<table style="width:100%; border-collapse:collapse; font-size:12px; white-space:nowrap;">
+        <thead>
+            <tr style="background:#f1f3f5;">
+                <th style="padding:6px 8px; text-align:left; position:sticky; left:0; background:#f1f3f5;">월</th>
+                <th style="padding:6px 8px; text-align:right; color:#1565c0;">매출</th>
+                <th style="padding:6px 8px; text-align:right; color:#8d6e63;">고센유통</th>
+                <th style="padding:6px 8px; text-align:right; color:#ef5350;">고기</th>
+                <th style="padding:6px 8px; text-align:right; color:#7e57c2;">인건비</th>
+                <th style="padding:6px 8px; text-align:right; color:#26a69a;">고정비총계</th>
+            </tr>
+        </thead><tbody>`;
+
+    [...rows].reverse().forEach(r => {
+        const ym = r.monthStr.replace('-', '.');
+        const cell = (v, color) => `<td style="padding:6px 8px; text-align:right;">${fmt(v)}<br><span style="color:${color}; font-size:10px;">${pct(v, r.sales)}</span></td>`;
+        html += `<tr style="border-bottom:1px solid #eee;">
+            <td style="padding:6px 8px; font-weight:bold; position:sticky; left:0; background:#fff;">${ym}</td>
+            <td style="padding:6px 8px; text-align:right; color:#1565c0; font-weight:bold;">${fmt(r.sales)}</td>
+            ${cell(r.food, '#8d6e63')}
+            ${cell(r.meat, '#ef5350')}
+            ${cell(r.staff, '#7e57c2')}
+            ${cell(r.fixed, '#26a69a')}
+        </tr>`;
+    });
+
+    html += '</tbody></table>';
+    el.innerHTML = html;
 }
 
 // 상세 항목 차트 렌더링
