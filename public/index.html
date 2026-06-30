@@ -986,33 +986,68 @@
             </div>
 
             <div id="acc-trend" class="acc-sub-content">
-                <div class="accounting-card" style="background:#f8f9fa;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-                        <h3 style="margin:0;">📈 월별 추이분석</h3>
-                        <div style="display:flex; gap:5px;">
-                            <button onclick="setTrendRange(6)" id="trendRange6" class="store-select-btn" style="padding:6px 12px; border:2px solid #00796b; background:white; color:#00796b; border-radius:5px; font-weight:bold; cursor:pointer; font-size:12px;">최근 6개월</button>
-                            <button onclick="setTrendRange(12)" id="trendRange12" class="store-select-btn active" style="padding:6px 12px; border:2px solid #00796b; background:#00796b; color:white; border-radius:5px; font-weight:bold; cursor:pointer; font-size:12px;">최근 12개월</button>
+                <!-- 추이분석 서브탭 -->
+                <div style="display:flex; gap:6px; margin-bottom:12px; border-bottom:2px solid #e0e0e0; padding-bottom:0;">
+                    <button id="trendSub-detail" onclick="switchTrendSub('detail', this)" class="trend-subtab active" style="padding:8px 16px; border:none; background:none; border-bottom:3px solid #00796b; color:#00796b; font-weight:bold; cursor:pointer; font-size:14px; margin-bottom:-2px;">📊 상세분석</button>
+                    <button id="trendSub-graph" onclick="switchTrendSub('graph', this)" class="trend-subtab" style="padding:8px 16px; border:none; background:none; border-bottom:3px solid transparent; color:#888; font-weight:bold; cursor:pointer; font-size:14px; margin-bottom:-2px;">📈 월별 그래프</button>
+                </div>
+
+                <!-- [서브탭 1] 상세분석 (POS 리포트 기반) -->
+                <div id="trendSub-detail-panel">
+                    <div class="accounting-card" style="background:#f8f9fa;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                            <h3 style="margin:0;">📊 매출 상세분석</h3>
+                            <div style="display:flex; gap:5px;" id="analysisStoreBtns">
+                                <button onclick="setAnalysisStore('합산')" data-store="합산" class="analysis-store-btn active" style="padding:6px 12px; border:2px solid #00796b; background:#00796b; color:white; border-radius:5px; font-weight:bold; cursor:pointer; font-size:12px;">합산</button>
+                                <button onclick="setAnalysisStore('1루')" data-store="1루" class="analysis-store-btn" style="padding:6px 12px; border:2px solid #00796b; background:white; color:#00796b; border-radius:5px; font-weight:bold; cursor:pointer; font-size:12px;">1루</button>
+                                <button onclick="setAnalysisStore('3루')" data-store="3루" class="analysis-store-btn" style="padding:6px 12px; border:2px solid #00796b; background:white; color:#00796b; border-radius:5px; font-weight:bold; cursor:pointer; font-size:12px;">3루</button>
+                            </div>
                         </div>
+                        <p id="analysisPeriodNote" style="font-size:12px; color:#666; margin:8px 0 0 0;">POS 시간대별·메뉴별 리포트 기반 분석입니다.</p>
                     </div>
-                    <p style="font-size:12px; color:#666; margin:8px 0 0 0;">* 전체(1루+3루) 기준. 수수료는 매출 비례로 일정하여 제외했습니다.</p>
+                    <div class="accounting-card" id="analysisUploadCard" style="display:none; background:#fffde7; border-left:4px solid #fbc02d;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                            <div style="font-size:13px; color:#795548;">📤 POS 리포트 엑셀(시간대별·메뉴별 × 1루·3루, 최대 4개)을 올리면 분석이 갱신됩니다.</div>
+                            <div>
+                                <input type="file" id="salesReportInput" accept=".xlsx" multiple style="display:none;" onchange="uploadSalesReports(this)">
+                                <button onclick="document.getElementById('salesReportInput').click()" style="padding:7px 14px; border:2px solid #f9a825; background:#f9a825; color:white; border-radius:5px; font-weight:bold; cursor:pointer; font-size:13px;">파일 선택</button>
+                            </div>
+                        </div>
+                        <div id="salesUploadStatus" style="font-size:12px; margin-top:8px; color:#666;"></div>
+                    </div>
+                    <div id="salesAnalysisBody"></div>
                 </div>
-                <div class="accounting-card">
-                    <h4 style="margin:0 0 5px 0; color:#1565c0;">💰 매출 추이</h4>
-                    <div id="trendSalesChart" style="overflow-x:auto;"></div>
-                </div>
-                <div class="accounting-card">
-                    <h4 style="margin:0 0 5px 0; color:#c62828;">📦 주요 비용 추이</h4>
-                    <div style="font-size:11px; color:#888; margin-bottom:5px;">고센유통 · 고기 · 인건비 · 고정비총계 (금액)</div>
-                    <div id="trendCostChart" style="overflow-x:auto;"></div>
-                </div>
-                <div class="accounting-card">
-                    <h4 style="margin:0 0 5px 0; color:#00796b;">📊 매출 대비 비율 추이 (%)</h4>
-                    <div style="font-size:11px; color:#888; margin-bottom:5px;">매출 대비 각 비용 비중 — 인건비/매입이 적절한지 확인</div>
-                    <div id="trendRatioChart" style="overflow-x:auto;"></div>
-                </div>
-                <div class="accounting-card">
-                    <h4 style="margin:0 0 10px 0;">📋 월별 상세</h4>
-                    <div id="trendTable" style="overflow-x:auto;"></div>
+
+                <!-- [서브탭 2] 월별 그래프 (기존) -->
+                <div id="trendSub-graph-panel" style="display:none;">
+                    <div class="accounting-card" style="background:#f8f9fa;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                            <h3 style="margin:0;">📈 월별 추이분석</h3>
+                            <div style="display:flex; gap:5px;">
+                                <button onclick="setTrendRange(6)" id="trendRange6" class="store-select-btn" style="padding:6px 12px; border:2px solid #00796b; background:white; color:#00796b; border-radius:5px; font-weight:bold; cursor:pointer; font-size:12px;">최근 6개월</button>
+                                <button onclick="setTrendRange(12)" id="trendRange12" class="store-select-btn active" style="padding:6px 12px; border:2px solid #00796b; background:#00796b; color:white; border-radius:5px; font-weight:bold; cursor:pointer; font-size:12px;">최근 12개월</button>
+                            </div>
+                        </div>
+                        <p style="font-size:12px; color:#666; margin:8px 0 0 0;">* 전체(1루+3루) 기준. 수수료는 매출 비례로 일정하여 제외했습니다.</p>
+                    </div>
+                    <div class="accounting-card">
+                        <h4 style="margin:0 0 5px 0; color:#1565c0;">💰 매출 추이</h4>
+                        <div id="trendSalesChart" style="overflow-x:auto;"></div>
+                    </div>
+                    <div class="accounting-card">
+                        <h4 style="margin:0 0 5px 0; color:#c62828;">📦 주요 비용 추이</h4>
+                        <div style="font-size:11px; color:#888; margin-bottom:5px;">고센유통 · 고기 · 인건비 · 고정비총계 (금액)</div>
+                        <div id="trendCostChart" style="overflow-x:auto;"></div>
+                    </div>
+                    <div class="accounting-card">
+                        <h4 style="margin:0 0 5px 0; color:#00796b;">📊 매출 대비 비율 추이 (%)</h4>
+                        <div style="font-size:11px; color:#888; margin-bottom:5px;">매출 대비 각 비용 비중 — 인건비/매입이 적절한지 확인</div>
+                        <div id="trendRatioChart" style="overflow-x:auto;"></div>
+                    </div>
+                    <div class="accounting-card">
+                        <h4 style="margin:0 0 10px 0;">📋 월별 상세</h4>
+                        <div id="trendTable" style="overflow-x:auto;"></div>
+                    </div>
                 </div>
             </div>
 

@@ -116,7 +116,7 @@ function updateDashboardUI() {
     else if (activeSubTab.id === 'acc-history') loadHistoryTable();
     else if (activeSubTab.id === 'acc-prediction') renderPredictionStats();
     else if (activeSubTab.id === 'acc-dashboard') renderDashboardStats();
-    else if (activeSubTab.id === 'acc-trend') renderTrendAnalysis();
+    else if (activeSubTab.id === 'acc-trend') { renderTrendAnalysis(); loadSalesAnalysis(); }
     else if (activeSubTab.id === 'acc-monthly') loadMonthlyForm();
 }
 
@@ -1565,6 +1565,342 @@ function renderTrendTable(rows) {
 
     html += '</tbody></table>';
     el.innerHTML = html;
+}
+
+// ==========================================
+// 매출 상세분석 (POS 시간대별/메뉴별 리포트 기반)
+// ==========================================
+let salesAnalysisData = null;
+let selectedAnalysisStore = '합산';
+
+// 추이분석 서브탭 전환 (상세분석 / 월별 그래프)
+function switchTrendSub(which, btn) {
+    const detail = document.getElementById('trendSub-detail-panel');
+    const graph = document.getElementById('trendSub-graph-panel');
+    if (detail) detail.style.display = (which === 'detail') ? 'block' : 'none';
+    if (graph) graph.style.display = (which === 'graph') ? 'block' : 'none';
+    document.querySelectorAll('.trend-subtab').forEach(b => {
+        b.classList.remove('active');
+        b.style.borderBottomColor = 'transparent';
+        b.style.color = '#888';
+    });
+    if (btn) { btn.classList.add('active'); btn.style.borderBottomColor = '#00796b'; btn.style.color = '#00796b'; }
+    if (which === 'detail') loadSalesAnalysis();
+    else renderTrendAnalysis();
+}
+
+// 업로드 카드는 admin/manager 에게만 표시
+function updateAnalysisUploadCard() {
+    const card = document.getElementById('analysisUploadCard');
+    if (!card) return;
+    const canUpload = currentUser && ['admin', 'manager'].includes(currentUser.role);
+    card.style.display = canUpload ? 'block' : 'none';
+}
+
+async function uploadSalesReports(input) {
+    const files = Array.from(input.files || []);
+    input.value = '';
+    if (!files.length) return;
+    if (!currentUser || !['admin', 'manager'].includes(currentUser.role)) { alert('업로드 권한이 없습니다.'); return; }
+    const status = document.getElementById('salesUploadStatus');
+    const route = (name) => {
+        const type = name.includes('시간대') ? 'time' : (name.includes('메뉴') ? 'menu' : null);
+        const store = name.includes('1루') ? '1루' : (name.includes('3루') ? '3루' : null);
+        return (type && store) ? { type, store } : null;
+    };
+    let ok = 0; const fail = [];
+    if (status) status.innerHTML = '업로드 중...';
+    for (const f of files) {
+        const r = route(f.name);
+        if (!r) { fail.push(f.name + ' (파일명에서 시간대/메뉴·1루/3루 구분 불가)'); continue; }
+        try {
+            const buf = await f.arrayBuffer();
+            const url = `/api/sales-analysis/upload?store=${encodeURIComponent(r.store)}&type=${r.type}&actor=${encodeURIComponent(currentUser.name || '')}`;
+            const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: buf });
+            const j = await res.json();
+            if (j.success) ok++; else fail.push(f.name + ' (' + (j.error || '실패') + ')');
+        } catch (e) { fail.push(f.name + ' (' + e.message + ')'); }
+    }
+    let msg = ok ? `✅ ${ok}개 업로드 완료.` : '';
+    if (fail.length) msg += ` <span style="color:#c62828;">⚠️ 실패: ${fail.join(', ')}</span>`;
+    if (status) status.innerHTML = msg;
+    if (ok) await loadSalesAnalysis(true);
+}
+
+async function loadSalesAnalysis(force) {
+    const body = document.getElementById('salesAnalysisBody');
+    if (!body) return;
+    updateAnalysisUploadCard();
+    if (salesAnalysisData && !force) { renderSalesAnalysis(); return; }
+    body.innerHTML = '<div style="text-align:center; color:#999; padding:30px;">분석 자료를 불러오는 중...</div>';
+    try {
+        const res = await fetch('/api/sales-analysis');
+        const json = await res.json();
+        if (!json.success || !json.available) {
+            body.innerHTML = '<div class="accounting-card" style="text-align:center; color:#999; padding:20px;">분석할 POS 리포트가 없습니다.<br>'
+                + '<span style="font-size:12px;">data 폴더에 「시간대별 분석 현황_1루/3루.xlsx」, 「메뉴별 매출 순위 집계_1루/3루.xlsx」를 넣어주세요.</span></div>';
+            return;
+        }
+        salesAnalysisData = json;
+        if (!json.stores[selectedAnalysisStore]) selectedAnalysisStore = json.storeOrder[0];
+        updateAnalysisStoreBtns();
+        renderSalesAnalysis();
+    } catch (e) {
+        body.innerHTML = '<div style="text-align:center; color:#c62828; padding:20px;">불러오기 실패: ' + e.message + '</div>';
+    }
+}
+
+function setAnalysisStore(store) {
+    selectedAnalysisStore = store;
+    updateAnalysisStoreBtns();
+    renderSalesAnalysis();
+}
+function updateAnalysisStoreBtns() {
+    document.querySelectorAll('.analysis-store-btn').forEach(b => {
+        const active = b.dataset.store === selectedAnalysisStore;
+        b.classList.toggle('active', active);
+        b.style.background = active ? '#00796b' : 'white';
+        b.style.color = active ? 'white' : '#00796b';
+    });
+}
+
+// 시(0~23) 라벨
+function analysisHourLabel(h) {
+    const hh = (h === 0) ? 24 : h;
+    return hh + '시';
+}
+// 경기 시작시각 -> 경기 유형 라벨
+function gameTypeLabel(startHour) {
+    if (startHour <= 13) return '낮 경기';
+    if (startHour <= 16) return '오후 경기';
+    return '야간 경기';
+}
+
+function renderSalesAnalysis() {
+    const body = document.getElementById('salesAnalysisBody');
+    if (!body || !salesAnalysisData) return;
+    const S = salesAnalysisData.stores[selectedAnalysisStore];
+    if (!S) { body.innerHTML = '<div style="padding:20px; color:#999;">데이터가 없습니다.</div>'; return; }
+
+    // 기간 안내 갱신
+    const note = document.getElementById('analysisPeriodNote');
+    if (note && S.period) {
+        note.innerHTML = `📅 분석기간 <b>${S.period.start} ~ ${S.period.end}</b> · 영업 ${S.daily.operatingDays}일`
+            + (S.daily.closedDays ? ` · 우천취소 등 휴무 ${S.daily.closedDays}일` : '')
+            + ` <span style="color:#999;">(월요일은 경기가 없어 제외)</span>`;
+    }
+
+    let html = '';
+    html += renderAnalysisInsights(S);
+    html += renderAnalysisDaily(S);
+    html += renderAnalysisWeekday(S);
+    html += renderAnalysisTime(S);
+    html += renderAnalysisMenu(S);
+    body.innerHTML = html;
+}
+
+// 핵심 요약 (자동 인사이트)
+function renderAnalysisInsights(S) {
+    const groups = S.time.groups.filter(g => g.days >= 2);
+    let bullets = [];
+    // 가장 흔한 경기 유형
+    if (groups.length) {
+        const main = groups.slice().sort((a, b) => b.days - a.days)[0];
+        const startCell = main.hourly.find(x => x.hour === main.startHour);
+        const peakCell = main.hourly.find(x => x.hour === main.peakHour);
+        const firstPct = startCell ? startCell.pct : 0;
+        const peakPct = peakCell ? peakCell.pct : 0;
+        bullets.push(`가장 잦은 형태는 <b>${gameTypeLabel(main.startHour)}</b>(${analysisHourLabel(main.startHour)}경 매출 시작, ${main.days}일)입니다. `
+            + `입장 직후 첫 1시간은 전체의 <b>${firstPct}%</b>뿐이고, <b>${analysisHourLabel(main.peakHour)}</b>대에 <b>${peakPct}%</b>로 피크가 옵니다 → 음식을 처음부터 몰아 쌓지 말고 ${analysisHourLabel(main.peakHour)}대 직전에 본격 준비하세요.`);
+    }
+    // 메뉴 준비 가이드
+    const topMenus = S.menu.items.filter(m => m.gross > 0).slice(0, 2);
+    if (topMenus.length) {
+        const txt = topMenus.map(m => `${m.name} 약 <b>${Math.round(m.perGame).toLocaleString()}개</b>`).join(', ');
+        bullets.push(`경기당 평균 판매(${selectedAnalysisStore} 기준): ${txt}. 이 두 메뉴가 전체의 <b>${(topMenus.reduce((s, m) => s + m.pct, 0)).toFixed(0)}%</b>를 차지합니다.`);
+    }
+    // 요일 팁
+    const wkOp = S.weekday.filter(w => w.op > 0);
+    if (wkOp.length) {
+        const best = wkOp.slice().sort((a, b) => b.avg - a.avg)[0];
+        const worst = wkOp.slice().sort((a, b) => a.avg - b.avg)[0];
+        bullets.push(`요일 중에는 <b>${best.name}요일</b>(평균 ${formatWonShort(best.avg)})이 가장 높고 <b>${worst.name}요일</b>(${formatWonShort(worst.avg)})이 가장 낮습니다.`);
+    }
+
+    let html = '<div class="accounting-card" style="background:#e0f2f1; border-left:4px solid #00796b;">'
+        + '<h4 style="margin:0 0 8px 0; color:#00695c;">💡 핵심 요약</h4>'
+        + '<ul style="margin:0; padding-left:18px; font-size:13px; line-height:1.7; color:#333;">';
+    bullets.forEach(b => html += `<li style="margin-bottom:4px;">${b}</li>`);
+    html += '</ul></div>';
+    return html;
+}
+
+// 1) 일별 평균 + 월별
+function renderAnalysisDaily(S) {
+    const d = S.daily;
+    let html = '<div class="accounting-card">'
+        + '<h4 style="margin:0 0 4px 0; color:#1565c0;">📅 일별 평균 매출</h4>'
+        + '<div style="font-size:11px; color:#888; margin-bottom:10px;">영업일(실제 매출 발생일) 기준 · 월요일·우천취소일 제외</div>';
+
+    html += `<div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
+        <div style="flex:1; min-width:120px; background:#f1f8ff; border-radius:8px; padding:10px; text-align:center;">
+            <div style="font-size:11px; color:#888;">영업일 일평균</div>
+            <div style="font-size:20px; font-weight:bold; color:#1565c0;">${d.avgPerDay.toLocaleString()}<span style="font-size:12px;">원</span></div>
+        </div>
+        <div style="flex:1; min-width:120px; background:#f9f9f9; border-radius:8px; padding:10px; text-align:center;">
+            <div style="font-size:11px; color:#888;">총 영업일</div>
+            <div style="font-size:20px; font-weight:bold; color:#444;">${d.operatingDays}<span style="font-size:12px;">일</span></div>
+        </div>
+        <div style="flex:1; min-width:120px; background:#f9f9f9; border-radius:8px; padding:10px; text-align:center;">
+            <div style="font-size:11px; color:#888;">총 매출</div>
+            <div style="font-size:20px; font-weight:bold; color:#444;">${formatWonShort(d.totalSales)}</div>
+        </div>
+    </div>`;
+
+    html += '<table style="width:100%; border-collapse:collapse; font-size:12px;"><thead><tr style="background:#f1f3f5;">'
+        + '<th style="padding:6px 8px; text-align:left;">월</th>'
+        + '<th style="padding:6px 8px; text-align:right;">영업일</th>'
+        + '<th style="padding:6px 8px; text-align:right;">휴무</th>'
+        + '<th style="padding:6px 8px; text-align:right;">일평균 매출</th>'
+        + '<th style="padding:6px 8px; text-align:right;">월 합계</th></tr></thead><tbody>';
+    d.byMonth.forEach(m => {
+        html += `<tr style="border-bottom:1px solid #eee;">
+            <td style="padding:6px 8px; font-weight:bold;">${m.month}월</td>
+            <td style="padding:6px 8px; text-align:right;">${m.op}일</td>
+            <td style="padding:6px 8px; text-align:right; color:#bbb;">${m.closed || '-'}</td>
+            <td style="padding:6px 8px; text-align:right; font-weight:bold; color:#1565c0;">${m.avg.toLocaleString()}</td>
+            <td style="padding:6px 8px; text-align:right; color:#666;">${formatWonShort(m.total)}</td>
+        </tr>`;
+    });
+    html += '</tbody></table></div>';
+    return html;
+}
+
+// 2) 요일별 평균
+function renderAnalysisWeekday(S) {
+    const rows = S.weekday;
+    const maxAvg = Math.max(1, ...rows.map(w => w.avg));
+    let html = '<div class="accounting-card">'
+        + '<h4 style="margin:0 0 4px 0; color:#6a1b9a;">📆 요일별 평균 매출</h4>'
+        + '<div style="font-size:11px; color:#888; margin-bottom:10px;">영업일 평균 · 월요일은 정기휴무(경기 없음)</div>';
+    html += '<table style="width:100%; border-collapse:collapse; font-size:12px;"><tbody>';
+    rows.forEach(w => {
+        if (w.op === 0) {
+            html += `<tr style="border-bottom:1px solid #eee;">
+                <td style="padding:6px 8px; font-weight:bold; width:36px;">${w.name}</td>
+                <td colspan="2" style="padding:6px 8px; color:#bbb;">정기휴무 (경기 없음)</td>
+            </tr>`;
+            return;
+        }
+        const widthPct = Math.round(w.avg / maxAvg * 100);
+        html += `<tr style="border-bottom:1px solid #eee;">
+            <td style="padding:6px 8px; font-weight:bold; width:36px;">${w.name}</td>
+            <td style="padding:6px 8px; width:60%;">
+                <div style="background:#f0e6f5; border-radius:4px; height:18px; position:relative;">
+                    <div style="background:#9c27b0; height:18px; width:${widthPct}%; border-radius:4px;"></div>
+                </div>
+            </td>
+            <td style="padding:6px 8px; text-align:right; white-space:nowrap;">
+                <b style="color:#6a1b9a;">${w.avg.toLocaleString()}</b>
+                <span style="font-size:10px; color:#aaa;"> · ${w.op}일</span>
+            </td>
+        </tr>`;
+    });
+    html += '</tbody></table></div>';
+    return html;
+}
+
+// 3) 경기 시작 시간대별 시간 분포 (입장 후 매출 램프업)
+function renderAnalysisTime(S) {
+    const hours = S.hoursAxis;
+    const groups = S.time.groups.filter(g => g.days >= 2);
+    const outliers = S.time.groups.filter(g => g.days < 2);
+
+    let html = '<div class="accounting-card">'
+        + '<h4 style="margin:0 0 4px 0; color:#00796b;">⏰ 시간대별 매출 패턴 (경기 시작 기준)</h4>'
+        + '<div style="font-size:11px; color:#888; margin-bottom:10px;">경기 시작시각(매출이 본격 시작되는 시각)별로 묶어, 입장 후 시간대별 매출 분포를 보여줍니다.<br>'
+        + '주말·공휴일은 경기시간이 앞당겨질 수 있어, 오늘 경기의 <b>입장 시각</b>에 맞는 줄을 보세요. 색이 진할수록 그 시간대 매출 비중이 큽니다.</div>';
+
+    html += '<div style="overflow-x:auto;"><table style="border-collapse:collapse; font-size:11px; white-space:nowrap; min-width:100%;"><thead>'
+        + '<tr style="background:#f1f3f5;">'
+        + '<th style="padding:5px 7px; text-align:left; position:sticky; left:0; background:#f1f3f5;">경기 시작</th>'
+        + '<th style="padding:5px 6px; text-align:right;">일수</th>'
+        + '<th style="padding:5px 6px; text-align:right;">평균매출</th>';
+    hours.forEach(h => html += `<th style="padding:5px 6px; text-align:center; color:#666;">${analysisHourLabel(h)}</th>`);
+    html += '</tr></thead><tbody>';
+
+    const cellFor = (cell, isPeak) => {
+        if (!cell || cell.pct <= 0) return '<td style="padding:5px 6px; text-align:center; color:#ddd;">·</td>';
+        const alpha = Math.min(0.85, cell.pct / 45 * 0.85 + 0.05);
+        const txtColor = alpha > 0.5 ? '#fff' : '#00695c';
+        const border = isPeak ? 'box-shadow:inset 0 0 0 2px #ff6f00;' : '';
+        return `<td style="padding:5px 6px; text-align:center; background:rgba(0,121,107,${alpha.toFixed(2)}); color:${txtColor}; font-weight:${isPeak ? 'bold' : 'normal'}; ${border}">${cell.pct}%</td>`;
+    };
+
+    groups.forEach(g => {
+        html += `<tr style="border-bottom:1px solid #eee;">
+            <td style="padding:5px 7px; position:sticky; left:0; background:#fff;">
+                <b>${analysisHourLabel(g.startHour)}</b><br><span style="font-size:9px; color:#999;">${gameTypeLabel(g.startHour)}</span>
+            </td>
+            <td style="padding:5px 6px; text-align:right;">${g.days}일</td>
+            <td style="padding:5px 6px; text-align:right; color:#00695c; font-weight:bold;">${formatWonShort(g.avgTotal)}</td>`;
+        hours.forEach(h => {
+            const cell = g.hourly.find(x => x.hour === h);
+            html += cellFor(cell, h === g.peakHour);
+        });
+        html += '</tr>';
+    });
+    // 전체 평균 행
+    const ov = S.time.overall;
+    html += `<tr style="border-top:2px solid #00796b; background:#fafafa;">
+        <td style="padding:5px 7px; position:sticky; left:0; background:#fafafa; font-weight:bold;">전체 평균</td>
+        <td style="padding:5px 6px; text-align:right;">${ov.days}일</td>
+        <td style="padding:5px 6px; text-align:right; color:#00695c; font-weight:bold;">${formatWonShort(ov.avgTotal)}</td>`;
+    hours.forEach(h => {
+        const cell = ov.hourly.find(x => x.hour === h);
+        html += cellFor(cell, h === ov.peakHour);
+    });
+    html += '</tr></tbody></table></div>';
+
+    html += '<div style="font-size:10px; color:#aaa; margin-top:6px;">'
+        + '※ 셀 숫자 = 그날 매출 중 해당 시간대 비중. <span style="color:#ff6f00; font-weight:bold;">주황 테두리</span>=피크 시간대.';
+    if (outliers.length) {
+        html += ' 표본 1일뿐인 ' + outliers.map(o => analysisHourLabel(o.startHour) + '시작').join(', ') + '은 제외.';
+    }
+    html += '</div></div>';
+    return html;
+}
+
+// 4) 메뉴별 매출
+function renderAnalysisMenu(S) {
+    const m = S.menu;
+    const items = m.items.filter(x => x.gross > 0);
+    let html = '<div class="accounting-card">'
+        + '<h4 style="margin:0 0 4px 0; color:#e65100;">🍽️ 메뉴별 매출 비교</h4>'
+        + `<div style="font-size:11px; color:#888; margin-bottom:10px;">총 ${m.totalCnt.toLocaleString()}건 · 객단가 ${m.avgOrderPrice.toLocaleString()}원 · "경기당"은 영업일 1일 평균 판매수량입니다.</div>`;
+
+    html += '<table style="width:100%; border-collapse:collapse; font-size:12px;"><thead><tr style="background:#fff3e0;">'
+        + '<th style="padding:6px 8px; text-align:left;">메뉴</th>'
+        + '<th style="padding:6px 6px; text-align:right;">건수</th>'
+        + '<th style="padding:6px 6px; text-align:right;">경기당</th>'
+        + '<th style="padding:6px 8px; text-align:right;">매출</th>'
+        + '<th style="padding:6px 8px; text-align:right;">비중</th></tr></thead><tbody>';
+    items.forEach(it => {
+        html += `<tr style="border-bottom:1px solid #eee;">
+            <td style="padding:6px 8px; font-weight:bold;">${it.name}</td>
+            <td style="padding:6px 6px; text-align:right; color:#666;">${it.cnt.toLocaleString()}</td>
+            <td style="padding:6px 6px; text-align:right; color:#e65100; font-weight:bold;">${Math.round(it.perGame).toLocaleString()}</td>
+            <td style="padding:6px 8px; text-align:right;">${formatWonShort(it.gross)}</td>
+            <td style="padding:6px 8px; text-align:right;">
+                <span style="font-weight:bold; color:#e65100;">${it.pct}%</span>
+                <div style="background:#fbe9e7; border-radius:3px; height:5px; margin-top:2px;">
+                    <div style="background:#ff7043; height:5px; width:${Math.min(100, it.pct)}%; border-radius:3px;"></div>
+                </div>
+            </td>
+        </tr>`;
+    });
+    html += '</tbody></table></div>';
+    return html;
 }
 
 // 상세 항목 차트 렌더링

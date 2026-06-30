@@ -225,7 +225,7 @@ function switchAccSubTab(subTabId, btnElement) {
         else if (subTabId === 'acc-history') loadHistoryTable();
         else if (subTabId === 'acc-prediction') renderPredictionStats();
         else if (subTabId === 'acc-dashboard') renderDashboardStats();
-        else if (subTabId === 'acc-trend') renderTrendAnalysis();
+        else if (subTabId === 'acc-trend') { renderTrendAnalysis(); loadSalesAnalysis(); }
         else if (subTabId === 'acc-monthly') loadMonthlyForm();
         else if (subTabId === 'acc-logs') loadAccountingLogs();
     }

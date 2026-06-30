@@ -3,6 +3,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
+const zlib = require('zlib');
 const cron = require('node-cron');
 const axios = require('axios');
 const FormData = require('form-data');
@@ -460,6 +461,369 @@ app.put('/api/accounting/monthly', (req, res) => {
     }
     addLog(actor, '월고정비', month, '저장됨');
     res.json({ success: true });
+});
+
+// ==========================================
+// [API 1-B] 매출 상세분석 (POS 엑셀 리포트 기반)
+//  - data 폴더의 "시간대별 분석 현황_{1루,3루}.xlsx" + "메뉴별 매출 순위 집계_{1루,3루}.xlsx" 파싱
+//  - 같은 파일명으로 새 리포트를 덮어쓰면 자동 갱신됨 (mtime 캐시)
+// ==========================================
+
+// --- 최소 XLSX 파서 (외부 의존성 없이 zip + sharedStrings 해석) ---
+function _xlsxReadZip(file) {
+    const buf = fs.readFileSync(file);
+    let eocd = -1;
+    for (let i = buf.length - 22; i >= 0; i--) {
+        if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+    }
+    if (eocd < 0) throw new Error('Not a zip');
+    const cdOffset = buf.readUInt32LE(eocd + 16);
+    const cdCount = buf.readUInt16LE(eocd + 10);
+    let p = cdOffset;
+    const entries = {};
+    for (let n = 0; n < cdCount; n++) {
+        const method = buf.readUInt16LE(p + 10);
+        const compSize = buf.readUInt32LE(p + 20);
+        const nameLen = buf.readUInt16LE(p + 28);
+        const extraLen = buf.readUInt16LE(p + 30);
+        const commentLen = buf.readUInt16LE(p + 32);
+        const lfh = buf.readUInt32LE(p + 42);
+        const name = buf.toString('utf8', p + 46, p + 46 + nameLen);
+        const lnl = buf.readUInt16LE(lfh + 26);
+        const lel = buf.readUInt16LE(lfh + 28);
+        const ds = lfh + 30 + lnl + lel;
+        const cd = buf.slice(ds, ds + compSize);
+        entries[name] = method === 0 ? cd : zlib.inflateRawSync(cd);
+        p += 46 + nameLen + extraLen + commentLen;
+    }
+    return entries;
+}
+function _xlsxDecode(s) {
+    return s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/_x000D_/g, '');
+}
+// 시트를 [{A:val, B:val, ...}, ...] 형태의 행 배열로 파싱 (셀 r 속성 기준, 빈 셀 무시)
+function _xlsxParse(file) {
+    const z = _xlsxReadZip(file);
+    let shared = [];
+    if (z['xl/sharedStrings.xml']) {
+        const ss = z['xl/sharedStrings.xml'].toString('utf8');
+        shared = ss.split(/<si>/).slice(1).map(si =>
+            _xlsxDecode([...si.matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map(x => x[1]).join('')));
+    }
+    const sheetName = Object.keys(z).filter(k => /xl\/worksheets\/sheet\d+\.xml$/.test(k)).sort()[0];
+    const xml = z[sheetName].toString('utf8');
+    const rows = [];
+    for (const rm of xml.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)) {
+        const o = {};
+        // 자기닫힘(<c .../>) 빈 셀과 일반 셀 모두 처리
+        for (const c of rm[1].matchAll(/<c r="([A-Z]+)\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+            const col = c[1], attrs = c[2] || '', inner = c[3] || '';
+            const t = (attrs.match(/t="([^"]*)"/) || [])[1];
+            const vm = inner.match(/<v>([\s\S]*?)<\/v>/);
+            const im = inner.match(/<t[^>]*>([\s\S]*?)<\/t>/);
+            let v = vm ? vm[1] : (im ? _xlsxDecode(im[1]) : undefined);
+            if (v === undefined) continue;
+            if (t === 's') v = shared[parseInt(v)];
+            o[col] = v;
+        }
+        if (Object.keys(o).length) rows.push(o);
+    }
+    return rows;
+}
+
+// 엑셀 일련번호 -> 'YYYY-MM-DD' (UTC 기준)
+function _excelSerialToDate(serial) {
+    return new Date(Date.UTC(1899, 11, 30) + serial * 86400000);
+}
+const _DOW_KR = ['일', '월', '화', '수', '목', '금', '토'];
+// 시간대 컬럼(E~AB) -> 시(0~23) 매핑 (AM01:00 ~ PM12:00=자정)
+const _TIME_COLS = (() => {
+    const letters = ['E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','AA','AB'];
+    // E=AM01(1) ... O=AM11(11), P=AM12(12,정오), Q=PM01(13) ... AB=PM12(0,자정)
+    return letters.map((c, idx) => {
+        const h = (idx + 1) % 24; // E->1, ... AB->0
+        return [c, h];
+    });
+})();
+const _START_THRESHOLD = 200000; // 매출 시작 시간대 판정 임계 (이 금액 이상 처음 발생한 시각)
+
+function _loadTimeReport(file) {
+    const rows = _xlsxParse(file);
+    const days = [];
+    for (const r of rows) {
+        if (!r.D || !/^\d+$/.test(String(r.D))) continue;      // 일자(일련번호) 행만
+        if (!r.B || !String(r.B).startsWith('184')) continue;   // 데이터 행만 (가맹점코드)
+        const serial = parseInt(r.D);
+        const dt = _excelSerialToDate(serial);
+        const hours = _TIME_COLS.map(([c, h]) => ({ h, v: parseInt(r[c] || 0) || 0 }));
+        const total = parseInt(r.AC || 0) || 0;
+        days.push({
+            date: dt.toISOString().slice(0, 10),
+            dow: dt.getUTCDay(),
+            month: dt.getUTCMonth() + 1,
+            hours, total
+        });
+    }
+    return days;
+}
+function _loadMenuReport(file) {
+    const rows = _xlsxParse(file);
+    const items = [];
+    for (const r of rows) {
+        const code = r.E, name = r.F;
+        if (!code || !/^\d+$/.test(String(code))) continue;     // 메뉴코드 있는 행만 (합계행 제외)
+        if (!name || name === '0') continue;
+        items.push({
+            name,
+            price: parseInt(r.G || 0) || 0,
+            cnt: parseInt(r.I || 0) || 0,
+            gross: parseInt(r.AC || 0) || 0   // 총판매금액
+        });
+    }
+    return items;
+}
+
+// 활성 시간대 목록 (데이터가 한 번이라도 발생한 시각, 정렬)
+function _activeHours(days) {
+    const set = new Set();
+    days.forEach(d => d.hours.forEach(x => { if (x.v > 0) set.add(x.h); }));
+    return [...set].sort((a, b) => a - b);
+}
+function _avg(arr, pick) {
+    if (!arr.length) return 0;
+    return arr.reduce((s, x) => s + pick(x), 0) / arr.length;
+}
+
+// 1) 일별 평균 + 월별 (영업일 = 매출>0 인 날, 휴무 = 매출 0 인 날)
+function _buildDaily(days) {
+    const op = days.filter(d => d.total > 0);
+    const byMonth = {};
+    days.forEach(d => {
+        const m = byMonth[d.month] || (byMonth[d.month] = { month: d.month, op: 0, closed: 0, total: 0 });
+        if (d.total > 0) { m.op++; m.total += d.total; } else m.closed++;
+    });
+    const months = Object.values(byMonth).sort((a, b) => a.month - b.month)
+        .map(m => ({ ...m, avg: m.op ? Math.round(m.total / m.op) : 0 }));
+    return {
+        operatingDays: op.length,
+        closedDays: days.length - op.length,
+        totalSales: op.reduce((s, d) => s + d.total, 0),
+        avgPerDay: op.length ? Math.round(_avg(op, d => d.total)) : 0,
+        byMonth: months
+    };
+}
+
+// 2) 요일별 평균 (월요일 등 데이터 없는 요일은 정기휴무로 표기)
+function _buildWeekday(days) {
+    const wk = {};
+    for (let i = 0; i < 7; i++) wk[i] = { dow: i, name: _DOW_KR[i], op: 0, closed: 0, total: 0, max: 0, min: Infinity };
+    days.forEach(d => {
+        const w = wk[d.dow];
+        if (d.total > 0) {
+            w.op++; w.total += d.total;
+            if (d.total > w.max) w.max = d.total;
+            if (d.total < w.min) w.min = d.total;
+        } else w.closed++;
+    });
+    // 월(1)~일(0) 순서로 정렬
+    const order = [1, 2, 3, 4, 5, 6, 0];
+    return order.map(i => {
+        const w = wk[i];
+        return {
+            dow: i, name: w.name, op: w.op, closed: w.closed,
+            avg: w.op ? Math.round(w.total / w.op) : 0,
+            max: w.op ? w.max : 0,
+            min: w.op ? w.min : 0,
+            hasData: w.op > 0 || w.closed > 0
+        };
+    });
+}
+
+// 3) 경기 시작 시간대별 시간 분포 (입장 후 매출 램프업 패턴)
+function _buildStartGroups(days, hoursAxis) {
+    const op = days.filter(d => d.total > 0);
+    const firstSaleHour = (d) => {
+        for (const x of d.hours) { if (x.v >= _START_THRESHOLD) return x.h; }
+        // 임계 미만이면 가장 매출 큰 시각
+        let best = null, bv = -1;
+        d.hours.forEach(x => { if (x.v > bv) { bv = x.v; best = x.h; } });
+        return best;
+    };
+    const groups = {};
+    op.forEach(d => {
+        const s = firstSaleHour(d);
+        if (s === null) return;
+        (groups[s] = groups[s] || []).push(d);
+    });
+    const build = (list) => {
+        const cnt = list.length;
+        const hourly = hoursAxis.map(h => {
+            const sum = list.reduce((s, d) => {
+                const cell = d.hours.find(x => x.h === h);
+                return s + (cell ? cell.v : 0);
+            }, 0);
+            return { hour: h, avg: cnt ? Math.round(sum / cnt) : 0, sum };
+        });
+        const grandTotal = hourly.reduce((s, x) => s + x.sum, 0);
+        hourly.forEach(x => { x.pct = grandTotal ? +(x.sum / grandTotal * 100).toFixed(1) : 0; });
+        let peak = hourly[0];
+        hourly.forEach(x => { if (x.avg > peak.avg) peak = x; });
+        return { hourly, peakHour: peak ? peak.hour : null };
+    };
+    const result = Object.keys(groups).map(Number).sort((a, b) => a - b).map(s => {
+        const list = groups[s];
+        const dowCounts = {};
+        list.forEach(d => { dowCounts[d.dow] = (dowCounts[d.dow] || 0) + 1; });
+        const b = build(list);
+        return {
+            startHour: s,
+            days: list.length,
+            avgTotal: Math.round(_avg(list, d => d.total)),
+            dowCounts,
+            hourly: b.hourly,
+            peakHour: b.peakHour
+        };
+    });
+    // 전체 평균 프로파일도 포함
+    const overall = build(op);
+    return { groups: result, overall: { days: op.length, hourly: overall.hourly, peakHour: overall.peakHour, avgTotal: op.length ? Math.round(_avg(op, d => d.total)) : 0 } };
+}
+
+// 4) 메뉴별 매출 (경기당 평균 판매량 포함)
+function _buildMenu(items, operatingDays) {
+    const total = items.reduce((s, m) => s + m.gross, 0);
+    const totalCnt = items.reduce((s, m) => s + m.cnt, 0);
+    const sorted = [...items].sort((a, b) => b.gross - a.gross).map(m => ({
+        name: m.name,
+        price: m.price,
+        cnt: m.cnt,
+        gross: m.gross,
+        pct: total ? +(m.gross / total * 100).toFixed(1) : 0,
+        perGame: operatingDays ? +(m.cnt / operatingDays).toFixed(1) : 0
+    }));
+    return {
+        items: sorted,
+        total, totalCnt,
+        avgOrderPrice: totalCnt ? Math.round(total / totalCnt) : 0
+    };
+}
+
+// 두 매장 시간대 데이터를 날짜 기준으로 합산
+function _combineTimeDays(a, b) {
+    const map = {};
+    const add = (d) => {
+        const cur = map[d.date] || (map[d.date] = { date: d.date, dow: d.dow, month: d.month, hours: _TIME_COLS.map(([c, h]) => ({ h, v: 0 })), total: 0 });
+        cur.total += d.total;
+        d.hours.forEach((x, i) => { cur.hours[i].v += x.v; });
+    };
+    a.forEach(add); b.forEach(add);
+    return Object.values(map).sort((x, y) => x.date.localeCompare(y.date));
+}
+function _combineMenu(a, b) {
+    const map = {};
+    [...a, ...b].forEach(m => {
+        const cur = map[m.name] || (map[m.name] = { name: m.name, price: m.price, cnt: 0, gross: 0 });
+        cur.cnt += m.cnt; cur.gross += m.gross;
+    });
+    return Object.values(map);
+}
+
+function _buildStoreAnalysis(timeDays, menuItems) {
+    const daily = _buildDaily(timeDays);
+    const hoursAxis = _activeHours(timeDays);
+    return {
+        daily,
+        weekday: _buildWeekday(timeDays),
+        hoursAxis,
+        time: _buildStartGroups(timeDays, hoursAxis),
+        menu: _buildMenu(menuItems, daily.operatingDays),
+        period: timeDays.length ? { start: timeDays[0].date, end: timeDays[timeDays.length - 1].date, days: timeDays.length } : null
+    };
+}
+
+const _SALES_FILES = {
+    '1루': { time: '시간대별 분석 현황_1루.xlsx', menu: '메뉴별 매출 순위 집계_1루.xlsx' },
+    '3루': { time: '시간대별 분석 현황_3루.xlsx', menu: '메뉴별 매출 순위 집계_3루.xlsx' }
+};
+let _salesAnalysisCache = { key: null, data: null };
+
+function _mtimeKey() {
+    const parts = [];
+    for (const store of Object.keys(_SALES_FILES)) {
+        for (const k of ['time', 'menu']) {
+            const f = path.join(actualDataPath, _SALES_FILES[store][k]);
+            parts.push(fs.existsSync(f) ? String(fs.statSync(f).mtimeMs) : '0');
+        }
+    }
+    return parts.join('|');
+}
+
+function buildSalesAnalysis() {
+    const stores = {};
+    let raw = {};
+    let anyFile = false;
+    for (const store of Object.keys(_SALES_FILES)) {
+        const tf = path.join(actualDataPath, _SALES_FILES[store].time);
+        const mf = path.join(actualDataPath, _SALES_FILES[store].menu);
+        if (!fs.existsSync(tf) || !fs.existsSync(mf)) continue;
+        anyFile = true;
+        const timeDays = _loadTimeReport(tf);
+        const menuItems = _loadMenuReport(mf);
+        raw[store] = { timeDays, menuItems };
+        stores[store] = _buildStoreAnalysis(timeDays, menuItems);
+    }
+    if (!anyFile) return { available: false };
+    // 합산
+    if (raw['1루'] && raw['3루']) {
+        const combinedTime = _combineTimeDays(raw['1루'].timeDays, raw['3루'].timeDays);
+        const combinedMenu = _combineMenu(raw['1루'].menuItems, raw['3루'].menuItems);
+        stores['합산'] = _buildStoreAnalysis(combinedTime, combinedMenu);
+    }
+    return { available: true, stores, storeOrder: ['합산', '1루', '3루'].filter(s => stores[s]) };
+}
+
+app.get('/api/sales-analysis', (req, res) => {
+    try {
+        const key = _mtimeKey();
+        if (_salesAnalysisCache.key !== key) {
+            _salesAnalysisCache = { key, data: buildSalesAnalysis() };
+        }
+        res.json({ success: true, ...(_salesAnalysisCache.data) });
+    } catch (e) {
+        console.error('sales-analysis error:', e.message);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// POS 리포트 엑셀 업로드 (운영 볼륨에 저장). store=1루|3루, type=time|menu
+// 파일 본문은 raw 바이너리로 전송됨 (의존성 없이 처리)
+app.post('/api/sales-analysis/upload', express.raw({ type: '*/*', limit: '25mb' }), (req, res) => {
+    try {
+        const store = req.query.store;
+        const type = req.query.type;
+        const actor = req.query.actor || '?';
+        if (!_SALES_FILES[store] || !['time', 'menu'].includes(type)) {
+            return res.status(400).json({ success: false, error: '잘못된 store/type' });
+        }
+        const buf = req.body;
+        if (!Buffer.isBuffer(buf) || buf.length < 100) {
+            return res.status(400).json({ success: false, error: '빈 파일이거나 본문이 없습니다' });
+        }
+        // xlsx(zip) 시그니처 검증 (PK..)
+        if (!(buf[0] === 0x50 && buf[1] === 0x4B)) {
+            return res.status(400).json({ success: false, error: 'xlsx 파일이 아닙니다' });
+        }
+        const targetName = _SALES_FILES[store][type];
+        const target = path.join(actualDataPath, targetName);
+        fs.writeFileSync(target, buf);
+        _salesAnalysisCache = { key: null, data: null }; // 캐시 무효화
+        addLog(actor, '매출분석', targetName, '리포트 업로드');
+        res.json({ success: true, file: targetName });
+    } catch (e) {
+        console.error('sales-analysis upload error:', e.message);
+        res.status(500).json({ success: false, error: e.message });
+    }
 });
 
 // ==========================================

@@ -37,6 +37,7 @@ Single Express.js file handling all API routes. Uses file-based JSON storage (no
 1. **Auth** (`/api/login`) - Password-based login returning role: `admin`, `manager`, `viewer`, or `inventory`
 2. **Staff Management** (`/api/staff/*`) - Employee CRUD, schedule exceptions, temp workers; soft delete with 30-day retention before permanent removal
 3. **Accounting** (`/api/accounting/*`) - Daily sales entry, monthly fixed costs
+   - **Sales Analysis** (`GET /api/sales-analysis`) - Parses POS Excel exports in `data/` (`시간대별 분석 현황_{1루,3루}.xlsx`, `메뉴별 매출 순위 집계_{1루,3루}.xlsx`) into daily/weekday/time-slot/menu statistics. Uses a built-in dependency-free xlsx parser (`_xlsxParse`, zip+sharedStrings via `zlib`). mtime-cached; returns `available:false` if files are missing (no crash). See "Sales Analysis" pattern below.
 4. **Inventory** (`/api/inventory/*`) - Items by vendor, current stock, daily usage, orders, holidays, history
 5. **Logs & Backup** (`/api/logs`, `/api/backup/*`) - Activity log (max 1000 entries); backup endpoints: `/api/backup/all` (download snapshot), `/api/backup/list` (list dated backups), `/api/backup/download/:date` (restore specific date)
 6. **Kakao Integration** (`/oauth/kakao`, `/api/kakao/*`) - OAuth login and KakaoTalk notification sending
@@ -128,6 +129,13 @@ if (s.endDate)   { const d = new Date(s.endDate);   d.setHours(0,0,0,0); if (dat
 **Item Cost Management:** Items optionally have `unitCost` (number, won per unit) and `costHistory` (array of `{date, unitCost}` entries). When `unitCost` changes in the edit modal, the old value is appended to `costHistory`. Cost data is displayed in the inventory check table (원가 column), order confirmation modal (예상원가), cost analysis tab (💰원가), and telegram/kakao briefings. Items without `unitCost` default to 0 and show "-" in cost columns.
 
 **Graceful Defaults:** `readJson()` returns a default value (empty array/object) when files are missing or unreadable, so the server never crashes on missing data files.
+
+**Sales Analysis (추이분석 → 상세분석 subtab):** The 추이분석 tab has two subtabs: "상세분석" (default, table-focused, `trendSub-detail-panel`) and "월별 그래프" (the original line charts, `trendSub-graph-panel`); `switchTrendSub()` toggles them. The detail subtab renders from `GET /api/sales-analysis` (frontend: `loadSalesAnalysis`/`renderSalesAnalysis` in `staff-accounting.js`). Source data are periodic POS Excel exports dropped into `data/` (same filenames overwrite to refresh). Per store (`1루`/`3루`/`합산`):
+- **일별 평균**: operating-day average (days with sales>0); rain-cancelled days (sales=0 rows) counted as 휴무; Mondays have no rows (no games) so are naturally excluded. Monthly breakdown included.
+- **요일별 평균**: per-weekday operating-day average; Monday shown as 정기휴무.
+- **시간대별**: operating days grouped by *detected game-start hour* (first hour with sales ≥ `_START_THRESHOLD` = 200,000원), each group showing the hour-by-hour distribution (% of day) with the peak hour highlighted. This grouping auto-handles weekend/holiday game-time shifts without a holiday table — the user matches today's entry time to the row. Peak is consistently ~1h after start.
+- **메뉴별**: per-menu 건수/매출/비중 plus `perGame` (units per operating day) for prep planning.
+The Excel date column is an Excel serial (`_excelSerialToDate`); time columns E~AB map to hours via `_TIME_COLS` (AB = midnight). The xlsx parser handles self-closing empty cells (merged-cell layout in the menu report) — do not revert that regex.
 
 **Dependencies:** Express, CORS, node-cron, axios (used for Kakao/Telegram API calls).
 
