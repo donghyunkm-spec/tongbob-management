@@ -1833,8 +1833,9 @@ function renderAnalysisTime(S) {
         if (!cell || cell.pct <= 0) return '<td style="padding:5px 6px; text-align:center; color:#ddd;">·</td>';
         const alpha = Math.min(0.85, cell.pct / 45 * 0.85 + 0.05);
         const txtColor = alpha > 0.5 ? '#fff' : '#00695c';
+        const amtColor = alpha > 0.5 ? 'rgba(255,255,255,0.85)' : '#7aa6a0';
         const border = isPeak ? 'box-shadow:inset 0 0 0 2px #ff6f00;' : '';
-        return `<td style="padding:5px 6px; text-align:center; background:rgba(0,121,107,${alpha.toFixed(2)}); color:${txtColor}; font-weight:${isPeak ? 'bold' : 'normal'}; ${border}">${cell.pct}%</td>`;
+        return `<td style="padding:5px 6px; text-align:center; background:rgba(0,121,107,${alpha.toFixed(2)}); color:${txtColor}; font-weight:${isPeak ? 'bold' : 'normal'}; ${border}">${cell.pct}%<br><span style="font-size:9px; color:${amtColor}; font-weight:normal;">${formatWonShort(cell.avg)}</span></td>`;
     };
 
     groups.forEach(g => {
@@ -1863,7 +1864,7 @@ function renderAnalysisTime(S) {
     html += '</tr></tbody></table></div>';
 
     html += '<div style="font-size:10px; color:#aaa; margin-top:6px;">'
-        + '※ 셀 숫자 = 그날 매출 중 해당 시간대 비중. <span style="color:#ff6f00; font-weight:bold;">주황 테두리</span>=피크 시간대.';
+        + '※ 셀 숫자 = 그날 매출 중 해당 시간대 비중(윗줄) + 해당 시간대 평균 매출금액(아랫줄). <span style="color:#ff6f00; font-weight:bold;">주황 테두리</span>=피크 시간대.';
     if (outliers.length) {
         html += ' 표본 1일뿐인 ' + outliers.map(o => analysisHourLabel(o.startHour) + '시작').join(', ') + '은 제외.';
     }
