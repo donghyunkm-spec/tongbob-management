@@ -201,14 +201,22 @@ async function loadData() {
   }
 }
 
-// 접속 차단 화면 (잘못된 링크 / 다른 기기)
+// 접속 차단 화면 (잘못된 링크 / 다른 기기) - 3개국어 동시 표기
 function showBlocked(msgKey) {
   document.getElementById('loading').classList.add('hidden');
   document.getElementById('app').classList.add('hidden');
   const ep = document.getElementById('errorPage');
   ep.classList.remove('hidden');
-  ep.querySelector('[data-t]').textContent = t(msgKey);
   ep.querySelector('.big').textContent = msgKey === 'deviceLocked' ? '📱' : '🔒';
+  // 차단 화면에는 언어 토글이 없으므로 한/영/미얀마어를 모두 표시
+  const order = ['ko', 'en', 'my'];
+  ep.querySelector('#blockMsg').innerHTML = order.map((l, i) => {
+    const txt = escapeHtml(I18N[l][msgKey]).replace(/\n/g, '<br>');
+    const style = i === 0
+      ? 'font-size:15px; color:#495057; font-weight:700;'
+      : 'font-size:13px; color:#adb5bd;';
+    return `<div style="${style} margin-bottom:16px;">${txt}</div>`;
+  }).join('<hr style="border:none; border-top:1px solid #eef0f2; margin:0 0 16px;">');
 }
 
 // ==========================================
