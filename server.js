@@ -1328,8 +1328,27 @@ app.get('/oauth/kakao', async (req, res) => {
         writeJson(KAKAO_TOKEN_FILE, tokenList);
         res.send(`<h1>✅ 로그인 성공!</h1><p>${userNickname}님 등록 완료.</p>`);
     } catch (error) {
-        console.error('카카오 로그인 실패:', error.message);
-        res.send(`로그인 실패: ${error.message}`);
+        const kakaoErr = error.response?.data || {};
+        console.error('카카오 로그인 실패:', error.message, kakaoErr);
+        // 카카오가 알려주는 실제 원인을 화면에 표시 (진단용)
+        const detail = kakaoErr.error_description || kakaoErr.msg || error.message;
+        const code = kakaoErr.error_code || kakaoErr.code || '';
+        res.send(`
+            <h2>❌ 로그인 실패</h2>
+            <p><b>원인:</b> ${detail}</p>
+            ${code ? `<p><b>코드:</b> ${code}</p>` : ''}
+            <hr>
+            <p style="color:#888; font-size:13px;">
+              현재 서버가 사용하는 값:<br>
+              redirect_uri = <code>${KAKAO_REDIRECT_URI}</code><br>
+              client_id(REST키) 앞 8자 = <code>${(KAKAO_REST_API_KEY || '').slice(0, 8)}…</code>
+            </p>
+            <p style="color:#888; font-size:13px;">
+              위 redirect_uri가 카카오 콘솔에 등록한 주소와 <b>글자까지 정확히</b> 같아야 하고,<br>
+              client_id가 로그인 페이지(kakao-auth.html)의 키와 같아야 합니다.<br>
+              "code expired/KOE320"이면 로그인 버튼을 <b>다시 새로</b> 눌러주세요(코드 재사용 불가).
+            </p>
+        `);
     }
 });
 
