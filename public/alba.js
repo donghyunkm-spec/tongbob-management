@@ -33,7 +33,9 @@ const I18N = {
     failed: '저장에 실패했습니다. 다시 시도해 주세요.',
     deviceLocked: '이 링크는 다른 휴대폰에 등록되어 있습니다.\n본인 휴대폰이 맞다면 사장님께 "기기 초기화"를 요청해 주세요.',
     unit_h: '시간', unit_m: '분', days: '일',
-    overnight: '(익일)'
+    overnight: '(익일)',
+    monthLabel: (y, m) => `${y}년 ${m}월`,
+    emptyMonth: '이 달은 입력한 내역이 없어요.'
   },
   en: {
     greet: name => `Hello, ${name}! 👋`,
@@ -63,7 +65,9 @@ const I18N = {
     failed: 'Failed to save. Please try again.',
     deviceLocked: 'This link is registered to another phone.\nIf this is your phone, please ask the owner to reset the device.',
     unit_h: 'h', unit_m: 'm', days: 'days',
-    overnight: '(next day)'
+    overnight: '(next day)',
+    monthLabel: (y, m) => `${['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m]} ${y}`,
+    emptyMonth: 'No records for this month.'
   },
   my: {
     greet: name => `${name}၊ မင်္ဂလာပါ! 👋`,
@@ -93,7 +97,9 @@ const I18N = {
     failed: 'သိမ်းဆည်း၍ မရပါ။ ထပ်စမ်းကြည့်ပါ။',
     deviceLocked: 'ဤလင့်ခ်ကို အခြားဖုန်းတစ်လုံးတွင် မှတ်ပုံတင်ထားပါသည်။\nသင့်ဖုန်းမှန်လျှင် ဆိုင်ရှင်ကို " device reset" လုပ်ပေးရန် တောင်းဆိုပါ။',
     unit_h: 'နာရီ', unit_m: 'မိနစ်', days: 'ရက်',
-    overnight: '(နောက်တစ်ရက်)'
+    overnight: '(နောက်တစ်ရက်)',
+    monthLabel: (y, m) => `${y} / ${String(m).padStart(2, '0')}`,
+    emptyMonth: 'ဤလအတွက် မှတ်တမ်း မရှိပါ။'
   }
 };
 
@@ -104,6 +110,7 @@ const TOKEN = decodeURIComponent(location.pathname.split('/alba/')[1] || '').rep
 let lang = localStorage.getItem('albaLang') || 'ko';
 let staffName = '';
 let records = [];
+let viewMonth = kstToday().slice(0, 7); // "YYYY-MM" - 요약/내역 조회 기준 월
 
 function t(key) { return I18N[lang][key]; }
 
@@ -159,6 +166,27 @@ function applyLang() {
   const editing = document.getElementById('editId').value;
   document.getElementById('saveBtn').textContent = editing ? t('saveEdit') : t('save');
   document.getElementById('cancelBtn').textContent = t('cancel');
+  updateMonthLabel();
+  renderList();
+  renderStats();
+}
+
+// 선택한 월(viewMonth)에 해당하는 기록만
+function monthRecords() {
+  return records.filter(r => (r.date || '').startsWith(viewMonth));
+}
+
+function updateMonthLabel() {
+  const [y, m] = viewMonth.split('-').map(Number);
+  const el = document.getElementById('monthLabel');
+  if (el) el.textContent = I18N[lang].monthLabel(y, m);
+}
+
+function changeViewMonth(delta) {
+  const [y, m] = viewMonth.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  viewMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  updateMonthLabel();
   renderList();
   renderStats();
 }
@@ -244,6 +272,7 @@ async function saveRecord() {
     if (res.status === 403) { btn.disabled = false; return showBlocked('deviceLocked'); }
     if (!res.ok) throw new Error('fail');
     toast(editId ? t('updated') : t('saved'));
+    viewMonth = date.slice(0, 7); // 방금 입력/수정한 기록의 달로 이동
     cancelEdit();
     await loadData();
   } catch (e) {
@@ -303,21 +332,23 @@ function fmtDur(min) {
 }
 
 function renderStats() {
-  const days = records.length;
-  const total = records.reduce((s, r) => s + (r.minutes || 0), 0);
+  const recs = monthRecords();
+  const days = recs.length;
+  const total = recs.reduce((s, r) => s + (r.minutes || 0), 0);
   const avg = days > 0 ? Math.round(total / days) : 0;
-  document.getElementById('stTotal').textContent = fmtDur(total);
+  document.getElementById('stTotal').textContent = days > 0 ? fmtDur(total) : '-';
   document.getElementById('stDays').textContent = `${days}${t('days')}`;
   document.getElementById('stAvg').textContent = days > 0 ? fmtDur(avg) : '-';
 }
 
 function renderList() {
   const box = document.getElementById('recList');
-  if (!records.length) {
-    box.innerHTML = `<div class="empty">${t('empty')}</div>`;
+  const recs = monthRecords();
+  if (!recs.length) {
+    box.innerHTML = `<div class="empty">${records.length ? t('emptyMonth') : t('empty')}</div>`;
     return;
   }
-  const sorted = [...records].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const sorted = [...recs].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   box.innerHTML = sorted.map(r => {
     // 자정 넘김 표시
     const overnight = (parseInt(r.end.replace(':', ''), 10) <= parseInt(r.start.replace(':', ''), 10))

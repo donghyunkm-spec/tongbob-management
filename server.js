@@ -548,6 +548,9 @@ app.get('/api/attendance/logs', (req, res) => {
     res.json({ success: true, data: readJson(ATTENDANCE_LOG_FILE, []) });
 });
 
+// 기기 잠금(1폰 고정) 사용 여부. true로 바꾸면 다시 활성화됨.
+const ALBA_DEVICE_LOCK = false;
+
 // 토큰 + 기기 확인. 미등록이면 현재 기기(deviceId)로 자동 고정.
 // return: { code:'OK'|'NOTFOUND'|'NODEVICE'|'MISMATCH', target }
 function resolveAlba(token, deviceId) {
@@ -567,6 +570,12 @@ function resolveAlba(token, deviceId) {
 
 // 알바 API 공통 게이트. 통과 시 staff 반환, 실패 시 응답 전송 후 null 반환.
 function albaGate(req, res) {
+    // 기기 잠금이 꺼져 있으면 토큰만 확인 (아무 브라우저/기기에서나 접속 가능)
+    if (!ALBA_DEVICE_LOCK) {
+        const staff = readJson(STAFF_FILE, []).find(s => s.attToken && s.attToken === req.params.token && !s.deleted);
+        if (!staff) { res.status(404).json({ success: false, error: 'invalid_token' }); return null; }
+        return staff;
+    }
     const deviceId = (req.get('X-Device-Id') || '').trim();
     const r = resolveAlba(req.params.token, deviceId);
     if (r.code === 'NOTFOUND') { res.status(404).json({ success: false, error: 'invalid_token' }); return null; }
