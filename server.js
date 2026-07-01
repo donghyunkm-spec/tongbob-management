@@ -1831,8 +1831,11 @@ function getAttendanceDigest(dateStr) {
 
     let monthPart = '';
     if (monthAgg.length > 0) {
-        const mlines = monthAgg.map(a => `${a.name}: ${a.days}일 / ${fmtMinKo(a.minutes)}`);
-        monthPart = `\n\n📆 ${m}월 근무 누계\n${mlines.join('\n')}`;
+        const mlines = monthAgg.map(a => {
+            const avg = a.days > 0 ? Math.round(a.minutes / a.days) : 0;
+            return `${a.name} | ${a.days}일 | 평균 ${fmtMinKo(avg)} | 총 ${fmtMinKo(a.minutes)}`;
+        });
+        monthPart = `\n\n📆 ${m}월 근무 누계\n(이름 | 일수 | 평균 | 총시간)\n${mlines.join('\n')}`;
     }
 
     return dayPart + monthPart;
