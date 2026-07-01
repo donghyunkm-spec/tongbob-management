@@ -212,16 +212,23 @@ function buildTimeOptions() {
   }
 }
 
-// 선택한 날짜의 요일에 따라 기본 출퇴근 시간 세팅
-// 평일(월~금): 16:00~22:00, 주말(토·일): 14:00~20:00
+// 선택한 날짜의 요일/월에 따라 기본 출퇴근 시간 세팅
+// 평일(월~금): 16:00~22:00
+// 주말(토·일): 14:00~20:00, 단 7·8월(무더위)은 15:00~21:00
 function applyDefaultTimes(dateStr) {
   if (!dateStr) return;
   const [y, m, d] = dateStr.split('-').map(Number);
   const dow = new Date(y, m - 1, d).getDay(); // 0=일, 6=토
   const weekend = (dow === 0 || dow === 6);
-  document.getElementById('fStartH').value = weekend ? '14' : '16';
+  const summer = (m === 7 || m === 8);        // 7·8월 무더위
+  let startH = '16', endH = '22';             // 평일 기본
+  if (weekend) {
+    startH = summer ? '15' : '14';
+    endH = summer ? '21' : '20';
+  }
+  document.getElementById('fStartH').value = startH;
   document.getElementById('fStartM').value = '00';
-  document.getElementById('fEndH').value = weekend ? '20' : '22';
+  document.getElementById('fEndH').value = endH;
   document.getElementById('fEndM').value = '00';
 }
 
