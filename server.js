@@ -548,6 +548,17 @@ app.get('/api/attendance/logs', (req, res) => {
     res.json({ success: true, data: readJson(ATTENDANCE_LOG_FILE, []) });
 });
 
+// --- [관리자/테스트] 출퇴근 요약 미리보기 & 즉시 전송 ---
+// GET /api/attendance/digest?date=YYYY-MM-DD (기본: 어제)  &send=1(카톡+텔레그램)|kakao|telegram
+app.get('/api/attendance/digest', async (req, res) => {
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getKstYesterday();
+    const text = getAttendanceDigest(date);
+    const send = req.query.send;
+    if (send === '1' || send === 'kakao') { try { await sendToKakao(text); } catch (e) {} }
+    if (send === '1' || send === 'telegram') { try { await sendToTelegram(text); } catch (e) {} }
+    res.json({ success: true, date, sent: send || null, text });
+});
+
 // 기기 잠금(1폰 고정) 사용 여부. true로 바꾸면 다시 활성화됨.
 const ALBA_DEVICE_LOCK = false;
 
@@ -1377,7 +1388,40 @@ function calculateServerStaffCost(staffList, monthStr) {
     return totalPay;
 }
 
+// 카카오 access_token 자동 갱신 (만료 임박/만료 시 refresh_token으로 재발급)
+async function refreshKakaoTokens() {
+    let tokenList = readJson(KAKAO_TOKEN_FILE, []);
+    if (!Array.isArray(tokenList) || tokenList.length === 0) return;
+    let changed = false;
+    for (const user of tokenList) {
+        if (!user.refresh_token) continue;
+        // 아직 넉넉히 유효하면 스킵 (발급 후 경과 < 만료 - 10분)
+        const issuedAt = new Date(user.updatedAt || user.createdAt || 0).getTime();
+        const ttlMs = (user.expires_in || 21600) * 1000;
+        if (Date.now() - issuedAt < ttlMs - 10 * 60 * 1000) continue;
+        try {
+            const resp = await axios.post('https://kauth.kakao.com/oauth/token', null, {
+                params: {
+                    grant_type: 'refresh_token',
+                    client_id: KAKAO_REST_API_KEY,
+                    refresh_token: user.refresh_token
+                },
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+            });
+            const d = resp.data || {};
+            if (d.access_token) { user.access_token = d.access_token; changed = true; }
+            if (d.refresh_token) user.refresh_token = d.refresh_token; // 새 refresh_token이 올 때만
+            if (d.expires_in) user.expires_in = d.expires_in;
+            user.updatedAt = new Date().toISOString();
+        } catch (e) {
+            console.error('카카오 토큰 갱신 실패:', e.response?.data || e.message);
+        }
+    }
+    if (changed) writeJson(KAKAO_TOKEN_FILE, tokenList);
+}
+
 async function sendToKakao(text) {
+    await refreshKakaoTokens(); // 보내기 전 토큰 갱신 (만료 시 자동 재발급)
     let tokenList = readJson(KAKAO_TOKEN_FILE, []);
     if (!Array.isArray(tokenList) || tokenList.length === 0) return;
 
@@ -1713,6 +1757,54 @@ function getDailyScheduleMessageDetailed(dateObj) {
     return msg;
 }
 
+// 분 -> "6시간", "3시간 20분", "40분"
+function fmtMinKo(min) {
+    min = min || 0;
+    const h = Math.floor(min / 60), m = min % 60;
+    if (h > 0 && m > 0) return `${h}시간 ${m}분`;
+    if (h > 0) return `${h}시간`;
+    return `${m}분`;
+}
+
+// 특정 날짜(dateStr "YYYY-MM-DD") 알바 출퇴근 요약 메시지 생성
+function getAttendanceDigest(dateStr) {
+    const staff = readJson(STAFF_FILE, []);
+    const att = readJson(ATTENDANCE_FILE, {});
+    const albas = staff.filter(s => s.attToken && !s.deleted);
+
+    // 해당 날짜 기록 모으기 (출근시각 순 정렬)
+    const entries = [];
+    albas.forEach(s => {
+        (att[s.id] || []).filter(r => r.date === dateStr).forEach(r => {
+            entries.push({ name: s.name, start: r.start, end: r.end, minutes: r.minutes || 0, note: r.note || '' });
+        });
+    });
+    entries.sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+
+    const dow = ['일', '월', '화', '수', '목', '금', '토'][new Date(dateStr + 'T00:00:00Z').getUTCDay()];
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const header = `📋 ${m}월 ${d}일 (${dow}) 통빱 출퇴근현황`;
+
+    if (entries.length === 0) {
+        return `${header}\n\n입력된 출퇴근 내역이 없습니다.`;
+    }
+
+    let totalMin = 0;
+    const lines = entries.map(e => {
+        totalMin += e.minutes;
+        const noteStr = e.note ? ` (${e.note})` : '';
+        return `${e.name}: ${e.start}~${e.end} ${fmtMinKo(e.minutes)}${noteStr}`;
+    });
+    return `${header}\n\n${lines.join('\n')}\n\n합계 ${entries.length}명 / ${fmtMinKo(totalMin)}`;
+}
+
+// KST 기준 어제 날짜 "YYYY-MM-DD"
+function getKstYesterday() {
+    const kst = new Date(Date.now() + 9 * 3600 * 1000);
+    kst.setUTCDate(kst.getUTCDate() - 1);
+    return kst.toISOString().slice(0, 10);
+}
+
 cron.schedule('0 9 * * *', async () => {
     try {
         const today = new Date();
@@ -1720,6 +1812,15 @@ cron.schedule('0 9 * * *', async () => {
         const dateStr = `${today.getMonth()+1}월 ${today.getDate()}일`;
         await sendToTelegram(`📅 [${dateStr} 근무현황]\n\n${msg}`);
     } catch (e) { console.error('텔레그램 근무현황 전송 실패:', e); }
+}, { timezone: "Asia/Seoul" });
+
+// 매일 오전 9시: 어제 알바 출퇴근 요약을 카톡 + 텔레그램으로 전송
+cron.schedule('0 9 * * *', async () => {
+    try {
+        const digest = getAttendanceDigest(getKstYesterday());
+        await sendToKakao(digest);
+        await sendToTelegram(digest);
+    } catch (e) { console.error('출퇴근 요약 전송 실패:', e); }
 }, { timezone: "Asia/Seoul" });
 
 cron.schedule('30 9 * * *', async () => {
