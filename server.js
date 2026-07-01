@@ -1785,17 +1785,37 @@ function getAttendanceDigest(dateStr) {
     const [y, m, d] = dateStr.split('-').map(Number);
     const header = `📋 ${m}월 ${d}일 (${dow}) 통빱 출퇴근현황`;
 
+    let dayPart;
     if (entries.length === 0) {
-        return `${header}\n\n입력된 출퇴근 내역이 없습니다.`;
+        dayPart = `${header}\n\n입력된 출퇴근 내역이 없습니다.`;
+    } else {
+        let totalMin = 0;
+        const lines = entries.map(e => {
+            totalMin += e.minutes;
+            const noteStr = e.note ? ` (${e.note})` : '';
+            return `${e.name}: ${e.start}~${e.end} ${fmtMinKo(e.minutes)}${noteStr}`;
+        });
+        dayPart = `${header}\n\n${lines.join('\n')}\n\n합계 ${entries.length}명 / ${fmtMinKo(totalMin)}`;
     }
 
-    let totalMin = 0;
-    const lines = entries.map(e => {
-        totalMin += e.minutes;
-        const noteStr = e.note ? ` (${e.note})` : '';
-        return `${e.name}: ${e.start}~${e.end} ${fmtMinKo(e.minutes)}${noteStr}`;
+    // 이번달(해당 날짜가 속한 달) 알바별 근무 누계 (총시간 많은 순)
+    const month = dateStr.slice(0, 7); // "YYYY-MM"
+    const monthAgg = [];
+    albas.forEach(s => {
+        const recs = (att[s.id] || []).filter(r => (r.date || '').startsWith(month));
+        if (recs.length === 0) return;
+        const tot = recs.reduce((sum, r) => sum + (r.minutes || 0), 0);
+        monthAgg.push({ name: s.name, days: recs.length, minutes: tot });
     });
-    return `${header}\n\n${lines.join('\n')}\n\n합계 ${entries.length}명 / ${fmtMinKo(totalMin)}`;
+    monthAgg.sort((a, b) => b.minutes - a.minutes);
+
+    let monthPart = '';
+    if (monthAgg.length > 0) {
+        const mlines = monthAgg.map(a => `${a.name}: ${a.days}일 / ${fmtMinKo(a.minutes)}`);
+        monthPart = `\n\n📆 ${m}월 근무 누계\n${mlines.join('\n')}`;
+    }
+
+    return dayPart + monthPart;
 }
 
 // KST 기준 어제 날짜 "YYYY-MM-DD"
