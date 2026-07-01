@@ -140,8 +140,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.lang-switch button').forEach(b => {
     b.addEventListener('click', () => setLang(b.dataset.lang));
   });
-  // 오늘 날짜 기본값 (KST)
+  // 오늘 날짜 기본값 (KST) + 요일별 기본 출퇴근 시간
   document.getElementById('fDate').value = kstToday();
+  applyDefaultTimes(kstToday());
+  // 날짜 변경 시 기본 시간 자동 세팅 (수정 중이 아닐 때만)
+  document.getElementById('fDate').addEventListener('change', (e) => {
+    if (!document.getElementById('editId').value) applyDefaultTimes(e.target.value);
+  });
   loadData();
 });
 
@@ -205,9 +210,19 @@ function buildTimeOptions() {
     const v = String(m).padStart(2, '0');
     mSel.forEach(s => s.add(new Option(v, v)));
   }
-  // 기본값: 출근 17:00, 퇴근 23:00 (매장 특성상)
-  document.getElementById('fStartH').value = '17';
-  document.getElementById('fEndH').value = '23';
+}
+
+// 선택한 날짜의 요일에 따라 기본 출퇴근 시간 세팅
+// 평일(월~금): 16:00~22:00, 주말(토·일): 14:00~20:00
+function applyDefaultTimes(dateStr) {
+  if (!dateStr) return;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dow = new Date(y, m - 1, d).getDay(); // 0=일, 6=토
+  const weekend = (dow === 0 || dow === 6);
+  document.getElementById('fStartH').value = weekend ? '14' : '16';
+  document.getElementById('fStartM').value = '00';
+  document.getElementById('fEndH').value = weekend ? '20' : '22';
+  document.getElementById('fEndM').value = '00';
 }
 
 // ==========================================
