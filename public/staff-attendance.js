@@ -44,6 +44,11 @@ function openAttLink(id) {
             </div>
             ${hasToken ? `
                 <p style="font-size:13px; color:#555; margin-bottom:8px;">아래 링크를 <strong>${s.name}</strong>님에게 카톡으로 보내주세요. 이 링크로 본인 출퇴근만 입력할 수 있습니다.</p>
+                <div style="font-size:12px; margin:0 0 10px; padding:8px 10px; border-radius:8px; ${s.attDeviceBound ? 'background:#e6fcf5; color:#0ca678;' : 'background:#fff9db; color:#e67700;'}">
+                    ${s.attDeviceBound
+                        ? '📱 기기 등록됨 — 등록된 휴대폰에서만 입력 가능합니다.'
+                        : '📱 아직 미등록 — 처음 링크를 연 휴대폰에 자동 등록됩니다. (발급 후 열지 말고 바로 알바에게 보내세요)'}
+                </div>
                 <input id="attLinkInput" type="text" readonly value="${link}"
                     style="width:100%; padding:10px; border:1.5px solid #dee2e6; border-radius:8px; font-size:13px; background:#f8f9fa; margin-bottom:12px;"
                     onclick="this.select()">
@@ -52,7 +57,8 @@ function openAttLink(id) {
                     <button onclick="reissueAttToken(${id})" style="background:#fab005; color:#fff; border:none; padding:12px 14px; border-radius:8px; font-weight:800; cursor:pointer;">🔄 재발급</button>
                     <button onclick="removeAttToken(${id})" style="background:#e03131; color:#fff; border:none; padding:12px 14px; border-radius:8px; font-weight:800; cursor:pointer;">🗑️ 해제</button>
                 </div>
-                <p style="font-size:11px; color:#999; margin-top:10px;">※ 재발급하면 이전 링크는 즉시 사용할 수 없게 됩니다 (유출 시 사용).</p>
+                ${s.attDeviceBound ? `<button onclick="resetAttDevice(${id})" style="width:100%; margin-top:8px; background:#f1f3f5; color:#495057; border:none; padding:11px; border-radius:8px; font-weight:800; cursor:pointer;">📱 기기 초기화 (폰 교체·오등록 시)</button>` : ''}
+                <p style="font-size:11px; color:#999; margin-top:10px;">※ 재발급하면 이전 링크·등록 기기가 모두 초기화됩니다 (유출 시 사용).</p>
             ` : `
                 <p style="font-size:13px; color:#555; margin-bottom:14px;"><strong>${s.name}</strong>님용 출퇴근 입력 링크를 발급합니다. 발급 후 카톡으로 전달하세요.</p>
                 <button onclick="reissueAttToken(${id})" style="width:100%; background:#f76707; color:#fff; border:none; padding:14px; border-radius:8px; font-weight:800; cursor:pointer;">🔗 링크 발급하기</button>
@@ -92,6 +98,22 @@ async function reissueAttToken(id) {
         renderManageList();
     } catch (e) {
         alert('링크 발급에 실패했습니다.');
+    }
+}
+
+async function resetAttDevice(id) {
+    if (!confirm('등록된 휴대폰을 초기화할까요?\n다음에 이 링크를 처음 여는 휴대폰이 새로 등록됩니다.')) return;
+    try {
+        const res = await fetch(`/api/staff/${id}/att-device-reset`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ actor: currentUser?.name || '사장님' })
+        });
+        if (!res.ok) throw new Error('fail');
+        await loadStaffData();       // attDeviceBound 갱신
+        openAttLink(id);             // 모달 상태 갱신
+    } catch (e) {
+        alert('기기 초기화에 실패했습니다.');
     }
 }
 

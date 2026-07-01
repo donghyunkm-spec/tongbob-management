@@ -31,6 +31,7 @@ const I18N = {
     needTime: '출근/퇴근 시간을 선택해 주세요.',
     needDate: '날짜를 선택해 주세요.',
     failed: '저장에 실패했습니다. 다시 시도해 주세요.',
+    deviceLocked: '이 링크는 다른 휴대폰에 등록되어 있습니다.\n본인 휴대폰이 맞다면 사장님께 "기기 초기화"를 요청해 주세요.',
     unit_h: '시간', unit_m: '분', days: '일',
     overnight: '(익일)'
   },
@@ -60,6 +61,7 @@ const I18N = {
     needTime: 'Please select clock-in / clock-out time.',
     needDate: 'Please select a date.',
     failed: 'Failed to save. Please try again.',
+    deviceLocked: 'This link is registered to another phone.\nIf this is your phone, please ask the owner to reset the device.',
     unit_h: 'h', unit_m: 'm', days: 'days',
     overnight: '(next day)'
   },
@@ -89,6 +91,7 @@ const I18N = {
     needTime: 'အလုပ်စ/ဆင်းချိန် ရွေးပါ။',
     needDate: 'ရက်စွဲ ရွေးပါ။',
     failed: 'သိမ်းဆည်း၍ မရပါ။ ထပ်စမ်းကြည့်ပါ။',
+    deviceLocked: 'ဤလင့်ခ်ကို အခြားဖုန်းတစ်လုံးတွင် မှတ်ပုံတင်ထားပါသည်။\nသင့်ဖုန်းမှန်လျှင် ဆိုင်ရှင်ကို " device reset" လုပ်ပေးရန် တောင်းဆိုပါ။',
     unit_h: 'နာရီ', unit_m: 'မိနစ်', days: 'ရက်',
     overnight: '(နောက်တစ်ရက်)'
   }
@@ -103,6 +106,22 @@ let staffName = '';
 let records = [];
 
 function t(key) { return I18N[lang][key]; }
+
+// 이 휴대폰 고유 식별자 (기기 잠금용) - 최초 접속 시 생성해 저장
+function getDeviceId() {
+  let id = localStorage.getItem('albaDeviceId');
+  if (!id) {
+    id = (crypto.randomUUID ? crypto.randomUUID() : 'd-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+    localStorage.setItem('albaDeviceId', id);
+  }
+  return id;
+}
+
+// 모든 알바 API 호출에 기기 ID 헤더 자동 첨부
+function albaFetch(url, opts = {}) {
+  opts.headers = Object.assign({}, opts.headers, { 'X-Device-Id': getDeviceId() });
+  return fetch(url, opts);
+}
 
 // ==========================================
 // 초기화
@@ -168,7 +187,8 @@ function buildTimeOptions() {
 // ==========================================
 async function loadData() {
   try {
-    const res = await fetch(`/api/alba/${encodeURIComponent(TOKEN)}`);
+    const res = await albaFetch(`/api/alba/${encodeURIComponent(TOKEN)}`);
+    if (res.status === 403) return showBlocked('deviceLocked');
     if (!res.ok) throw new Error('invalid');
     const json = await res.json();
     staffName = json.name;
@@ -177,11 +197,18 @@ async function loadData() {
     document.getElementById('app').classList.remove('hidden');
     applyLang();
   } catch (e) {
-    document.getElementById('loading').classList.add('hidden');
-    const ep = document.getElementById('errorPage');
-    ep.classList.remove('hidden');
-    ep.querySelector('[data-t]').textContent = t('invalidLink');
+    showBlocked('invalidLink');
   }
+}
+
+// 접속 차단 화면 (잘못된 링크 / 다른 기기)
+function showBlocked(msgKey) {
+  document.getElementById('loading').classList.add('hidden');
+  document.getElementById('app').classList.add('hidden');
+  const ep = document.getElementById('errorPage');
+  ep.classList.remove('hidden');
+  ep.querySelector('[data-t]').textContent = t(msgKey);
+  ep.querySelector('.big').textContent = msgKey === 'deviceLocked' ? '📱' : '🔒';
 }
 
 // ==========================================
@@ -201,11 +228,12 @@ async function saveRecord() {
     const url = editId
       ? `/api/alba/${encodeURIComponent(TOKEN)}/record/${editId}`
       : `/api/alba/${encodeURIComponent(TOKEN)}/record`;
-    const res = await fetch(url, {
+    const res = await albaFetch(url, {
       method: editId ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ date, start, end, note })
     });
+    if (res.status === 403) { btn.disabled = false; return showBlocked('deviceLocked'); }
     if (!res.ok) throw new Error('fail');
     toast(editId ? t('updated') : t('saved'));
     cancelEdit();
@@ -244,7 +272,8 @@ function cancelEdit() {
 async function delRecord(id) {
   if (!confirm(t('confirmDel'))) return;
   try {
-    const res = await fetch(`/api/alba/${encodeURIComponent(TOKEN)}/record/${id}`, { method: 'DELETE' });
+    const res = await albaFetch(`/api/alba/${encodeURIComponent(TOKEN)}/record/${id}`, { method: 'DELETE' });
+    if (res.status === 403) return showBlocked('deviceLocked');
     if (!res.ok) throw new Error('fail');
     toast(t('deleted'));
     if (document.getElementById('editId').value == id) cancelEdit();

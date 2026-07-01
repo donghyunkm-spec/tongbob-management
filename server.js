@@ -139,13 +139,6 @@ function calcWorkMinutes(start, end) {
     return diff;
 }
 
-// 토큰으로 직원 찾기 (삭제된 직원 제외)
-function findStaffByToken(token) {
-    if (!token) return null;
-    const staff = readJson(STAFF_FILE, []);
-    return staff.find(s => s.attToken && s.attToken === token && !s.deleted) || null;
-}
-
 // 출퇴근 수정/삭제 이력 기록
 function addAttLog(staffId, staffName, action, actor, detail) {
     const logs = readJson(ATTENDANCE_LOG_FILE, []);
@@ -219,14 +212,14 @@ app.get('/api/staff', (req, res) => {
         staff = staff.filter(s => !s.deleted);
     }
 
-    // ✅ admin이 아니면 급여 정보 + 출퇴근 토큰(비밀값) 제거
+    // ✅ admin이 아니면 급여 정보 + 출퇴근 토큰/기기(비밀값) 제거
     if (role !== 'admin') {
         staff = staff.map(s => {
-            const { salary, salaryType, attToken, ...rest } = s;
+            const { salary, salaryType, attToken, attDevice, attDeviceBoundAt, ...rest } = s;
             return { ...rest, hasAttToken: !!attToken };
         });
     } else {
-        staff = staff.map(s => ({ ...s, hasAttToken: !!s.attToken }));
+        staff = staff.map(s => ({ ...s, hasAttToken: !!s.attToken, attDeviceBound: !!s.attDevice }));
     }
 
     res.json({ success: true, data: staff });
@@ -495,6 +488,8 @@ app.post('/api/staff/:id/att-token', (req, res) => {
 
     const isReissue = !!target.attToken;
     target.attToken = crypto.randomBytes(24).toString('base64url'); // 32자 URL-safe
+    delete target.attDevice;        // 재발급 시 기기 등록 초기화
+    delete target.attDeviceBoundAt;
     if (!writeJson(STAFF_FILE, staff)) return res.status(500).json({ success: false });
     addLog(actor || '사장님', '출퇴근링크', target.name, isReissue ? '링크 재발급' : '링크 발급');
     res.json({ success: true, token: target.attToken });
@@ -507,8 +502,23 @@ app.delete('/api/staff/:id/att-token', (req, res) => {
     const target = staff.find(s => s.id == req.params.id);
     if (!target) return res.status(404).json({ success: false, error: '직원 없음' });
     delete target.attToken;
+    delete target.attDevice;
+    delete target.attDeviceBoundAt;
     if (!writeJson(STAFF_FILE, staff)) return res.status(500).json({ success: false });
     addLog(actor || '사장님', '출퇴근링크', target.name, '링크 해제');
+    res.json({ success: true });
+});
+
+// --- [관리자] 등록 기기 초기화 (폰 교체/오등록 시 다음 접속 기기로 재등록) ---
+app.post('/api/staff/:id/att-device-reset', (req, res) => {
+    const { actor } = req.body || {};
+    let staff = readJson(STAFF_FILE, []);
+    const target = staff.find(s => s.id == req.params.id);
+    if (!target) return res.status(404).json({ success: false, error: '직원 없음' });
+    delete target.attDevice;
+    delete target.attDeviceBoundAt;
+    if (!writeJson(STAFF_FILE, staff)) return res.status(500).json({ success: false });
+    addLog(actor || '사장님', '출퇴근링크', target.name, '등록 기기 초기화');
     res.json({ success: true });
 });
 
@@ -538,10 +548,37 @@ app.get('/api/attendance/logs', (req, res) => {
     res.json({ success: true, data: readJson(ATTENDANCE_LOG_FILE, []) });
 });
 
+// 토큰 + 기기 확인. 미등록이면 현재 기기(deviceId)로 자동 고정.
+// return: { code:'OK'|'NOTFOUND'|'NODEVICE'|'MISMATCH', target }
+function resolveAlba(token, deviceId) {
+    const staff = readJson(STAFF_FILE, []);
+    const target = staff.find(s => s.attToken && s.attToken === token && !s.deleted);
+    if (!target) return { code: 'NOTFOUND' };
+    if (!deviceId) return { code: 'NODEVICE', target };
+    if (!target.attDevice) {
+        target.attDevice = deviceId;
+        target.attDeviceBoundAt = new Date().toISOString();
+        writeJson(STAFF_FILE, staff);
+        return { code: 'OK', target };
+    }
+    if (target.attDevice === deviceId) return { code: 'OK', target };
+    return { code: 'MISMATCH', target };
+}
+
+// 알바 API 공통 게이트. 통과 시 staff 반환, 실패 시 응답 전송 후 null 반환.
+function albaGate(req, res) {
+    const deviceId = (req.get('X-Device-Id') || '').trim();
+    const r = resolveAlba(req.params.token, deviceId);
+    if (r.code === 'NOTFOUND') { res.status(404).json({ success: false, error: 'invalid_token' }); return null; }
+    if (r.code === 'NODEVICE') { res.status(400).json({ success: false, error: 'no_device' }); return null; }
+    if (r.code === 'MISMATCH') { res.status(403).json({ success: false, error: 'device_mismatch' }); return null; }
+    return r.target;
+}
+
 // --- [알바] 토큰으로 본인 정보 + 기록 + 통계 조회 ---
 app.get('/api/alba/:token', (req, res) => {
-    const staff = findStaffByToken(req.params.token);
-    if (!staff) return res.status(404).json({ success: false, error: 'invalid token' });
+    const staff = albaGate(req, res);
+    if (!staff) return;
     const att = readJson(ATTENDANCE_FILE, {});
     const stats = buildAttStats(att[staff.id] || []);
     res.json({ success: true, name: staff.name, ...stats });
@@ -549,8 +586,8 @@ app.get('/api/alba/:token', (req, res) => {
 
 // --- [알바] 출퇴근 기록 추가 ---
 app.post('/api/alba/:token/record', (req, res) => {
-    const staff = findStaffByToken(req.params.token);
-    if (!staff) return res.status(404).json({ success: false, error: 'invalid token' });
+    const staff = albaGate(req, res);
+    if (!staff) return;
     const { date, start, end, note } = req.body || {};
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return res.status(400).json({ success: false, error: 'bad date' });
     const minutes = calcWorkMinutes(start, end);
@@ -568,8 +605,8 @@ app.post('/api/alba/:token/record', (req, res) => {
 
 // --- [알바] 출퇴근 기록 수정 ---
 app.put('/api/alba/:token/record/:rid', (req, res) => {
-    const staff = findStaffByToken(req.params.token);
-    if (!staff) return res.status(404).json({ success: false, error: 'invalid token' });
+    const staff = albaGate(req, res);
+    if (!staff) return;
     const { date, start, end, note } = req.body || {};
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return res.status(400).json({ success: false, error: 'bad date' });
     const minutes = calcWorkMinutes(start, end);
@@ -589,8 +626,8 @@ app.put('/api/alba/:token/record/:rid', (req, res) => {
 
 // --- [알바] 출퇴근 기록 삭제 ---
 app.delete('/api/alba/:token/record/:rid', (req, res) => {
-    const staff = findStaffByToken(req.params.token);
-    if (!staff) return res.status(404).json({ success: false, error: 'invalid token' });
+    const staff = albaGate(req, res);
+    if (!staff) return;
     const att = readJson(ATTENDANCE_FILE, {});
     const list = att[staff.id] || [];
     const idx = list.findIndex(r => r.id == req.params.rid);
