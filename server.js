@@ -12,9 +12,10 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// === [설정] 카카오 등 (환경변수에서 읽음) ===
-const KAKAO_REST_API_KEY = process.env.KAKAO_REST_API_KEY || '';
-const KAKAO_REDIRECT_URI = process.env.KAKAO_REDIRECT_URI || 'http://localhost:3000/oauth/kakao';
+// === [설정] 카카오 등 (환경변수 우선, 없으면 통빱 프로덕션 기본값) ===
+// 기본값은 public/kakao-auth.html 의 로그인 설정과 일치해야 함 (client_id/redirect_uri 동일 필수)
+const KAKAO_REST_API_KEY = process.env.KAKAO_REST_API_KEY || 'b93a072ab458557243baf45e12f2a011';
+const KAKAO_REDIRECT_URI = process.env.KAKAO_REDIRECT_URI || 'https://tongbob-management-production.up.railway.app/oauth/kakao';
 
 // === [설정] 텔레그램 ===
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '';
