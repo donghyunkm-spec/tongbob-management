@@ -113,6 +113,12 @@ async function onLoginSuccess(user) {
         const backupBtn = document.getElementById('adminBackupBtn');
         if(backupBtn) backupBtn.style.display = 'block';
 
+        // 출퇴근 요약 서브탭 표시 + 서브탭 그리드 6열로
+        const attSummaryTab = document.getElementById('tab-att-summary');
+        if(attSummaryTab) attSummaryTab.style.display = '';
+        const attSubTabs = document.getElementById('att-sub-tabs');
+        if(attSubTabs) attSubTabs.style.gridTemplateColumns = 'repeat(6, 1fr)';
+
         try { await loadLogs(); } catch(e) {}
     }
 

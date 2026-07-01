@@ -202,17 +202,24 @@ function renderManageList() {
         const idCardBadge = (s.idCardIssued === false) ?
             `<span style="background:#ff7043; color:white; padding:2px 6px; border-radius:3px; font-size:11px; margin-left:6px;">🪪 ID 미발급</span>` : '';
 
+        // 출퇴근 링크 배지/버튼 (사장님 전용)
+        const attBadge = (isAdmin && s.hasAttToken) ?
+            `<span style="background:#f76707; color:white; padding:2px 6px; border-radius:3px; font-size:11px; margin-left:6px;">🔗 출퇴근링크</span>` : '';
+        const attBtn = isAdmin ?
+            `<button class="edit-btn" style="background:#f76707;" onclick="openAttLink(${s.id})">🔗 링크</button>` : '';
+
         list.innerHTML += `
             <div class="reservation-item">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <div>
-                        <strong style="font-size:16px;">${s.name}</strong>${idCardBadge}
+                        <strong style="font-size:16px;">${s.name}</strong>${idCardBadge}${attBadge}
                         <div style="font-size:13px; margin-top:5px;">${rolesBadge}</div>
                         <div style="font-size:12px; margin-top:5px; color:#555;">${scheduleStr}</div>
                         ${salaryInfo}
                         ${paidUntilInfo}
                     </div>
                     <div>
+                        ${attBtn}
                         <button class="edit-btn" onclick="openEditModal(${s.id})">수정</button>
                         <button class="delete-btn" onclick="deleteStaff(${s.id})">삭제</button>
                     </div>

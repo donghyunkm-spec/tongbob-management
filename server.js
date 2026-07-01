@@ -7,6 +7,7 @@ const zlib = require('zlib');
 const cron = require('node-cron');
 const axios = require('axios');
 const FormData = require('form-data');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,6 +36,8 @@ const STAFF_FILE = path.join(actualDataPath, 'staff.json');
 const LOG_FILE = path.join(actualDataPath, 'logs.json');
 const ACCOUNTING_FILE = path.join(actualDataPath, 'accounting.json');
 const KAKAO_TOKEN_FILE = path.join(actualDataPath, 'kakao_token.json');
+const ATTENDANCE_FILE = path.join(actualDataPath, 'attendance.json');       // 알바 출퇴근 기록 { staffId: [ {id,date,start,end,minutes,note,createdAt,updatedAt} ] }
+const ATTENDANCE_LOG_FILE = path.join(actualDataPath, 'attendance_logs.json'); // 수정/삭제 이력 (최대 1000)
 
 // 2. 재고관리용 (Inventory)
 const INVENTORY_ITEMS_FILE = path.join(actualDataPath, 'items.json');
@@ -62,6 +65,8 @@ initFile(STAFF_FILE, []);
 initFile(LOG_FILE, []);
 initFile(ACCOUNTING_FILE, { monthly: {}, daily: {} });
 initFile(KAKAO_TOKEN_FILE, []);
+initFile(ATTENDANCE_FILE, {});
+initFile(ATTENDANCE_LOG_FILE, []);
 
 // === [유틸리티 함수] ===
 function readJson(file, defaultVal = []) {
@@ -112,6 +117,55 @@ function addLog(actor, action, target, details) {
     });
     if (logs.length > 1000) logs.pop();
     writeJson(LOG_FILE, logs);
+}
+
+// === [출퇴근] 유틸리티 ===
+// "HH:MM" -> 분(0~1439). 유효하지 않으면 null
+function parseHM(str) {
+    if (typeof str !== 'string') return null;
+    const m = str.match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return null;
+    const h = parseInt(m[1], 10), mm = parseInt(m[2], 10);
+    if (h < 0 || h > 23 || mm < 0 || mm > 59) return null;
+    return h * 60 + mm;
+}
+
+// 근무 분 계산 (자정 넘김 자동 처리: 퇴근<=출근이면 다음날로 간주)
+function calcWorkMinutes(start, end) {
+    const s = parseHM(start), e = parseHM(end);
+    if (s === null || e === null) return null;
+    let diff = e - s;
+    if (diff <= 0) diff += 24 * 60; // 자정 넘김
+    return diff;
+}
+
+// 토큰으로 직원 찾기 (삭제된 직원 제외)
+function findStaffByToken(token) {
+    if (!token) return null;
+    const staff = readJson(STAFF_FILE, []);
+    return staff.find(s => s.attToken && s.attToken === token && !s.deleted) || null;
+}
+
+// 출퇴근 수정/삭제 이력 기록
+function addAttLog(staffId, staffName, action, actor, detail) {
+    const logs = readJson(ATTENDANCE_LOG_FILE, []);
+    logs.unshift({
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        timestamp: new Date().toISOString(),
+        staffId, staffName, action, actor, detail
+    });
+    if (logs.length > 1000) logs.pop();
+    writeJson(ATTENDANCE_LOG_FILE, logs);
+}
+
+// 기록 목록 + 통계 계산
+function buildAttStats(records) {
+    const list = [...(records || [])].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    const days = list.length;
+    const totalMin = list.reduce((sum, r) => sum + (r.minutes || 0), 0);
+    const maxMin = list.reduce((mx, r) => Math.max(mx, r.minutes || 0), 0);
+    const avgMin = days > 0 ? Math.round(totalMin / days) : 0;
+    return { records: list, days, totalMin, avgMin, maxMin };
 }
 
 // [초기화] 재고관리 필수 파일 생성
@@ -165,12 +219,14 @@ app.get('/api/staff', (req, res) => {
         staff = staff.filter(s => !s.deleted);
     }
 
-    // ✅ admin이 아니면 급여 정보 제거
+    // ✅ admin이 아니면 급여 정보 + 출퇴근 토큰(비밀값) 제거
     if (role !== 'admin') {
         staff = staff.map(s => {
-            const { salary, salaryType, ...rest } = s;
-            return rest;
+            const { salary, salaryType, attToken, ...rest } = s;
+            return { ...rest, hasAttToken: !!attToken };
         });
+    } else {
+        staff = staff.map(s => ({ ...s, hasAttToken: !!s.attToken }));
     }
 
     res.json({ success: true, data: staff });
@@ -424,6 +480,132 @@ app.post('/api/staff/temp', async (req, res) => {
         }
         res.json({ success: true });
     } else res.status(500).json({ success: false });
+});
+
+// =======================
+// [API] 알바 출퇴근 (attendance)
+// =======================
+
+// --- [관리자] 출퇴근 링크(토큰) 발급/재발급 ---
+app.post('/api/staff/:id/att-token', (req, res) => {
+    const { actor } = req.body || {};
+    let staff = readJson(STAFF_FILE, []);
+    const target = staff.find(s => s.id == req.params.id);
+    if (!target) return res.status(404).json({ success: false, error: '직원 없음' });
+
+    const isReissue = !!target.attToken;
+    target.attToken = crypto.randomBytes(24).toString('base64url'); // 32자 URL-safe
+    if (!writeJson(STAFF_FILE, staff)) return res.status(500).json({ success: false });
+    addLog(actor || '사장님', '출퇴근링크', target.name, isReissue ? '링크 재발급' : '링크 발급');
+    res.json({ success: true, token: target.attToken });
+});
+
+// --- [관리자] 출퇴근 링크 해제 ---
+app.delete('/api/staff/:id/att-token', (req, res) => {
+    const { actor } = req.body || {};
+    let staff = readJson(STAFF_FILE, []);
+    const target = staff.find(s => s.id == req.params.id);
+    if (!target) return res.status(404).json({ success: false, error: '직원 없음' });
+    delete target.attToken;
+    if (!writeJson(STAFF_FILE, staff)) return res.status(500).json({ success: false });
+    addLog(actor || '사장님', '출퇴근링크', target.name, '링크 해제');
+    res.json({ success: true });
+});
+
+// --- [관리자] 월별 출퇴근 요약 (알바별 총시간/근무일수/평균/하루최대) ---
+app.get('/api/attendance/summary', (req, res) => {
+    const month = req.query.month; // "YYYY-MM", 없으면 전체
+    const staff = readJson(STAFF_FILE, []);
+    const att = readJson(ATTENDANCE_FILE, {});
+    // 토큰이 발급된 직원 = 관리 대상 알바
+    const albas = staff.filter(s => s.attToken && !s.deleted);
+    const result = albas.map(s => {
+        let records = att[s.id] || [];
+        if (month) records = records.filter(r => (r.date || '').startsWith(month));
+        const stats = buildAttStats(records);
+        return {
+            id: s.id, name: s.name,
+            days: stats.days, totalMin: stats.totalMin,
+            avgMin: stats.avgMin, maxMin: stats.maxMin,
+            records: stats.records
+        };
+    });
+    res.json({ success: true, data: result });
+});
+
+// --- [관리자] 출퇴근 수정/삭제 이력 ---
+app.get('/api/attendance/logs', (req, res) => {
+    res.json({ success: true, data: readJson(ATTENDANCE_LOG_FILE, []) });
+});
+
+// --- [알바] 토큰으로 본인 정보 + 기록 + 통계 조회 ---
+app.get('/api/alba/:token', (req, res) => {
+    const staff = findStaffByToken(req.params.token);
+    if (!staff) return res.status(404).json({ success: false, error: 'invalid token' });
+    const att = readJson(ATTENDANCE_FILE, {});
+    const stats = buildAttStats(att[staff.id] || []);
+    res.json({ success: true, name: staff.name, ...stats });
+});
+
+// --- [알바] 출퇴근 기록 추가 ---
+app.post('/api/alba/:token/record', (req, res) => {
+    const staff = findStaffByToken(req.params.token);
+    if (!staff) return res.status(404).json({ success: false, error: 'invalid token' });
+    const { date, start, end, note } = req.body || {};
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return res.status(400).json({ success: false, error: 'bad date' });
+    const minutes = calcWorkMinutes(start, end);
+    if (minutes === null) return res.status(400).json({ success: false, error: 'bad time' });
+
+    const att = readJson(ATTENDANCE_FILE, {});
+    if (!att[staff.id]) att[staff.id] = [];
+    const now = new Date().toISOString();
+    const record = { id: Date.now() + Math.floor(Math.random() * 1000), date, start, end, minutes, note: note || '', createdAt: now, updatedAt: now };
+    att[staff.id].push(record);
+    if (!writeJson(ATTENDANCE_FILE, att)) return res.status(500).json({ success: false });
+    addAttLog(staff.id, staff.name, '입력', staff.name, `${date} ${start}~${end} (${Math.floor(minutes/60)}시간 ${minutes%60}분)`);
+    res.json({ success: true, record });
+});
+
+// --- [알바] 출퇴근 기록 수정 ---
+app.put('/api/alba/:token/record/:rid', (req, res) => {
+    const staff = findStaffByToken(req.params.token);
+    if (!staff) return res.status(404).json({ success: false, error: 'invalid token' });
+    const { date, start, end, note } = req.body || {};
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return res.status(400).json({ success: false, error: 'bad date' });
+    const minutes = calcWorkMinutes(start, end);
+    if (minutes === null) return res.status(400).json({ success: false, error: 'bad time' });
+
+    const att = readJson(ATTENDANCE_FILE, {});
+    const list = att[staff.id] || [];
+    const rec = list.find(r => r.id == req.params.rid);
+    if (!rec) return res.status(404).json({ success: false, error: 'record not found' });
+    const before = `${rec.date} ${rec.start}~${rec.end}`;
+    rec.date = date; rec.start = start; rec.end = end; rec.minutes = minutes; rec.note = note || '';
+    rec.updatedAt = new Date().toISOString();
+    if (!writeJson(ATTENDANCE_FILE, att)) return res.status(500).json({ success: false });
+    addAttLog(staff.id, staff.name, '수정', staff.name, `${before} → ${date} ${start}~${end}`);
+    res.json({ success: true, record: rec });
+});
+
+// --- [알바] 출퇴근 기록 삭제 ---
+app.delete('/api/alba/:token/record/:rid', (req, res) => {
+    const staff = findStaffByToken(req.params.token);
+    if (!staff) return res.status(404).json({ success: false, error: 'invalid token' });
+    const att = readJson(ATTENDANCE_FILE, {});
+    const list = att[staff.id] || [];
+    const idx = list.findIndex(r => r.id == req.params.rid);
+    if (idx === -1) return res.status(404).json({ success: false, error: 'record not found' });
+    const rec = list[idx];
+    list.splice(idx, 1);
+    att[staff.id] = list;
+    if (!writeJson(ATTENDANCE_FILE, att)) return res.status(500).json({ success: false });
+    addAttLog(staff.id, staff.name, '삭제', staff.name, `${rec.date} ${rec.start}~${rec.end}`);
+    res.json({ success: true });
+});
+
+// --- [알바] 토큰 페이지 서빙 (관리시스템과 분리된 독립 페이지) ---
+app.get('/alba/:token', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'alba.html'));
 });
 
 // =======================

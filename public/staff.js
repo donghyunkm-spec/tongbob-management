@@ -164,6 +164,7 @@ function switchAttSubTab(subId, btn) {
     if(subId === 'att-daily') renderDailyView();
     else if(subId === 'att-weekly') renderWeeklyView();
     else if(subId === 'att-monthly') renderMonthlyView();
+    else if(subId === 'att-attendance') loadAttendanceSummary();
     else if(subId === 'att-manage') renderManageList();
     else if(subId === 'att-logs') loadLogs();
 }

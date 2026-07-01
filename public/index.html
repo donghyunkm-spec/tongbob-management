@@ -677,10 +677,11 @@
 
         <div id="attendance-content" class="tab-content active">    
             <div class="accounting-card" style="padding: 10px; margin-bottom:15px;">
-                <div class="tabs sub-tabs" style="grid-template-columns: repeat(5, 1fr); margin-bottom: 0;">
+                <div id="att-sub-tabs" class="tabs sub-tabs" style="grid-template-columns: repeat(5, 1fr); margin-bottom: 0;">
                     <button class="tab active" onclick="switchAttSubTab('att-daily', this)">📅 일별</button>
                     <button class="tab" onclick="switchAttSubTab('att-weekly', this)">🗓 주간</button>
                     <button class="tab" onclick="switchAttSubTab('att-monthly', this)">📆 월별</button>
+                    <button class="tab tab-att-summary" id="tab-att-summary" style="display:none;" onclick="switchAttSubTab('att-attendance', this)">🕒 출퇴근</button>
                     <button class="tab tab-manage" onclick="switchAttSubTab('att-manage', this)">⚙️ 관리</button>
                     <button class="tab tab-logs" onclick="switchAttSubTab('att-logs', this)">📜 이력</button>
                 </div>
@@ -753,6 +754,43 @@
                     <div class="calendar-head">금</div>
                     <div class="calendar-head" style="color:blue">토</div>
                     <div id="calendarBody" style="display:contents;"></div>
+                </div>
+            </div>
+
+            <div id="att-attendance" class="att-sub-content">
+                <div class="form-container">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                        <h2>🕒 알바 출퇴근 현황</h2>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <button onclick="changeAttMonth(-1)" class="number-btn">&lt;</button>
+                            <strong id="attMonthLabel" style="min-width:90px; text-align:center;"></strong>
+                            <button onclick="changeAttMonth(1)" class="number-btn">&gt;</button>
+                        </div>
+                    </div>
+                    <p style="font-size:12px; color:#888; margin:6px 0 14px;">
+                        알바가 링크로 입력한 내역이 실시간 반영됩니다. 링크 발급은 아래 <strong>⚙️ 관리</strong> 탭의 각 직원 <strong>🔗 출퇴근 링크</strong> 버튼에서 하세요.
+                        <br>⚠️ 표시는 하루 최대 근무시간이 12시간을 초과한 경우(오입력/과다입력 의심)입니다.
+                    </p>
+                    <div style="overflow-x:auto;">
+                        <table class="log-table" id="attSummaryTable" style="width:100%;">
+                            <thead>
+                                <tr>
+                                    <th>알바</th><th>근무일수</th><th>총 근무시간</th><th>평균 근무</th><th>하루 최대</th><th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="attSummaryBody"></tbody>
+                        </table>
+                    </div>
+                    <div id="attDetailBox" style="margin-top:16px;"></div>
+
+                    <hr style="margin:24px 0;">
+                    <h3 style="margin-bottom:10px;">📜 출퇴근 수정/삭제 이력</h3>
+                    <div style="overflow-x:auto;">
+                        <table class="log-table">
+                            <thead><tr><th>시간</th><th>알바</th><th>구분</th><th>내용</th></tr></thead>
+                            <tbody id="attLogBody"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -1361,11 +1399,12 @@
     </script>
 
     <!-- 순서 중요: 전역변수 → 인증 → 직원관리 → 가계부 → 근무표 -->
-    <script src="staff.js?v=20260629b"></script>
-    <script src="staff-auth.js?v=20260629b"></script>
-    <script src="staff-employee.js?v=20260629b"></script>
+    <script src="staff.js?v=20260701a"></script>
+    <script src="staff-auth.js?v=20260701a"></script>
+    <script src="staff-employee.js?v=20260701a"></script>
     <script src="staff-accounting.js?v=20260629b"></script>
     <script src="staff-schedule.js?v=20260629b"></script>
+    <script src="staff-attendance.js?v=20260701a"></script>
     <!-- 재고관리: 전역변수/초기화 → 입력 → 확인/발주 → 품목관리 → 기타 -->
     <script src="inventory.js?v=20260629b"></script>
     <script src="inventory-input.js?v=20260629b"></script>

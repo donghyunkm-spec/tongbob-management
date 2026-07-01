@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="robots" content="noindex, nofollow">
+<title>통빱 출퇴근</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', -apple-system, sans-serif;
+    background: #f4f6f8; color: #2c3e50; line-height: 1.5;
+    padding: 0 0 40px; min-height: 100vh;
+  }
+  .wrap { max-width: 480px; margin: 0 auto; padding: 0 14px; }
+  header {
+    background: linear-gradient(135deg, #e8590c, #f76707); color: #fff;
+    padding: 18px 14px 16px; margin-bottom: 16px;
+    border-radius: 0 0 18px 18px; box-shadow: 0 4px 12px rgba(231,89,12,.25);
+  }
+  .header-top { display: flex; justify-content: space-between; align-items: center; }
+  .brand { font-size: 15px; font-weight: 700; opacity: .95; }
+  .greeting { font-size: 22px; font-weight: 800; margin-top: 10px; }
+  .lang-switch { display: flex; gap: 4px; }
+  .lang-switch button {
+    border: none; background: rgba(255,255,255,.2); color: #fff;
+    padding: 5px 9px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;
+  }
+  .lang-switch button.active { background: #fff; color: #e8590c; }
+
+  .card {
+    background: #fff; border-radius: 14px; padding: 16px;
+    margin-bottom: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  }
+  .card h2 { font-size: 15px; margin-bottom: 12px; color: #495057; display:flex; align-items:center; gap:6px; }
+
+  label { display: block; font-size: 13px; font-weight: 700; color: #868e96; margin: 10px 0 5px; }
+  input[type="date"], textarea, select {
+    width: 100%; padding: 12px; border: 1.5px solid #dee2e6; border-radius: 10px;
+    font-size: 16px; background: #fff; color: #2c3e50; font-family: inherit;
+  }
+  input[type="date"]:focus, textarea:focus, select:focus { outline: none; border-color: #f76707; }
+  textarea { resize: vertical; min-height: 44px; }
+  .time-row { display: flex; gap: 8px; }
+  .time-row select { flex: 1; text-align: center; }
+  .time-sep { align-self: center; font-weight: 800; color: #adb5bd; }
+
+  .btn {
+    width: 100%; padding: 14px; border: none; border-radius: 10px;
+    font-size: 16px; font-weight: 800; cursor: pointer; margin-top: 14px;
+  }
+  .btn-primary { background: #f76707; color: #fff; }
+  .btn-primary:active { background: #e8590c; }
+  .btn-ghost { background: #f1f3f5; color: #495057; }
+
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .stat { background: #fff8f2; border-radius: 12px; padding: 12px 8px; text-align: center; }
+  .stat .v { font-size: 19px; font-weight: 800; color: #e8590c; }
+  .stat .l { font-size: 11px; color: #868e96; margin-top: 3px; }
+
+  .rec { border: 1px solid #eef0f2; border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+  .rec-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .rec-date { font-weight: 800; font-size: 15px; }
+  .rec-time { color: #495057; font-size: 14px; margin-top: 3px; }
+  .rec-dur { color: #e8590c; font-weight: 700; font-size: 13px; margin-top: 3px; }
+  .rec-note { color: #868e96; font-size: 12px; margin-top: 4px; white-space: pre-wrap; }
+  .rec-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .rec-actions button { border: none; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .edit-b { background: #e7f5ff; color: #1971c2; }
+  .del-b { background: #fff0f0; color: #e03131; }
+  .empty { text-align: center; color: #adb5bd; padding: 24px 0; font-size: 14px; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%) translateY(20px);
+    background: #2c3e50; color: #fff; padding: 12px 22px; border-radius: 24px;
+    font-size: 14px; font-weight: 700; opacity: 0; transition: all .25s; z-index: 100; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .loading, .error-page { text-align: center; padding: 60px 20px; color: #868e96; }
+  .error-page .big { font-size: 40px; margin-bottom: 12px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+  <div id="app" class="hidden">
+    <header>
+      <div class="header-top">
+        <span class="brand">🍚 통빱</span>
+        <div class="lang-switch">
+          <button data-lang="ko">한국어</button>
+          <button data-lang="en">EN</button>
+          <button data-lang="my">မြန်မာ</button>
+        </div>
+      </div>
+      <div class="greeting"><span id="greetText"></span></div>
+    </header>
+
+    <div class="wrap">
+      <!-- 입력 카드 -->
+      <div class="card">
+        <h2>✏️ <span data-t="inputTitle"></span></h2>
+        <input type="hidden" id="editId" value="">
+
+        <label data-t="dateLabel"></label>
+        <input type="date" id="fDate">
+
+        <label data-t="startLabel"></label>
+        <div class="time-row">
+          <select id="fStartH"></select>
+          <span class="time-sep">:</span>
+          <select id="fStartM"></select>
+        </div>
+
+        <label data-t="endLabel"></label>
+        <div class="time-row">
+          <select id="fEndH"></select>
+          <span class="time-sep">:</span>
+          <select id="fEndM"></select>
+        </div>
+
+        <label data-t="noteLabel"></label>
+        <textarea id="fNote" rows="1"></textarea>
+
+        <button class="btn btn-primary" id="saveBtn" onclick="saveRecord()"></button>
+        <button class="btn btn-ghost hidden" id="cancelBtn" onclick="cancelEdit()"></button>
+      </div>
+
+      <!-- 요약 카드 -->
+      <div class="card">
+        <h2>📊 <span data-t="summaryTitle"></span></h2>
+        <div class="stats">
+          <div class="stat"><div class="v" id="stTotal">-</div><div class="l" data-t="stTotal"></div></div>
+          <div class="stat"><div class="v" id="stDays">-</div><div class="l" data-t="stDays"></div></div>
+          <div class="stat"><div class="v" id="stAvg">-</div><div class="l" data-t="stAvg"></div></div>
+        </div>
+      </div>
+
+      <!-- 내역 카드 -->
+      <div class="card">
+        <h2>🗒️ <span data-t="listTitle"></span></h2>
+        <div id="recList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="loading" class="loading">⏳</div>
+  <div id="errorPage" class="error-page hidden">
+    <div class="big">🔒</div>
+    <div data-t="invalidLink"></div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="alba.js?v=20260701a"></script>
+</body>
+</html>

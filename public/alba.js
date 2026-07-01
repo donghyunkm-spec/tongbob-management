@@ -1,0 +1,321 @@
+// alba.js - 알바 출퇴근 입력 페이지 (관리시스템과 분리된 독립 페이지)
+// URL: /alba/:token
+
+// ==========================================
+// 다국어 (한국어 / English / မြန်မာ)
+// ==========================================
+const I18N = {
+  ko: {
+    greet: name => `${name}님, 안녕하세요! 👋`,
+    inputTitle: '출퇴근 입력',
+    dateLabel: '날짜',
+    startLabel: '출근 시간',
+    endLabel: '퇴근 시간',
+    noteLabel: '메모 (선택)',
+    save: '저장하기',
+    saveEdit: '수정 저장',
+    cancel: '취소',
+    summaryTitle: '내 근무 요약',
+    stTotal: '총 근무시간',
+    stDays: '근무일수',
+    stAvg: '평균 근무',
+    listTitle: '내 근무내역',
+    edit: '수정',
+    del: '삭제',
+    empty: '아직 입력한 내역이 없어요.',
+    invalidLink: '잘못된 링크이거나 만료된 링크입니다.\n사장님께 문의해 주세요.',
+    saved: '저장되었습니다 ✅',
+    updated: '수정되었습니다 ✅',
+    deleted: '삭제되었습니다',
+    confirmDel: '이 기록을 삭제할까요?',
+    needTime: '출근/퇴근 시간을 선택해 주세요.',
+    needDate: '날짜를 선택해 주세요.',
+    failed: '저장에 실패했습니다. 다시 시도해 주세요.',
+    unit_h: '시간', unit_m: '분', days: '일',
+    overnight: '(익일)'
+  },
+  en: {
+    greet: name => `Hello, ${name}! 👋`,
+    inputTitle: 'Log Work Hours',
+    dateLabel: 'Date',
+    startLabel: 'Clock In',
+    endLabel: 'Clock Out',
+    noteLabel: 'Note (optional)',
+    save: 'Save',
+    saveEdit: 'Save Changes',
+    cancel: 'Cancel',
+    summaryTitle: 'My Summary',
+    stTotal: 'Total Hours',
+    stDays: 'Days Worked',
+    stAvg: 'Avg / Day',
+    listTitle: 'My Records',
+    edit: 'Edit',
+    del: 'Delete',
+    empty: 'No records yet.',
+    invalidLink: 'Invalid or expired link.\nPlease contact the owner.',
+    saved: 'Saved ✅',
+    updated: 'Updated ✅',
+    deleted: 'Deleted',
+    confirmDel: 'Delete this record?',
+    needTime: 'Please select clock-in / clock-out time.',
+    needDate: 'Please select a date.',
+    failed: 'Failed to save. Please try again.',
+    unit_h: 'h', unit_m: 'm', days: 'days',
+    overnight: '(next day)'
+  },
+  my: {
+    greet: name => `${name}၊ မင်္ဂလာပါ! 👋`,
+    inputTitle: 'အလုပ်ချိန် မှတ်တမ်းတင်ရန်',
+    dateLabel: 'ရက်စွဲ',
+    startLabel: 'အလုပ်စချိန်',
+    endLabel: 'အလုပ်ဆင်းချိန်',
+    noteLabel: 'မှတ်ချက် (ရွေးချယ်နိုင်)',
+    save: 'သိမ်းမည်',
+    saveEdit: 'ပြင်ဆင်ချက် သိမ်းမည်',
+    cancel: 'ပယ်ဖျက်',
+    summaryTitle: 'ကျွန်ုပ်၏ အနှစ်ချုပ်',
+    stTotal: 'စုစုပေါင်း အချိန်',
+    stDays: 'အလုပ်ဆင်းရက်',
+    stAvg: 'ပျမ်းမျှ (တစ်ရက်)',
+    listTitle: 'ကျွန်ုပ်၏ မှတ်တမ်း',
+    edit: 'ပြင်ရန်',
+    del: 'ဖျက်ရန်',
+    empty: 'မှတ်တမ်း မရှိသေးပါ။',
+    invalidLink: 'လင့်ခ် မမှန်ကန်ပါ သို့မဟုတ် သက်တမ်းကုန်သွားပါပြီ။\nဆိုင်ရှင်ကို ဆက်သွယ်ပါ။',
+    saved: 'သိမ်းဆည်းပြီးပါပြီ ✅',
+    updated: 'ပြင်ဆင်ပြီးပါပြီ ✅',
+    deleted: 'ဖျက်လိုက်ပါပြီ',
+    confirmDel: 'ဤမှတ်တမ်းကို ဖျက်မလား?',
+    needTime: 'အလုပ်စ/ဆင်းချိန် ရွေးပါ။',
+    needDate: 'ရက်စွဲ ရွေးပါ။',
+    failed: 'သိမ်းဆည်း၍ မရပါ။ ထပ်စမ်းကြည့်ပါ။',
+    unit_h: 'နာရီ', unit_m: 'မိနစ်', days: 'ရက်',
+    overnight: '(နောက်တစ်ရက်)'
+  }
+};
+
+// ==========================================
+// 상태
+// ==========================================
+const TOKEN = decodeURIComponent(location.pathname.split('/alba/')[1] || '').replace(/\/$/, '');
+let lang = localStorage.getItem('albaLang') || 'ko';
+let staffName = '';
+let records = [];
+
+function t(key) { return I18N[lang][key]; }
+
+// ==========================================
+// 초기화
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+  document.documentElement.lang = lang;
+  buildTimeOptions();
+  // 언어 버튼
+  document.querySelectorAll('.lang-switch button').forEach(b => {
+    b.addEventListener('click', () => setLang(b.dataset.lang));
+  });
+  // 오늘 날짜 기본값 (KST)
+  document.getElementById('fDate').value = kstToday();
+  loadData();
+});
+
+function kstToday() {
+  return new Date(Date.now() + 9 * 3600 * 1000).toISOString().split('T')[0];
+}
+
+function setLang(l) {
+  lang = l;
+  localStorage.setItem('albaLang', l);
+  document.documentElement.lang = l;
+  applyLang();
+}
+
+function applyLang() {
+  document.querySelectorAll('.lang-switch button').forEach(b =>
+    b.classList.toggle('active', b.dataset.lang === lang));
+  document.querySelectorAll('[data-t]').forEach(el => {
+    el.textContent = t(el.dataset.t);
+  });
+  document.getElementById('greetText').textContent = I18N[lang].greet(staffName);
+  const editing = document.getElementById('editId').value;
+  document.getElementById('saveBtn').textContent = editing ? t('saveEdit') : t('save');
+  document.getElementById('cancelBtn').textContent = t('cancel');
+  renderList();
+  renderStats();
+}
+
+// ==========================================
+// 시간 옵션 (10분 단위)
+// ==========================================
+function buildTimeOptions() {
+  const hSel = ['fStartH', 'fEndH'].map(id => document.getElementById(id));
+  const mSel = ['fStartM', 'fEndM'].map(id => document.getElementById(id));
+  for (let h = 0; h < 24; h++) {
+    const v = String(h).padStart(2, '0');
+    hSel.forEach(s => s.add(new Option(v, v)));
+  }
+  for (let m = 0; m < 60; m += 10) {
+    const v = String(m).padStart(2, '0');
+    mSel.forEach(s => s.add(new Option(v, v)));
+  }
+  // 기본값: 출근 17:00, 퇴근 23:00 (매장 특성상)
+  document.getElementById('fStartH').value = '17';
+  document.getElementById('fEndH').value = '23';
+}
+
+// ==========================================
+// 데이터 로드
+// ==========================================
+async function loadData() {
+  try {
+    const res = await fetch(`/api/alba/${encodeURIComponent(TOKEN)}`);
+    if (!res.ok) throw new Error('invalid');
+    const json = await res.json();
+    staffName = json.name;
+    records = json.records || [];
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    applyLang();
+  } catch (e) {
+    document.getElementById('loading').classList.add('hidden');
+    const ep = document.getElementById('errorPage');
+    ep.classList.remove('hidden');
+    ep.querySelector('[data-t]').textContent = t('invalidLink');
+  }
+}
+
+// ==========================================
+// 저장 / 수정
+// ==========================================
+async function saveRecord() {
+  const date = document.getElementById('fDate').value;
+  if (!date) return toast(t('needDate'));
+  const start = document.getElementById('fStartH').value + ':' + document.getElementById('fStartM').value;
+  const end = document.getElementById('fEndH').value + ':' + document.getElementById('fEndM').value;
+  const note = document.getElementById('fNote').value.trim();
+  const editId = document.getElementById('editId').value;
+
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true;
+  try {
+    const url = editId
+      ? `/api/alba/${encodeURIComponent(TOKEN)}/record/${editId}`
+      : `/api/alba/${encodeURIComponent(TOKEN)}/record`;
+    const res = await fetch(url, {
+      method: editId ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date, start, end, note })
+    });
+    if (!res.ok) throw new Error('fail');
+    toast(editId ? t('updated') : t('saved'));
+    cancelEdit();
+    await loadData();
+  } catch (e) {
+    toast(t('failed'));
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function startEdit(id) {
+  const r = records.find(x => x.id == id);
+  if (!r) return;
+  document.getElementById('editId').value = r.id;
+  document.getElementById('fDate').value = r.date;
+  const [sh, sm] = r.start.split(':');
+  const [eh, em] = r.end.split(':');
+  document.getElementById('fStartH').value = sh;
+  document.getElementById('fStartM').value = sm;
+  document.getElementById('fEndH').value = eh;
+  document.getElementById('fEndM').value = em;
+  document.getElementById('fNote').value = r.note || '';
+  document.getElementById('saveBtn').textContent = t('saveEdit');
+  document.getElementById('cancelBtn').classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function cancelEdit() {
+  document.getElementById('editId').value = '';
+  document.getElementById('fNote').value = '';
+  document.getElementById('saveBtn').textContent = t('save');
+  document.getElementById('cancelBtn').classList.add('hidden');
+}
+
+async function delRecord(id) {
+  if (!confirm(t('confirmDel'))) return;
+  try {
+    const res = await fetch(`/api/alba/${encodeURIComponent(TOKEN)}/record/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('fail');
+    toast(t('deleted'));
+    if (document.getElementById('editId').value == id) cancelEdit();
+    await loadData();
+  } catch (e) {
+    toast(t('failed'));
+  }
+}
+
+// ==========================================
+// 렌더링
+// ==========================================
+function fmtDur(min) {
+  const h = Math.floor(min / 60), m = min % 60;
+  let s = '';
+  if (h > 0) s += `${h}${t('unit_h')} `;
+  if (m > 0 || h === 0) s += `${m}${t('unit_m')}`;
+  return s.trim();
+}
+
+function renderStats() {
+  const days = records.length;
+  const total = records.reduce((s, r) => s + (r.minutes || 0), 0);
+  const avg = days > 0 ? Math.round(total / days) : 0;
+  document.getElementById('stTotal').textContent = fmtDur(total);
+  document.getElementById('stDays').textContent = `${days}${t('days')}`;
+  document.getElementById('stAvg').textContent = days > 0 ? fmtDur(avg) : '-';
+}
+
+function renderList() {
+  const box = document.getElementById('recList');
+  if (!records.length) {
+    box.innerHTML = `<div class="empty">${t('empty')}</div>`;
+    return;
+  }
+  const sorted = [...records].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  box.innerHTML = sorted.map(r => {
+    // 자정 넘김 표시
+    const overnight = (parseInt(r.end.replace(':', ''), 10) <= parseInt(r.start.replace(':', ''), 10))
+      ? ` <span style="color:#adb5bd;font-size:12px;">${t('overnight')}</span>` : '';
+    const note = r.note ? `<div class="rec-note">📝 ${escapeHtml(r.note)}</div>` : '';
+    return `
+      <div class="rec">
+        <div class="rec-top">
+          <div>
+            <div class="rec-date">${r.date}</div>
+            <div class="rec-time">${r.start} ~ ${r.end}${overnight}</div>
+            <div class="rec-dur">${fmtDur(r.minutes || 0)}</div>
+            ${note}
+          </div>
+          <div class="rec-actions">
+            <button class="edit-b" onclick="startEdit(${r.id})">${t('edit')}</button>
+            <button class="del-b" onclick="delRecord(${r.id})">${t('del')}</button>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// ==========================================
+// 토스트
+// ==========================================
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2000);
+}
