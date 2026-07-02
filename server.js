@@ -549,6 +549,84 @@ app.get('/api/attendance/logs', (req, res) => {
     res.json({ success: true, data: readJson(ATTENDANCE_LOG_FILE, []) });
 });
 
+// --- [관리자] 출퇴근 중복 정리 (버튼 연타로 쌓인 동일 기록/로그 제거) ---
+// 동일 기록 판정: 같은 알바 + 같은 날짜 + 같은 출근 + 같은 퇴근 → 1건만 남기고 제거
+// GET  /api/attendance/dedup?key=관리자비번        → 미리보기 (변경 없음)
+// POST /api/attendance/dedup?key=관리자비번&confirm=1 → 실제 정리 (백업 후 실행)
+function computeAttDedup() {
+    const att = readJson(ATTENDANCE_FILE, {});
+    const logs = readJson(ATTENDANCE_LOG_FILE, []);
+    const staff = readJson(STAFF_FILE, []);
+    const nameById = {};
+    staff.forEach(s => { nameById[s.id] = s.name; });
+
+    // 기록 중복 제거 (먼저 들어온 1건 유지)
+    const cleanedAtt = {};
+    const recDups = [];
+    let recRemoved = 0;
+    for (const [sid, list] of Object.entries(att)) {
+        const seen = new Set();
+        const kept = [];
+        const dupCount = {};
+        for (const r of (list || [])) {
+            const key = `${r.date}|${r.start}|${r.end}`;
+            if (seen.has(key)) { dupCount[key] = (dupCount[key] || 1) + 1; recRemoved++; continue; }
+            seen.add(key);
+            kept.push(r);
+        }
+        cleanedAtt[sid] = kept;
+        Object.entries(dupCount).forEach(([key, total]) => {
+            const [date, start, end] = key.split('|');
+            recDups.push({ name: nameById[sid] || sid, date, start, end, total, removed: total - 1 });
+        });
+    }
+
+    // '입력' 로그 중복 제거 (같은 알바 + 같은 상세내용 → 1건만 유지). 수정/삭제 이력은 보존.
+    const seenLog = new Set();
+    let logRemoved = 0;
+    const cleanedLogs = logs.filter(l => {
+        if (l.action !== '입력') return true;
+        const key = `${l.staffId}|${l.detail}`;
+        if (seenLog.has(key)) { logRemoved++; return false; }
+        seenLog.add(key);
+        return true;
+    });
+
+    return { att, logs, cleanedAtt, cleanedLogs, recDups, recRemoved, logRemoved };
+}
+
+app.get('/api/attendance/dedup', (req, res) => {
+    if (req.query.key !== (process.env.ADMIN_PASSWORD || 'admin1234!')) {
+        return res.status(403).json({ success: false, error: 'forbidden' });
+    }
+    const { recDups, recRemoved, logRemoved } = computeAttDedup();
+    res.json({ success: true, preview: true, recRemoved, logRemoved, recDups });
+});
+
+app.post('/api/attendance/dedup', (req, res) => {
+    if (req.query.key !== (process.env.ADMIN_PASSWORD || 'admin1234!')) {
+        return res.status(403).json({ success: false, error: 'forbidden' });
+    }
+    const { att, logs, cleanedAtt, cleanedLogs, recDups, recRemoved, logRemoved } = computeAttDedup();
+    if (req.query.confirm !== '1') {
+        return res.status(400).json({ success: false, error: 'confirm=1 필요', recRemoved, logRemoved });
+    }
+    // 실행 전 백업 (되돌릴 수 있도록)
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupDir = path.join(actualDataPath, 'backups');
+    try {
+        if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+        writeJson(path.join(backupDir, `attendance-predep-${stamp}.json`), att);
+        writeJson(path.join(backupDir, `attendance_logs-predep-${stamp}.json`), logs);
+    } catch (e) {
+        return res.status(500).json({ success: false, error: '백업 실패: ' + e.message });
+    }
+    if (!writeJson(ATTENDANCE_FILE, cleanedAtt)) return res.status(500).json({ success: false, error: '기록 저장 실패' });
+    if (!writeJson(ATTENDANCE_LOG_FILE, cleanedLogs)) return res.status(500).json({ success: false, error: '로그 저장 실패' });
+    addLog('시스템', '출퇴근정리', '중복제거', `기록 ${recRemoved}건, 로그 ${logRemoved}건 제거 (백업 ${stamp})`);
+    res.json({ success: true, recRemoved, logRemoved, recDups, backup: stamp });
+});
+
 // --- [관리자/테스트] 출퇴근 요약 미리보기 & 즉시 전송 ---
 // GET /api/attendance/digest?date=YYYY-MM-DD (기본: 어제)  &send=1(카톡+텔레그램)|kakao|telegram
 app.get('/api/attendance/digest', async (req, res) => {
