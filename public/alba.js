@@ -14,6 +14,7 @@ const I18N = {
     noteLabel: '메모 (선택)',
     save: '저장하기',
     saveEdit: '수정 저장',
+    saving: '저장 중...',
     cancel: '취소',
     summaryTitle: '내 근무 요약',
     stTotal: '총 근무시간',
@@ -46,6 +47,7 @@ const I18N = {
     noteLabel: 'Note (optional)',
     save: 'Save',
     saveEdit: 'Save Changes',
+    saving: 'Saving...',
     cancel: 'Cancel',
     summaryTitle: 'My Summary',
     stTotal: 'Total Hours',
@@ -78,6 +80,7 @@ const I18N = {
     noteLabel: 'မှတ်ချက် (ရွေးချယ်နိုင်)',
     save: 'သိမ်းမည်',
     saveEdit: 'ပြင်ဆင်ချက် သိမ်းမည်',
+    saving: 'သိမ်းနေသည်...',
     cancel: 'ပယ်ဖျက်',
     summaryTitle: 'ကျွန်ုပ်၏ အနှစ်ချုပ်',
     stTotal: 'စုစုပေါင်း အချိန်',
@@ -272,7 +275,9 @@ function showBlocked(msgKey) {
 // ==========================================
 // 저장 / 수정
 // ==========================================
+let saving = false; // 저장 진행 중 플래그 (중복 제출 방지)
 async function saveRecord() {
+  if (saving) return; // 저장이 느려 두 번 눌러도 요청은 한 번만
   const date = document.getElementById('fDate').value;
   if (!date) return toast(t('needDate'));
   const start = document.getElementById('fStartH').value + ':' + document.getElementById('fStartM').value;
@@ -281,7 +286,9 @@ async function saveRecord() {
   const editId = document.getElementById('editId').value;
 
   const btn = document.getElementById('saveBtn');
+  saving = true;
   btn.disabled = true;
+  btn.textContent = t('saving');
   try {
     const url = editId
       ? `/api/alba/${encodeURIComponent(TOKEN)}/record/${editId}`
@@ -300,7 +307,9 @@ async function saveRecord() {
   } catch (e) {
     toast(t('failed'));
   } finally {
+    saving = false;
     btn.disabled = false;
+    btn.textContent = document.getElementById('editId').value ? t('saveEdit') : t('save');
   }
 }
 

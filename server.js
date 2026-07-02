@@ -616,8 +616,17 @@ app.post('/api/alba/:token/record', (req, res) => {
 
     const att = readJson(ATTENDANCE_FILE, {});
     if (!att[staff.id]) att[staff.id] = [];
+    // 중복 저장 방지(멱등): 저장이 느려 버튼을 두 번 누르거나 네트워크 재시도로
+    // 같은 요청이 두 번 도달하면 동일 기록/로그가 2중으로 쌓임 → 방금(15초 이내)
+    // 저장된 동일 내역이 있으면 새로 만들지 않고 기존 기록을 그대로 반환한다.
+    const nowMs = Date.now();
+    const dup = att[staff.id].find(r =>
+        r.date === date && r.start === start && r.end === end &&
+        r.createdAt && (nowMs - new Date(r.createdAt).getTime()) < 15000
+    );
+    if (dup) return res.json({ success: true, record: dup, duplicate: true });
     const now = new Date().toISOString();
-    const record = { id: Date.now() + Math.floor(Math.random() * 1000), date, start, end, minutes, note: note || '', createdAt: now, updatedAt: now };
+    const record = { id: nowMs + Math.floor(Math.random() * 1000), date, start, end, minutes, note: note || '', createdAt: now, updatedAt: now };
     att[staff.id].push(record);
     if (!writeJson(ATTENDANCE_FILE, att)) return res.status(500).json({ success: false });
     addAttLog(staff.id, staff.name, '입력', staff.name, `${date} ${start}~${end} (${Math.floor(minutes/60)}시간 ${minutes%60}분)`);
