@@ -163,6 +163,7 @@ function renderAttendanceSummary(data) {
     const detailBox = document.getElementById('attDetailBox');
     if (!body) return;
     detailBox.innerHTML = '';
+    window._attSummary = data;
 
     if (!data.length) {
         body.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#999; padding:20px;">출퇴근 링크가 발급된 알바가 없습니다. ⚙️ 관리 탭에서 링크를 발급하세요.</td></tr>`;
@@ -193,6 +194,120 @@ function renderAttendanceSummary(data) {
     // 상세용 데이터 보관
     window._attData = {};
     data.forEach(a => { window._attData[a.id] = a; });
+}
+
+// ==========================================
+// 엑셀 다운로드 (한 시트에 전체 알바 요약 + 상세 + 이번달 알바비)
+// ==========================================
+const ATT_WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+
+function attWeekday(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr + 'T00:00:00');
+    return isNaN(d) ? '' : ATT_WEEKDAYS[d.getDay()];
+}
+
+function downloadAttendanceExcel() {
+    const data = window._attSummary || [];
+    if (!data.length) {
+        alert('내려받을 출퇴근 내역이 없습니다.');
+        return;
+    }
+    const isAdmin = currentUser && currentUser.role === 'admin';
+    const [yy, mm] = attMonth.split('-');
+    const title = `${yy}년 ${Number(mm)}월 알바 출퇴근${isAdmin ? ' / 급여 정산' : ''}`;
+
+    // 각 알바의 시급/급여유형을 staffList에서 조회
+    const wageOf = id => {
+        const s = staffList.find(x => x.id == id) || {};
+        return { salary: s.salary || 0, salaryType: s.salaryType || 'hourly' };
+    };
+    // 알바비 계산: 시급직은 시간×시급, 월급직은 월급 그대로
+    const calcPay = (a, w) => {
+        if (!isAdmin) return 0;
+        if (w.salaryType === 'monthly') return w.salary;
+        return (a.records || []).reduce((sum, r) => sum + Math.round((r.minutes || 0) / 60 * w.salary), 0);
+    };
+
+    const MONEY = "mso-number-format:'\\#\\,\\#\\#0'";
+    const esc = escapeAttHtml;
+    // 상세 표 최대 열 수 = 8 (알바/날짜/요일/출근/퇴근/근무시간/금액/메모)
+    const COLS = isAdmin ? 8 : 6;
+
+    let rows = '';
+    // 제목
+    rows += `<tr><td colspan="${COLS}" style="font-size:15px;font-weight:bold;">${esc(title)}</td></tr>`;
+    rows += `<tr><td colspan="${COLS}" style="color:#888;">생성: ${new Date().toLocaleString('ko-KR')}</td></tr>`;
+    rows += `<tr><td colspan="${COLS}"></td></tr>`;
+
+    // ===== 요약 =====
+    rows += `<tr><td colspan="${COLS}" style="font-weight:bold;background:#f1f3f5;">■ 알바별 요약</td></tr>`;
+    const sumHead = isAdmin
+        ? ['알바', '시급', '근무일수', '총 근무시간', '이번달 알바비']
+        : ['알바', '근무일수', '총 근무시간', '평균 근무', '하루 최대'];
+    rows += '<tr>' + sumHead.map(h => `<th style="background:#dee2e6;">${h}</th>`).join('') + `<th colspan="${COLS - sumHead.length}" style="background:#dee2e6;"></th></tr>`;
+
+    let grandDays = 0, grandMin = 0, grandPay = 0;
+    data.forEach(a => {
+        const w = wageOf(a.id);
+        const pay = calcPay(a, w);
+        grandDays += a.days || 0; grandMin += a.totalMin || 0; grandPay += pay;
+        const hours = ((a.totalMin || 0) / 60).toFixed(1);
+        if (isAdmin) {
+            const wageCell = w.salaryType === 'monthly'
+                ? `<td>월급</td>`
+                : `<td style="${MONEY}">${w.salary}</td>`;
+            rows += `<tr><td>${esc(a.name)}</td>${wageCell}<td>${a.days || 0}</td><td>${hours}</td><td style="${MONEY}">${pay}</td><td colspan="${COLS - 5}"></td></tr>`;
+        } else {
+            rows += `<tr><td>${esc(a.name)}</td><td>${a.days || 0}</td><td>${hours}</td><td>${((a.avgMin || 0) / 60).toFixed(1)}</td><td>${((a.maxMin || 0) / 60).toFixed(1)}</td><td></td></tr>`;
+        }
+    });
+    // 합계
+    if (isAdmin) {
+        rows += `<tr style="font-weight:bold;background:#f8f9fa;"><td>합계</td><td></td><td>${grandDays}</td><td>${(grandMin / 60).toFixed(1)}</td><td style="${MONEY}">${grandPay}</td><td colspan="${COLS - 5}"></td></tr>`;
+    } else {
+        rows += `<tr style="font-weight:bold;background:#f8f9fa;"><td>합계</td><td>${grandDays}</td><td>${(grandMin / 60).toFixed(1)}</td><td></td><td></td><td></td></tr>`;
+    }
+
+    rows += `<tr><td colspan="${COLS}"></td></tr>`;
+
+    // ===== 상세 =====
+    rows += `<tr><td colspan="${COLS}" style="font-weight:bold;background:#f1f3f5;">■ 출퇴근 상세 내역</td></tr>`;
+    const detHead = isAdmin
+        ? ['알바', '날짜', '요일', '출근', '퇴근', '근무시간', '금액', '메모']
+        : ['알바', '날짜', '요일', '출근', '퇴근', '근무시간'];
+    rows += '<tr>' + detHead.map(h => `<th style="background:#dee2e6;">${h}</th>`).join('') + '</tr>';
+
+    data.forEach(a => {
+        const w = wageOf(a.id);
+        const recs = [...(a.records || [])].sort((x, y) => (x.date || '').localeCompare(y.date || ''));
+        if (!recs.length) return;
+        recs.forEach(r => {
+            const hours = ((r.minutes || 0) / 60).toFixed(1);
+            const overnight = (parseInt(String(r.end).replace(':', ''), 10) <= parseInt(String(r.start).replace(':', ''), 10)) ? ' (익일)' : '';
+            let row = `<td>${esc(a.name)}</td><td>${r.date}</td><td>${attWeekday(r.date)}</td><td>${r.start}</td><td>${r.end}${overnight}</td><td>${hours}</td>`;
+            if (isAdmin) {
+                const pay = w.salaryType === 'monthly' ? '' : Math.round((r.minutes || 0) / 60 * w.salary);
+                row += `<td style="${MONEY}">${pay}</td><td>${r.note ? esc(r.note) : ''}</td>`;
+            }
+            rows += `<tr>${row}</tr>`;
+        });
+    });
+
+    const html = `﻿<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>출퇴근</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+<style>td,th{border:0.5pt solid #ccc;padding:3px 6px;text-align:center;mso-data-placement:same-cell;} th{font-weight:bold;}</style></head>
+<body><table>${rows}</table></body></html>`;
+
+    const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `출퇴근_${attMonth}${isAdmin ? '_급여' : ''}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function toggleAttDetail(id) {

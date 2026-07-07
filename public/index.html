@@ -762,6 +762,7 @@
                     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                         <h2>🕒 알바 출퇴근 현황</h2>
                         <div style="display:flex; align-items:center; gap:8px;">
+                            <button id="attExcelBtn" onclick="downloadAttendanceExcel()" style="background:#2e7d32; color:#fff; border:none; padding:8px 12px; border-radius:6px; font-weight:800; cursor:pointer;">📥 엑셀</button>
                             <button onclick="changeAttMonth(-1)" class="number-btn">&lt;</button>
                             <strong id="attMonthLabel" style="min-width:90px; text-align:center;"></strong>
                             <button onclick="changeAttMonth(1)" class="number-btn">&gt;</button>
