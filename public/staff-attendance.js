@@ -325,6 +325,7 @@ function toggleAttDetail(id) {
         content.innerHTML = `<div style="color:#999; padding:8px;">이 달 입력 내역이 없습니다.</div>`;
         return;
     }
+    const canEdit = currentUser && currentUser.role === 'admin';
     content.innerHTML = `
         <table style="width:100%; font-size:13px; border-collapse:collapse;">
             <thead><tr style="color:#888;">
@@ -332,20 +333,127 @@ function toggleAttDetail(id) {
                 <th style="text-align:left; padding:4px 6px;">시간</th>
                 <th style="text-align:right; padding:4px 6px;">근무</th>
                 <th style="text-align:left; padding:4px 6px;">메모</th>
+                ${canEdit ? '<th style="text-align:right; padding:4px 6px;">관리</th>' : ''}
             </tr></thead>
             <tbody>
                 ${recs.map(r => {
                     const overnight = (parseInt(r.end.replace(':', ''), 10) <= parseInt(r.start.replace(':', ''), 10)) ? ' <span style="color:#adb5bd;">(익일)</span>' : '';
                     const warn = (r.minutes || 0) > ATT_MAX_WARN_MIN ? ' color:#e03131; font-weight:700;' : '';
+                    const manageCell = canEdit ? `<td style="padding:5px 6px; text-align:right; white-space:nowrap;">
+                        <button onclick="editAttRecord(${a.id}, ${r.id})" style="background:#1971c2; color:#fff; border:none; padding:4px 8px; border-radius:5px; font-size:12px; font-weight:700; cursor:pointer;">수정</button>
+                        <button onclick="deleteAttRecord(${a.id}, ${r.id})" style="background:#e03131; color:#fff; border:none; padding:4px 8px; border-radius:5px; font-size:12px; font-weight:700; cursor:pointer; margin-left:4px;">삭제</button>
+                    </td>` : '';
                     return `<tr style="border-top:1px solid #ffe8d6;">
                         <td style="padding:5px 6px;">${r.date}</td>
                         <td style="padding:5px 6px;">${r.start} ~ ${r.end}${overnight}</td>
                         <td style="padding:5px 6px; text-align:right;${warn}">${attFmtDur(r.minutes || 0)}</td>
                         <td style="padding:5px 6px; color:#888;">${r.note ? escapeAttHtml(r.note) : ''}</td>
+                        ${manageCell}
                     </tr>`;
                 }).join('')}
             </tbody>
         </table>`;
+}
+
+// ==========================================
+// [사장님] 출퇴근 기록 수정/삭제
+// ==========================================
+// 상세 뷰를 열어둔 채 데이터만 다시 불러와 갱신 (열린 상세는 재렌더)
+async function refreshAttAfterChange(staffId) {
+    const wasOpen = (() => {
+        const row = document.getElementById(`attDetailRow-${staffId}`);
+        return row && row.style.display !== 'none';
+    })();
+    await loadAttendanceSummary();
+    if (wasOpen) {
+        const row = document.getElementById(`attDetailRow-${staffId}`);
+        if (row) { row.style.display = 'none'; toggleAttDetail(staffId); }
+    }
+}
+
+function editAttRecord(staffId, rid) {
+    const a = (window._attData || {})[staffId];
+    if (!a) return;
+    const r = (a.records || []).find(x => x.id == rid);
+    if (!r) return;
+
+    let modal = document.getElementById('attEditModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'attEditModal';
+        modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:9999; display:flex; align-items:center; justify-content:center; padding:20px;';
+        document.body.appendChild(modal);
+    }
+    modal.innerHTML = `
+        <div style="background:#fff; border-radius:14px; max-width:400px; width:100%; padding:22px; box-shadow:0 8px 30px rgba(0,0,0,.3);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <h3 style="margin:0;">✏️ ${escapeAttHtml(a.name)} 출퇴근 수정</h3>
+                <button onclick="closeAttEdit()" style="border:none; background:none; font-size:22px; cursor:pointer; color:#888;">×</button>
+            </div>
+            <label style="display:block; font-size:13px; color:#555; margin-bottom:4px;">날짜</label>
+            <input id="attEditDate" type="date" value="${r.date}" style="width:100%; padding:9px; border:1.5px solid #dee2e6; border-radius:8px; margin-bottom:12px;">
+            <div style="display:flex; gap:10px; margin-bottom:12px;">
+                <div style="flex:1;">
+                    <label style="display:block; font-size:13px; color:#555; margin-bottom:4px;">출근</label>
+                    <input id="attEditStart" type="time" value="${r.start}" style="width:100%; padding:9px; border:1.5px solid #dee2e6; border-radius:8px;">
+                </div>
+                <div style="flex:1;">
+                    <label style="display:block; font-size:13px; color:#555; margin-bottom:4px;">퇴근</label>
+                    <input id="attEditEnd" type="time" value="${r.end}" style="width:100%; padding:9px; border:1.5px solid #dee2e6; border-radius:8px;">
+                </div>
+            </div>
+            <label style="display:block; font-size:13px; color:#555; margin-bottom:4px;">메모</label>
+            <input id="attEditNote" type="text" value="${r.note ? escapeAttHtml(r.note) : ''}" placeholder="(선택)" style="width:100%; padding:9px; border:1.5px solid #dee2e6; border-radius:8px; margin-bottom:16px;">
+            <div style="display:flex; gap:8px;">
+                <button onclick="closeAttEdit()" style="flex:1; background:#e9ecef; color:#495057; border:none; padding:12px; border-radius:8px; font-weight:800; cursor:pointer;">취소</button>
+                <button onclick="saveAttRecordEdit(${staffId}, ${rid})" style="flex:2; background:#1971c2; color:#fff; border:none; padding:12px; border-radius:8px; font-weight:800; cursor:pointer;">저장</button>
+            </div>
+            <p style="font-size:11px; color:#999; margin-top:10px;">※ 퇴근이 출근보다 빠르면 익일 퇴근으로 계산됩니다.</p>
+        </div>`;
+    modal.style.display = 'flex';
+}
+
+function closeAttEdit() {
+    const m = document.getElementById('attEditModal');
+    if (m) m.style.display = 'none';
+}
+
+async function saveAttRecordEdit(staffId, rid) {
+    const date = document.getElementById('attEditDate').value;
+    const start = document.getElementById('attEditStart').value;
+    const end = document.getElementById('attEditEnd').value;
+    const note = document.getElementById('attEditNote').value;
+    if (!date || !start || !end) { alert('날짜/출근/퇴근을 모두 입력하세요.'); return; }
+    try {
+        const res = await fetch(`/api/attendance/record/${staffId}/${rid}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ date, start, end, note, actor: currentUser?.name || '사장님' })
+        });
+        if (!res.ok) throw new Error('fail');
+        closeAttEdit();
+        await refreshAttAfterChange(staffId);
+    } catch (e) {
+        alert('수정에 실패했습니다.');
+    }
+}
+
+async function deleteAttRecord(staffId, rid) {
+    const a = (window._attData || {})[staffId];
+    const r = a && (a.records || []).find(x => x.id == rid);
+    const label = r ? `${r.date} ${r.start}~${r.end}` : '이 기록';
+    if (!confirm(`${label} 출퇴근 기록을 삭제할까요?`)) return;
+    try {
+        const res = await fetch(`/api/attendance/record/${staffId}/${rid}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ actor: currentUser?.name || '사장님' })
+        });
+        if (!res.ok) throw new Error('fail');
+        await refreshAttAfterChange(staffId);
+    } catch (e) {
+        alert('삭제에 실패했습니다.');
+    }
 }
 
 function renderAttendanceLogs(logs) {

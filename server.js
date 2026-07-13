@@ -549,6 +549,46 @@ app.get('/api/attendance/logs', (req, res) => {
     res.json({ success: true, data: readJson(ATTENDANCE_LOG_FILE, []) });
 });
 
+// --- [관리자] 출퇴근 기록 수정 (사장님이 특정 알바의 기록을 직접 수정) ---
+app.put('/api/attendance/record/:staffId/:rid', (req, res) => {
+    const { date, start, end, note, actor } = req.body || {};
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return res.status(400).json({ success: false, error: 'bad date' });
+    const minutes = calcWorkMinutes(start, end);
+    if (minutes === null) return res.status(400).json({ success: false, error: 'bad time' });
+
+    const staff = readJson(STAFF_FILE, []).find(s => s.id == req.params.staffId);
+    if (!staff) return res.status(404).json({ success: false, error: '직원 없음' });
+
+    const att = readJson(ATTENDANCE_FILE, {});
+    const list = att[req.params.staffId] || [];
+    const rec = list.find(r => r.id == req.params.rid);
+    if (!rec) return res.status(404).json({ success: false, error: 'record not found' });
+    const before = `${rec.date} ${rec.start}~${rec.end}`;
+    rec.date = date; rec.start = start; rec.end = end; rec.minutes = minutes; rec.note = note || '';
+    rec.updatedAt = new Date().toISOString();
+    if (!writeJson(ATTENDANCE_FILE, att)) return res.status(500).json({ success: false });
+    addAttLog(staff.id, staff.name, '수정', actor || '사장님', `${before} → ${date} ${start}~${end} (사장님)`);
+    res.json({ success: true, record: rec });
+});
+
+// --- [관리자] 출퇴근 기록 삭제 (사장님이 특정 알바의 기록을 직접 삭제) ---
+app.delete('/api/attendance/record/:staffId/:rid', (req, res) => {
+    const { actor } = req.body || {};
+    const staff = readJson(STAFF_FILE, []).find(s => s.id == req.params.staffId);
+    if (!staff) return res.status(404).json({ success: false, error: '직원 없음' });
+
+    const att = readJson(ATTENDANCE_FILE, {});
+    const list = att[req.params.staffId] || [];
+    const idx = list.findIndex(r => r.id == req.params.rid);
+    if (idx === -1) return res.status(404).json({ success: false, error: 'record not found' });
+    const rec = list[idx];
+    list.splice(idx, 1);
+    att[req.params.staffId] = list;
+    if (!writeJson(ATTENDANCE_FILE, att)) return res.status(500).json({ success: false });
+    addAttLog(staff.id, staff.name, '삭제', actor || '사장님', `${rec.date} ${rec.start}~${rec.end} (사장님)`);
+    res.json({ success: true });
+});
+
 // --- [관리자] 출퇴근 중복 정리 (버튼 연타로 쌓인 동일 기록/로그 제거) ---
 // 동일 기록 판정: 같은 알바 + 같은 날짜 + 같은 출근 + 같은 퇴근 → 1건만 남기고 제거
 // GET  /api/attendance/dedup?key=관리자비번        → 미리보기 (변경 없음)

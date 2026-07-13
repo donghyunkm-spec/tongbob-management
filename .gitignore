@@ -16,6 +16,7 @@ data_backup/
 
 # Node.js
 node_modules/
+
 npm-debug.log*
 
 # OS 생성 파일
