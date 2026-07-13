@@ -294,10 +294,14 @@ function downloadAttendanceExcel() {
         });
     });
 
+    // ===== 시트2: 일자별 출퇴근 비교 (알바=행, 날짜=열) =====
+    // 그 날짜에 다른 알바들과 비교해 퇴근시간이 너무 튀는 셀을 빨갛게 표시(오입력 의심)
+    const pivotRows = buildAttPivotSheet(data, esc);
+
     const html = `﻿<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-<head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>출퇴근</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+<head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>출퇴근</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet><x:ExcelWorksheet><x:Name>일자별비교</x:Name><x:WorksheetOptions><x:DisplayGridlines/><x:FreezePanes/><x:FrozenNoSplit/><x:SplitHorizontal>1</x:SplitHorizontal><x:TopRowBottomPane>1</x:TopRowBottomPane><x:SplitVertical>1</x:SplitVertical><x:LeftColumnRightPane>1</x:LeftColumnRightPane><x:ActivePane>0</x:ActivePane></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
 <style>td,th{border:0.5pt solid #ccc;padding:3px 6px;text-align:center;mso-data-placement:same-cell;} th{font-weight:bold;}</style></head>
-<body><table>${rows}</table></body></html>`;
+<body><table>${rows}</table><br><table>${pivotRows}</table></body></html>`;
 
     const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -308,6 +312,115 @@ function downloadAttendanceExcel() {
     link.click();
     document.body.removeChild(link);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// "HH:MM" -> 분. 실패 시 null
+function attParseHM(t) {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || '').trim());
+    if (!m) return null;
+    const h = +m[1], mi = +m[2];
+    if (h > 23 || mi > 59) return null;
+    return h * 60 + mi;
+}
+
+// 퇴근시각을 "출근 이후 경과 기준"의 절대 분으로 (자정 넘김이면 +24h) → 비교용
+function attEndMinAbs(r) {
+    const s = attParseHM(r.start), e = attParseHM(r.end);
+    if (s === null || e === null) return null;
+    return e <= s ? e + 1440 : e;
+}
+
+function attMedian(arr) {
+    const s = [...arr].sort((a, b) => a - b);
+    const n = s.length;
+    if (!n) return 0;
+    return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
+}
+
+// 같은 날 알바들의 퇴근시간(vals: 절대분)에서 튀는 값 인덱스 → boolean 배열
+// 현장 특성 반영: 설거지 등으로 1시간 정도 늦는 건 정상 → 중앙값 대비 편차가
+//   MIN_DEV(90분) 이내면 무시. HARD_DEV(150분) 이상이면 무조건 이상치.
+//   그 사이 구간만 MAD 기반(수정 z-score)으로 판단. 표본 3 미만이면 판단 보류.
+function attEndOutlierFlags(vals) {
+    const n = vals.length;
+    const flags = new Array(n).fill(false);
+    if (n < 3) return flags;
+    const MIN_DEV = 90;    // 90분 이내 차이는 정상(설거지 등)으로 보고 무시
+    const HARD_DEV = 150;  // 2.5시간 이상 벌어지면 무조건 이상(오입력 의심)
+    const med = attMedian(vals);
+    const devs = vals.map(v => Math.abs(v - med));
+    const mad = attMedian(devs);
+    for (let i = 0; i < n; i++) {
+        const dev = devs[i];
+        if (dev < MIN_DEV) continue;            // 정상 범위 → 표시 안 함
+        if (dev >= HARD_DEV) { flags[i] = true; continue; }
+        if (mad === 0) { flags[i] = true; }     // 다들 거의 같은데 이 값만 90분+ 벗어남
+        else if (0.6745 * dev / mad > 3.5) flags[i] = true;
+    }
+    return flags;
+}
+
+// 시트2 HTML(테이블 내용) 생성: 알바=행, 날짜=열, 셀=출근~퇴근, 튀는 퇴근은 빨강
+function buildAttPivotSheet(data, esc) {
+    // 이번 달 기록이 있는 날짜 모으기
+    const dateSet = new Set();
+    data.forEach(a => (a.records || []).forEach(r => { if (r.date) dateSet.add(r.date); }));
+    const dates = [...dateSet].sort();
+    const nCols = dates.length + 1;
+
+    if (!dates.length) {
+        return `<tr><td>입력된 출퇴근 내역이 없습니다.</td></tr>`;
+    }
+
+    // 날짜별로 알바들의 퇴근시간(절대분)을 모아 튀는 알바 계산
+    const flag = {}; // `${date}_${staffId}` -> true
+    dates.forEach(d => {
+        const entries = []; // {id, endMin}
+        data.forEach(a => {
+            const rs = (a.records || []).filter(r => r.date === d);
+            if (!rs.length) return;
+            // 같은 날 여러 건이면 가장 늦은 퇴근을 대표값으로
+            let best = null;
+            rs.forEach(r => { const em = attEndMinAbs(r); if (em !== null && (best === null || em > best)) best = em; });
+            if (best !== null) entries.push({ id: a.id, endMin: best });
+        });
+        const outFlags = attEndOutlierFlags(entries.map(e => e.endMin));
+        entries.forEach((e, i) => { if (outFlags[i]) flag[`${d}_${e.id}`] = true; });
+    });
+
+    const [yy, mm] = attMonth.split('-');
+    let rows = '';
+    rows += `<tr><td colspan="${nCols}" style="font-size:15px;font-weight:bold;">${yy}년 ${Number(mm)}월 일자별 출퇴근 비교표</td></tr>`;
+    rows += `<tr><td colspan="${nCols}" style="color:#c92a2a;">※ 셀 안은 "출근~퇴근". <b style="background:#ffc9c9;">빨간 셀</b> = 그날 다른 알바들과 비교해 퇴근시간이 튀는 경우(오입력 의심).</td></tr>`;
+    rows += `<tr><td colspan="${nCols}"></td></tr>`;
+
+    // 헤더: 알바 ＼ 날짜 + 각 날짜(M/D 요일)
+    rows += '<tr><th style="background:#dee2e6;">알바 ＼ 날짜</th>' + dates.map(d => {
+        const [, m, dd] = d.split('-');
+        const wd = attWeekday(d);
+        const weekend = wd === '토' ? 'color:#1971c2;' : (wd === '일' ? 'color:#e03131;' : '');
+        return `<th style="background:#dee2e6;${weekend}">${Number(m)}/${Number(dd)}<br>(${wd})</th>`;
+    }).join('') + '</tr>';
+
+    // 각 알바 행
+    data.forEach(a => {
+        let tds = `<td style="font-weight:bold;background:#f8f9fa;text-align:left;">${esc(a.name)}</td>`;
+        dates.forEach(d => {
+            const rs = (a.records || []).filter(r => r.date === d)
+                .sort((x, y) => (attParseHM(x.start) || 0) - (attParseHM(y.start) || 0));
+            if (!rs.length) { tds += '<td></td>'; return; }
+            const txt = rs.map(r => {
+                const overnight = attEndMinAbs(r) > 1440 ? ' (익일)' : '';
+                return `${r.start}~${r.end}${overnight}`;
+            }).join('<br>');
+            const flagged = flag[`${d}_${a.id}`];
+            const style = flagged ? 'background:#ffc9c9;color:#c92a2a;font-weight:bold;' : '';
+            tds += `<td style="${style}">${txt}</td>`;
+        });
+        rows += `<tr>${tds}</tr>`;
+    });
+
+    return rows;
 }
 
 function toggleAttDetail(id) {

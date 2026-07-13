@@ -734,15 +734,16 @@ app.post('/api/alba/:token/record', (req, res) => {
 
     const att = readJson(ATTENDANCE_FILE, {});
     if (!att[staff.id]) att[staff.id] = [];
-    // 중복 저장 방지(멱등): 저장이 느려 버튼을 두 번 누르거나 네트워크 재시도로
-    // 같은 요청이 두 번 도달하면 동일 기록/로그가 2중으로 쌓임 → 방금(15초 이내)
-    // 저장된 동일 내역이 있으면 새로 만들지 않고 기존 기록을 그대로 반환한다.
+    // 하루 1회 입력 원칙: 같은 날짜 기록이 이미 있으면 새로 만들지 않는다.
+    // - 완전히 동일한 내용(연타/네트워크 재시도로 인한 중복 요청)이면 멱등 처리 → 기존 기록 반환
+    // - 내용이 다르면 하루 중복 입력으로 보고 차단(409) → 기존 기록을 수정/삭제 후 재입력 유도
+    const sameDate = att[staff.id].filter(r => r.date === date);
+    if (sameDate.length) {
+        const identical = sameDate.find(r => r.start === start && r.end === end);
+        if (identical) return res.json({ success: true, record: identical, duplicate: true });
+        return res.status(409).json({ success: false, error: 'duplicate_date', message: '이미 이 날짜에 입력한 기록이 있습니다.' });
+    }
     const nowMs = Date.now();
-    const dup = att[staff.id].find(r =>
-        r.date === date && r.start === start && r.end === end &&
-        r.createdAt && (nowMs - new Date(r.createdAt).getTime()) < 15000
-    );
-    if (dup) return res.json({ success: true, record: dup, duplicate: true });
     const now = new Date().toISOString();
     const record = { id: nowMs + Math.floor(Math.random() * 1000), date, start, end, minutes, note: note || '', createdAt: now, updatedAt: now };
     att[staff.id].push(record);

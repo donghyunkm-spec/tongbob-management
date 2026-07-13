@@ -32,6 +32,7 @@ const I18N = {
     needTime: '출근/퇴근 시간을 선택해 주세요.',
     needDate: '날짜를 선택해 주세요.',
     failed: '저장에 실패했습니다. 다시 시도해 주세요.',
+    dupDate: '이미 이 날짜에 입력한 기록이 있어요.\n기존 기록을 수정하거나 삭제한 뒤 다시 입력해 주세요.',
     deviceLocked: '이 링크는 다른 휴대폰에 등록되어 있습니다.\n본인 휴대폰이 맞다면 사장님께 "기기 초기화"를 요청해 주세요.',
     unit_h: '시간', unit_m: '분', days: '일',
     overnight: '(익일)',
@@ -65,6 +66,7 @@ const I18N = {
     needTime: 'Please select clock-in / clock-out time.',
     needDate: 'Please select a date.',
     failed: 'Failed to save. Please try again.',
+    dupDate: 'You already logged this date.\nPlease edit or delete the existing record instead.',
     deviceLocked: 'This link is registered to another phone.\nIf this is your phone, please ask the owner to reset the device.',
     unit_h: 'h', unit_m: 'm', days: 'days',
     overnight: '(next day)',
@@ -98,6 +100,7 @@ const I18N = {
     needTime: 'အလုပ်စ/ဆင်းချိန် ရွေးပါ။',
     needDate: 'ရက်စွဲ ရွေးပါ။',
     failed: 'သိမ်းဆည်း၍ မရပါ။ ထပ်စမ်းကြည့်ပါ။',
+    dupDate: 'ဤရက်စွဲအတွက် မှတ်တမ်း ရှိပြီးသားဖြစ်သည်။\nရှိပြီးသား မှတ်တမ်းကို ပြင်ပါ သို့မဟုတ် ဖျက်ပြီးမှ ထပ်ထည့်ပါ။',
     deviceLocked: 'ဤလင့်ခ်ကို အခြားဖုန်းတစ်လုံးတွင် မှတ်ပုံတင်ထားပါသည်။\nသင့်ဖုန်းမှန်လျှင် ဆိုင်ရှင်ကို " device reset" လုပ်ပေးရန် တောင်းဆိုပါ။',
     unit_h: 'နာရီ', unit_m: 'မိနစ်', days: 'ရက်',
     overnight: '(နောက်တစ်ရက်)',
@@ -299,6 +302,8 @@ async function saveRecord() {
       body: JSON.stringify({ date, start, end, note })
     });
     if (res.status === 403) { btn.disabled = false; return showBlocked('deviceLocked'); }
+    // 하루 중복 입력 차단 (같은 날짜에 이미 기록 있음)
+    if (res.status === 409) { toast(t('dupDate')); return; }
     if (!res.ok) throw new Error('fail');
     toast(editId ? t('updated') : t('saved'));
     viewMonth = date.slice(0, 7); // 방금 입력/수정한 기록의 달로 이동
