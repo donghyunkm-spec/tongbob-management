@@ -207,6 +207,11 @@ function attWeekday(dateStr) {
     return isNaN(d) ? '' : ATT_WEEKDAYS[d.getDay()];
 }
 
+// 셀 팩토리: s = 스타일 인덱스(ATT_XS), merge = 병합할 열 수
+function aStr(v, s) { return { t: 's', v: v == null ? '' : String(v), s: s || 0 }; }
+function aNum(v, s) { return { t: 'n', v: Number(v) || 0, s: s || 0 }; }
+function aTitle(v, s, span) { return { t: 's', v: String(v == null ? '' : v), s: s || 0, merge: span }; }
+
 function downloadAttendanceExcel() {
     const data = window._attSummary || [];
     if (!data.length) {
@@ -216,6 +221,7 @@ function downloadAttendanceExcel() {
     const isAdmin = currentUser && currentUser.role === 'admin';
     const [yy, mm] = attMonth.split('-');
     const title = `${yy}년 ${Number(mm)}월 알바 출퇴근${isAdmin ? ' / 급여 정산' : ''}`;
+    const X = ATT_XS;
 
     // 각 알바의 시급/급여유형을 staffList에서 조회
     const wageOf = id => {
@@ -228,86 +234,83 @@ function downloadAttendanceExcel() {
         if (w.salaryType === 'monthly') return w.salary;
         return (a.records || []).reduce((sum, r) => sum + Math.round((r.minutes || 0) / 60 * w.salary), 0);
     };
+    const hoursOf = min => Number(((min || 0) / 60).toFixed(1));
 
-    const MONEY = "mso-number-format:'\\#\\,\\#\\#0'";
-    const esc = escapeAttHtml;
     // 상세 표 최대 열 수 = 8 (알바/날짜/요일/출근/퇴근/근무시간/금액/메모)
     const COLS = isAdmin ? 8 : 6;
 
-    let rows = '';
-    // 제목
-    rows += `<tr><td colspan="${COLS}" style="font-size:15px;font-weight:bold;">${esc(title)}</td></tr>`;
-    rows += `<tr><td colspan="${COLS}" style="color:#888;">생성: ${new Date().toLocaleString('ko-KR')}</td></tr>`;
-    rows += `<tr><td colspan="${COLS}"></td></tr>`;
+    // ===== 시트1: 요약 + 상세 =====
+    const s1 = [];
+    s1.push([aTitle(title, X.title, COLS)]);
+    s1.push([aTitle('생성: ' + new Date().toLocaleString('ko-KR'), X.muted, COLS)]);
+    s1.push([]);
 
-    // ===== 요약 =====
-    rows += `<tr><td colspan="${COLS}" style="font-weight:bold;background:#f1f3f5;">■ 알바별 요약</td></tr>`;
+    // 요약
+    s1.push([aTitle('■ 알바별 요약', X.section, COLS)]);
     const sumHead = isAdmin
         ? ['알바', '시급', '근무일수', '총 근무시간', '이번달 알바비']
         : ['알바', '근무일수', '총 근무시간', '평균 근무', '하루 최대'];
-    rows += '<tr>' + sumHead.map(h => `<th style="background:#dee2e6;">${h}</th>`).join('') + `<th colspan="${COLS - sumHead.length}" style="background:#dee2e6;"></th></tr>`;
+    s1.push(sumHead.map(h => aStr(h, X.colhead)));
 
     let grandDays = 0, grandMin = 0, grandPay = 0;
     data.forEach(a => {
         const w = wageOf(a.id);
         const pay = calcPay(a, w);
         grandDays += a.days || 0; grandMin += a.totalMin || 0; grandPay += pay;
-        const hours = ((a.totalMin || 0) / 60).toFixed(1);
         if (isAdmin) {
-            const wageCell = w.salaryType === 'monthly'
-                ? `<td>월급</td>`
-                : `<td style="${MONEY}">${w.salary}</td>`;
-            rows += `<tr><td>${esc(a.name)}</td>${wageCell}<td>${a.days || 0}</td><td>${hours}</td><td style="${MONEY}">${pay}</td><td colspan="${COLS - 5}"></td></tr>`;
+            const wageCell = w.salaryType === 'monthly' ? aStr('월급', X.def) : aNum(w.salary, X.money);
+            s1.push([aStr(a.name, X.textL), wageCell, aNum(a.days || 0, X.def), aNum(hoursOf(a.totalMin), X.def), aNum(pay, X.money)]);
         } else {
-            rows += `<tr><td>${esc(a.name)}</td><td>${a.days || 0}</td><td>${hours}</td><td>${((a.avgMin || 0) / 60).toFixed(1)}</td><td>${((a.maxMin || 0) / 60).toFixed(1)}</td><td></td></tr>`;
+            s1.push([aStr(a.name, X.textL), aNum(a.days || 0, X.def), aNum(hoursOf(a.totalMin), X.def), aNum(hoursOf(a.avgMin), X.def), aNum(hoursOf(a.maxMin), X.def)]);
         }
     });
     // 합계
     if (isAdmin) {
-        rows += `<tr style="font-weight:bold;background:#f8f9fa;"><td>합계</td><td></td><td>${grandDays}</td><td>${(grandMin / 60).toFixed(1)}</td><td style="${MONEY}">${grandPay}</td><td colspan="${COLS - 5}"></td></tr>`;
+        s1.push([aStr('합계', X.totText), aStr('', X.totText), aNum(grandDays, X.totText), aNum(hoursOf(grandMin), X.totText), aNum(grandPay, X.moneyTot)]);
     } else {
-        rows += `<tr style="font-weight:bold;background:#f8f9fa;"><td>합계</td><td>${grandDays}</td><td>${(grandMin / 60).toFixed(1)}</td><td></td><td></td><td></td></tr>`;
+        s1.push([aStr('합계', X.totText), aNum(grandDays, X.totText), aNum(hoursOf(grandMin), X.totText), aStr('', X.totText), aStr('', X.totText)]);
     }
+    s1.push([]);
 
-    rows += `<tr><td colspan="${COLS}"></td></tr>`;
-
-    // ===== 상세 =====
-    rows += `<tr><td colspan="${COLS}" style="font-weight:bold;background:#f1f3f5;">■ 출퇴근 상세 내역</td></tr>`;
+    // 상세
+    s1.push([aTitle('■ 출퇴근 상세 내역', X.section, COLS)]);
     const detHead = isAdmin
         ? ['알바', '날짜', '요일', '출근', '퇴근', '근무시간', '금액', '메모']
         : ['알바', '날짜', '요일', '출근', '퇴근', '근무시간'];
-    rows += '<tr>' + detHead.map(h => `<th style="background:#dee2e6;">${h}</th>`).join('') + '</tr>';
+    s1.push(detHead.map(h => aStr(h, X.colhead)));
 
     data.forEach(a => {
         const w = wageOf(a.id);
         const recs = [...(a.records || [])].sort((x, y) => (x.date || '').localeCompare(y.date || ''));
-        if (!recs.length) return;
         recs.forEach(r => {
-            const hours = ((r.minutes || 0) / 60).toFixed(1);
             const overnight = (parseInt(String(r.end).replace(':', ''), 10) <= parseInt(String(r.start).replace(':', ''), 10)) ? ' (익일)' : '';
-            let row = `<td>${esc(a.name)}</td><td>${r.date}</td><td>${attWeekday(r.date)}</td><td>${r.start}</td><td>${r.end}${overnight}</td><td>${hours}</td>`;
+            const row = [aStr(a.name, X.textL), aStr(r.date, X.def), aStr(attWeekday(r.date), X.def),
+                aStr(r.start, X.def), aStr(r.end + overnight, X.def), aNum(hoursOf(r.minutes), X.def)];
             if (isAdmin) {
-                const pay = w.salaryType === 'monthly' ? '' : Math.round((r.minutes || 0) / 60 * w.salary);
-                row += `<td style="${MONEY}">${pay}</td><td>${r.note ? esc(r.note) : ''}</td>`;
+                if (w.salaryType === 'monthly') row.push(aStr('', X.money));
+                else row.push(aNum(Math.round((r.minutes || 0) / 60 * w.salary), X.money));
+                row.push(aStr(r.note || '', X.textL));
             }
-            rows += `<tr>${row}</tr>`;
+            s1.push(row);
         });
     });
 
     // ===== 시트2: 일자별 출퇴근 비교 (알바=행, 날짜=열) =====
-    // 그 날짜에 다른 알바들과 비교해 퇴근시간이 너무 튀는 셀을 빨갛게 표시(오입력 의심)
-    const pivotRows = buildAttPivotSheet(data, esc);
+    const s2 = buildAttPivotRows(data);
 
-    const html = `﻿<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-<head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>출퇴근</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet><x:ExcelWorksheet><x:Name>일자별비교</x:Name><x:WorksheetOptions><x:DisplayGridlines/><x:FreezePanes/><x:FrozenNoSplit/><x:SplitHorizontal>1</x:SplitHorizontal><x:TopRowBottomPane>1</x:TopRowBottomPane><x:SplitVertical>1</x:SplitVertical><x:LeftColumnRightPane>1</x:LeftColumnRightPane><x:ActivePane>0</x:ActivePane></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
-<style>td,th{border:0.5pt solid #ccc;padding:3px 6px;text-align:center;mso-data-placement:same-cell;} th{font-weight:bold;}</style></head>
-<body><table>${rows}</table><br><table>${pivotRows}</table></body></html>`;
+    // 실제 .xlsx(OOXML) 생성 → 두 시트가 확실히 분리됨
+    const sheet1Cols = [{ min: 1, max: 1, width: 12 }, { min: 2, max: Math.max(2, COLS), width: 12 }];
+    const sheet2Cols = [{ min: 1, max: 1, width: 12 }, { min: 2, max: Math.max(2, s2.nCols), width: 13 }];
+    const xlsx = attWriteXlsx([
+        { name: '출퇴근', xml: attSheetXml(s1, { cols: sheet1Cols }) },
+        { name: '일자별비교', xml: attSheetXml(s2.rows, { cols: sheet2Cols, freeze: { xSplit: 1, ySplit: 4, topLeft: 'B5' } }) }
+    ]);
 
-    const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const blob = new Blob([xlsx], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `출퇴근_${attMonth}${isAdmin ? '_급여' : ''}.xls`;
+    link.download = `출퇴근_${attMonth}${isAdmin ? '_급여' : ''}.xlsx`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -360,16 +363,18 @@ function attEndOutlierFlags(vals) {
     return flags;
 }
 
-// 시트2 HTML(테이블 내용) 생성: 알바=행, 날짜=열, 셀=출근~퇴근, 튀는 퇴근은 빨강
-function buildAttPivotSheet(data, esc) {
+// 시트2 셀 데이터 생성: 알바=행, 날짜=열, 셀=출근~퇴근, 튀는 퇴근은 빨강
+// return: { rows: [[cell,...],...], nCols }
+function buildAttPivotRows(data) {
+    const X = ATT_XS;
     // 이번 달 기록이 있는 날짜 모으기
     const dateSet = new Set();
     data.forEach(a => (a.records || []).forEach(r => { if (r.date) dateSet.add(r.date); }));
     const dates = [...dateSet].sort();
-    const nCols = dates.length + 1;
+    const nCols = Math.max(1, dates.length + 1);
 
     if (!dates.length) {
-        return `<tr><td>입력된 출퇴근 내역이 없습니다.</td></tr>`;
+        return { rows: [[aStr('입력된 출퇴근 내역이 없습니다.', X.muted)]], nCols };
     }
 
     // 날짜별로 알바들의 퇴근시간(절대분)을 모아 튀는 알바 계산
@@ -389,38 +394,223 @@ function buildAttPivotSheet(data, esc) {
     });
 
     const [yy, mm] = attMonth.split('-');
-    let rows = '';
-    rows += `<tr><td colspan="${nCols}" style="font-size:15px;font-weight:bold;">${yy}년 ${Number(mm)}월 일자별 출퇴근 비교표</td></tr>`;
-    rows += `<tr><td colspan="${nCols}" style="color:#c92a2a;">※ 셀 안은 "출근~퇴근". <b style="background:#ffc9c9;">빨간 셀</b> = 그날 다른 알바들과 비교해 퇴근시간이 튀는 경우(오입력 의심).</td></tr>`;
-    rows += `<tr><td colspan="${nCols}"></td></tr>`;
+    const rows = [];
+    rows.push([aTitle(`${yy}년 ${Number(mm)}월 일자별 출퇴근 비교표`, X.title, nCols)]);
+    rows.push([aTitle('※ 셀 안은 "출근~퇴근". 빨간 셀 = 그날 다른 알바들과 비교해 퇴근시간이 튀는 경우(오입력 의심).', X.noteRed, nCols)]);
+    rows.push([]);
 
     // 헤더: 알바 ＼ 날짜 + 각 날짜(M/D 요일)
-    rows += '<tr><th style="background:#dee2e6;">알바 ＼ 날짜</th>' + dates.map(d => {
+    const head = [aStr('알바 ＼ 날짜', X.colhead)];
+    dates.forEach(d => {
         const [, m, dd] = d.split('-');
         const wd = attWeekday(d);
-        const weekend = wd === '토' ? 'color:#1971c2;' : (wd === '일' ? 'color:#e03131;' : '');
-        return `<th style="background:#dee2e6;${weekend}">${Number(m)}/${Number(dd)}<br>(${wd})</th>`;
-    }).join('') + '</tr>';
+        const s = wd === '토' ? X.colheadSat : (wd === '일' ? X.colheadSun : X.colhead);
+        head.push(aStr(`${Number(m)}/${Number(dd)}(${wd})`, s));
+    });
+    rows.push(head);
 
     // 각 알바 행
     data.forEach(a => {
-        let tds = `<td style="font-weight:bold;background:#f8f9fa;text-align:left;">${esc(a.name)}</td>`;
+        const row = [aStr(a.name, X.name)];
         dates.forEach(d => {
             const rs = (a.records || []).filter(r => r.date === d)
                 .sort((x, y) => (attParseHM(x.start) || 0) - (attParseHM(y.start) || 0));
-            if (!rs.length) { tds += '<td></td>'; return; }
+            if (!rs.length) { row.push(aStr('', X.def)); return; }
             const txt = rs.map(r => {
                 const overnight = attEndMinAbs(r) > 1440 ? ' (익일)' : '';
                 return `${r.start}~${r.end}${overnight}`;
-            }).join('<br>');
-            const flagged = flag[`${d}_${a.id}`];
-            const style = flagged ? 'background:#ffc9c9;color:#c92a2a;font-weight:bold;' : '';
-            tds += `<td style="${style}">${txt}</td>`;
+            }).join(' / ');
+            row.push(aStr(txt, flag[`${d}_${a.id}`] ? X.red : X.def));
         });
-        rows += `<tr>${tds}</tr>`;
+        rows.push(row);
     });
 
-    return rows;
+    return { rows, nCols };
+}
+
+// ==========================================
+// 최소 .xlsx(OOXML) 생성기 — 외부 라이브러리 없이 두 시트를 확실히 분리
+// ==========================================
+// 스타일 인덱스 (styles.xml의 cellXfs 순서와 일치)
+const ATT_XS = {
+    def: 0, bold: 1, title: 2, muted: 3, section: 4, colhead: 5,
+    colheadSat: 6, colheadSun: 7, textL: 8, name: 9, money: 10,
+    moneyTot: 11, totText: 12, red: 13, noteRed: 14
+};
+
+const ATT_STYLES_XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0"/></numFmts>' +
+    '<fonts count="6">' +
+    '<font><sz val="11"/><name val="맑은 고딕"/></font>' +
+    '<font><b/><sz val="11"/><name val="맑은 고딕"/></font>' +
+    '<font><b/><sz val="11"/><color rgb="FFC92A2A"/><name val="맑은 고딕"/></font>' +
+    '<font><b/><sz val="11"/><color rgb="FF1971C2"/><name val="맑은 고딕"/></font>' +
+    '<font><sz val="11"/><color rgb="FF868E96"/><name val="맑은 고딕"/></font>' +
+    '<font><b/><sz val="14"/><name val="맑은 고딕"/></font>' +
+    '</fonts>' +
+    '<fills count="6">' +
+    '<fill><patternFill patternType="none"/></fill>' +
+    '<fill><patternFill patternType="gray125"/></fill>' +
+    '<fill><patternFill patternType="solid"><fgColor rgb="FFDEE2E6"/></patternFill></fill>' +
+    '<fill><patternFill patternType="solid"><fgColor rgb="FFF1F3F5"/></patternFill></fill>' +
+    '<fill><patternFill patternType="solid"><fgColor rgb="FFFFC9C9"/></patternFill></fill>' +
+    '<fill><patternFill patternType="solid"><fgColor rgb="FFF8F9FA"/></patternFill></fill>' +
+    '</fills>' +
+    '<borders count="2">' +
+    '<border><left/><right/><top/><bottom/><diagonal/></border>' +
+    '<border><left style="thin"><color rgb="FFD9D9D9"/></left><right style="thin"><color rgb="FFD9D9D9"/></right><top style="thin"><color rgb="FFD9D9D9"/></top><bottom style="thin"><color rgb="FFD9D9D9"/></bottom><diagonal/></border>' +
+    '</borders>' +
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+    '<cellXfs count="15">' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="5" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="left"/></xf>' +
+    '<xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="left"/></xf>' +
+    '<xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="3" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="2" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="1" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>' +
+    '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>' +
+    '<xf numFmtId="164" fontId="1" fillId="5" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="1" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="2" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>' +
+    '</cellXfs>' +
+    '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
+    '</styleSheet>';
+
+function attXmlEsc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]));
+}
+
+// 0-based 열 인덱스 -> 엑셀 열문자 (0->A, 26->AA)
+function attColLetter(n) {
+    let s = ''; n += 1;
+    while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
+    return s;
+}
+
+// rows(셀 2차원 배열) -> worksheet xml
+function attSheetXml(rows, opt) {
+    opt = opt || {};
+    const merges = [];
+    let sd = '';
+    rows.forEach((cells, ri) => {
+        const r = ri + 1;
+        let col = 0, cx = '';
+        (cells || []).forEach(c => {
+            const span = c.merge && c.merge > 1 ? c.merge : 1;
+            const ref = attColLetter(col) + r;
+            if (c.t === 'n') {
+                cx += `<c r="${ref}" s="${c.s || 0}"><v>${c.v}</v></c>`;
+            } else {
+                const v = c.v == null ? '' : String(c.v);
+                cx += v === ''
+                    ? `<c r="${ref}" s="${c.s || 0}"/>`
+                    : `<c r="${ref}" s="${c.s || 0}" t="inlineStr"><is><t xml:space="preserve">${attXmlEsc(v)}</t></is></c>`;
+            }
+            if (span > 1) merges.push(`${ref}:${attColLetter(col + span - 1)}${r}`);
+            col += span;
+        });
+        sd += `<row r="${r}">${cx}</row>`;
+    });
+    let views = '';
+    if (opt.freeze) {
+        const f = opt.freeze;
+        views = `<sheetViews><sheetView workbookViewId="0"><pane xSplit="${f.xSplit || 0}" ySplit="${f.ySplit || 0}" topLeftCell="${f.topLeft}" activePane="bottomRight" state="frozen"/></sheetView></sheetViews>`;
+    }
+    let cols = '';
+    if (opt.cols && opt.cols.length) {
+        cols = '<cols>' + opt.cols.map(c => `<col min="${c.min}" max="${c.max}" width="${c.width}" customWidth="1"/>`).join('') + '</cols>';
+    }
+    const mc = merges.length ? `<mergeCells count="${merges.length}">${merges.map(m => `<mergeCell ref="${m}"/>`).join('')}</mergeCells>` : '';
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+        views + cols + `<sheetData>${sd}</sheetData>` + mc + '</worksheet>';
+}
+
+// sheets: [{name, xml}] -> .xlsx 바이트(Uint8Array)
+function attWriteXlsx(sheets) {
+    const enc = new TextEncoder();
+    const files = [];
+    const add = (name, str) => files.push({ name, data: enc.encode(str) });
+
+    add('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Default Extension="xml" ContentType="application/xml"/>' +
+        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+        sheets.map((s, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('') +
+        '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+        '</Types>');
+    add('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+        '</Relationships>');
+    add('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+        '<sheets>' + sheets.map((s, i) => `<sheet name="${attXmlEsc(s.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('') + '</sheets></workbook>');
+    add('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        sheets.map((s, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('') +
+        `<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>` +
+        '</Relationships>');
+    add('xl/styles.xml', ATT_STYLES_XML);
+    sheets.forEach((s, i) => add(`xl/worksheets/sheet${i + 1}.xml`, s.xml));
+
+    return attZip(files);
+}
+
+// CRC32
+const ATT_CRC_TABLE = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[n] = c >>> 0; }
+    return t;
+})();
+function attCrc32(u8) {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < u8.length; i++) c = ATT_CRC_TABLE[(c ^ u8[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+// 무압축(stored) ZIP 생성: files=[{name, data:Uint8Array}] -> Uint8Array
+function attZip(files) {
+    const enc = new TextEncoder();
+    const u16 = n => [n & 0xFF, (n >>> 8) & 0xFF];
+    const u32 = n => [n & 0xFF, (n >>> 8) & 0xFF, (n >>> 16) & 0xFF, (n >>> 24) & 0xFF];
+    const parts = [];
+    const central = [];
+    let offset = 0;
+    files.forEach(f => {
+        const nameBytes = enc.encode(f.name);
+        const crc = attCrc32(f.data);
+        const size = f.data.length;
+        const local = new Uint8Array([].concat(
+            u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
+            u32(crc), u32(size), u32(size), u16(nameBytes.length), u16(0)
+        ));
+        parts.push(local, nameBytes, f.data);
+        const cen = new Uint8Array([].concat(
+            u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+            u32(crc), u32(size), u32(size), u16(nameBytes.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset)
+        ));
+        central.push(cen, nameBytes);
+        offset += local.length + nameBytes.length + size;
+    });
+    let cdSize = 0;
+    central.forEach(c => cdSize += c.length);
+    const cdOffset = offset;
+    const eocd = new Uint8Array([].concat(
+        u32(0x06054b50), u16(0), u16(0), u16(files.length), u16(files.length), u32(cdSize), u32(cdOffset), u16(0)
+    ));
+    const all = [...parts, ...central, eocd];
+    let total = 0; all.forEach(a => total += a.length);
+    const out = new Uint8Array(total);
+    let p = 0; all.forEach(a => { out.set(a, p); p += a.length; });
+    return out;
 }
 
 function toggleAttDetail(id) {
